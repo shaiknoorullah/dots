@@ -1,9 +1,9 @@
 # ~/.config/ghostty/config — minimal text surface. tmux/herdr own tabs, panes, sessions.
 font-family = JetBrainsMono Nerd Font
 font-size = 9
-# kitty parity: adjust_line_height 1, and its heavier glyph blending (Linux default linear-corrected looks thinner)
+# kitty parity: adjust_line_height 1. Text: the font's own hinting (crisper than FreeType's light autohinter) with the default linear-corrected blending
 adjust-cell-height = 1
-alpha-blending = native
+freetype-load-flags = hinting,no-force-autohint,no-monochrome,no-autohint,no-light
 window-padding-x = 10
 window-padding-y = 10
 window-decoration = false
