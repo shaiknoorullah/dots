@@ -1,4 +1,7 @@
 #!/bin/sh
 # Display-manager session entry (run_once system script installs hyprland-dots.desktop -> here).
 export PATH="$HOME/.local/bin:$HOME/.nix-profile/bin:$PATH"
-exec start-hyprland "$@"
+# --no-nixgl: on non-NixOS, start-hyprland (0.56+) refuses a Nix-built Hyprland unless it finds nixGL.
+# The dots wrap Hyprland themselves (nvidia: nix-gl-host, mesa: nixGL), and this launcher already runs
+# inside that wrapper, so its GL environment reaches Hyprland; the flag only skips the redundant check.
+exec start-hyprland --no-nixgl "$@"
