@@ -39,7 +39,7 @@ case "$chosen" in
         systemctl suspend
         ;;
     "$logout")
-        confirm_action 'Logout?' && hyprctl dispatch exit
+        confirm_action 'Logout?' && hyprctl dispatch 'hl.dsp.exit()'
         ;;
     "$reboot")
         confirm_action 'Reboot?' && systemctl reboot
