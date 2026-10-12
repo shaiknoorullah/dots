@@ -51,7 +51,8 @@ in {
   fonts.fontconfig.enable = true;
   home.packages = with pkgs; [
     # --- desktop / session / scripts ---
-    (gl hyprland)
+    # NVIDIA (non-NixOS) runs the distro Hyprland: Nix's cannot load the host GBM backend (start-hyprland-dots)
+  ] ++ lib.optional (gpu != "nvidia") (gl hyprland) ++ [
     hypridle hyprpolkitagent xdg-desktop-portal-hyprland hyprpicker
     waybar swaynotificationcenter swayosd awww (gl ghostty) chafa otter-launcher clipse yazi ffmpegthumbnailer unar file fd
     grim slurp wl-clipboard playerctl brightnessctl networkmanagerapplet bluetuith libnotify papirus-icon-theme
