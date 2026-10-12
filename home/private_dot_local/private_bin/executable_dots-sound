@@ -1,0 +1,12 @@
+#!/bin/sh
+# dots-sound <name>: play ~/.local/share/sounds/dots/<name>.oga in the background.
+# Silent while swaync's Do Not Disturb is on. Always exits 0: swaync turns a failing script into a notification.
+f="$HOME/.local/share/sounds/dots/${1:-message}.oga"
+[ -r "$f" ] || exit 0
+[ "$(swaync-client -D 2>/dev/null)" = true ] && exit 0
+if command -v pw-play >/dev/null 2>&1; then
+  pw-play "$f" >/dev/null 2>&1 &
+elif command -v paplay >/dev/null 2>&1; then
+  paplay "$f" >/dev/null 2>&1 &
+fi
+exit 0
