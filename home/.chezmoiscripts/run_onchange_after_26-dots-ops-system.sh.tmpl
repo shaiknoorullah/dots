@@ -46,7 +46,7 @@ done
 # root jobs need jq from the system (never the user's Nix profile)
 if ! PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin command -v jq >/dev/null; then
   if command -v pacman >/dev/null; then sudo pacman -S --needed --noconfirm jq
-  elif command -v apt-get >/dev/null; then sudo DEBIAN_FRONTEND=noninteractive apt-get install -y jq
+  elif command -v apt-get >/dev/null; then sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y jq
   elif command -v dnf >/dev/null; then sudo dnf install -y jq
   else echo "dots-ops: install jq system-wide for root jobs" >&2; fi
 fi
