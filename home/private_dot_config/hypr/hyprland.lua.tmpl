@@ -27,7 +27,7 @@ hl.env("NVD_BACKEND", "direct")
 {{- end }}
 
 -- ── Monitors (catch-all: preferred mode, auto position) ────────────────
-hl.monitor({ output = "", mode = "preferred", position = "auto", scale = 1 })
+hl.monitor({ output = "", mode = "highrr", position = "auto", scale = 1 })  -- highest refresh: 1080p60 is a CEA mode, so NVIDIA HDMI sends limited RGB (washed-out); high-rate modes get full range
 
 -- ── Appearance — Dracula, glass ON ─────────────────────────────────────
 hl.config({
