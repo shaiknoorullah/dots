@@ -4,6 +4,10 @@ Documentation=man:tmux(1)
 
 [Service]
 Type=forking
+# The server keeps the PATH it starts with, and plugin scripts (tpm, resurrect, continuum) call plain `tmux`.
+# At login this unit can start before environment.d's PATH reaches the user manager; then `tmux` meant the
+# distro client (e.g. Ubuntu 3.4) against this Nix server, and every plugin call failed: no restore, no autosave.
+Environment=PATH=%h/.local/bin:%h/.nix-profile/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/bin
 ExecStart=%h/.nix-profile/bin/tmux new-session -d
 
 ExecStop=%h/.config/tmux/plugins/tmux-resurrect/scripts/save.sh
