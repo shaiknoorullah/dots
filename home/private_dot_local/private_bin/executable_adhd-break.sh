@@ -16,5 +16,5 @@ fi
 "$TIMEW" start break >/dev/null 2>&1 || true
 # Blank the monitor, then lock via logind (hypridle -> hyprlock; Stage-1 daemon logs Lock).
 HIS=$(find "${XDG_RUNTIME_DIR}/hypr" -maxdepth 1 -mindepth 1 -type d -printf '%f\n' 2>/dev/null | head -1)
-HYPRLAND_INSTANCE_SIGNATURE="$HIS" hyprctl dispatch dpms off >/dev/null 2>&1 || true
+HYPRLAND_INSTANCE_SIGNATURE="$HIS" hyprctl dispatch 'hl.dsp.dpms({action = "off"})' >/dev/null 2>&1 || true
 loginctl lock-session >/dev/null 2>&1 || true

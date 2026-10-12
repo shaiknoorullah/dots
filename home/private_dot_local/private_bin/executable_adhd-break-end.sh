@@ -5,7 +5,7 @@ set -uo pipefail
 TIMEW=timew
 STATE="$HOME/.cache/adhd/break-active"
 HIS=$(find "${XDG_RUNTIME_DIR}/hypr" -maxdepth 1 -mindepth 1 -type d -printf '%f\n' 2>/dev/null | head -1)
-HYPRLAND_INSTANCE_SIGNATURE="$HIS" hyprctl dispatch dpms on >/dev/null 2>&1 || true
+HYPRLAND_INSTANCE_SIGNATURE="$HIS" hyprctl dispatch 'hl.dsp.dpms({action = "on"})' >/dev/null 2>&1 || true
 # Stop ONLY if a `break` interval is active — gate strictly on the active
 # interval's TAGS (never the JSON blob; its annotation text could contain the
 # word "break" and wrongly stop a real task on an idle-lock unlock).

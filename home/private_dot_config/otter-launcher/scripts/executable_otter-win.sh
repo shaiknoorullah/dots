@@ -46,4 +46,4 @@ selection="$(echo "$windows" | fzf --delimiter=$'\t' --with-nth=2 --header=$'
 [[ -z "$selection" ]] && exit 0
 
 addr="$(cut -f1 <<<"$selection")"
-hyprctl dispatch focuswindow "address:$addr" >/dev/null 2>&1
+hyprctl dispatch "hl.dsp.focus({ window = \"address:$addr\" })" >/dev/null 2>&1
