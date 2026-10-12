@@ -18,6 +18,7 @@ zstyle ':zim:completion' dumpfile "${XDG_CACHE_HOME:-$HOME/.cache}/zcompdump"
 zstyle ':antidote:bundle' use-friendly-names 'yes'
 source "$HOME/.nix-profile/share/antidote/antidote.zsh"
 antidote load "$HOME/.zsh_plugins.txt" "${XDG_CACHE_HOME:-$HOME/.cache}/zsh_plugins.zsh"
+unalias gh 2>/dev/null   # zimfw/git with the g prefix aliases gh to git help, hiding the GitHub CLI
 bindkey -v; export KEYTIMEOUT=1
 bindkey '^F' autosuggest-accept   # accept zsh-autosuggestions with Ctrl-F
 
