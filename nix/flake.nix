@@ -24,6 +24,7 @@
       depsCheck = gpu: pkgs.runCommand "deps-${gpu}" { } ''
         fail=0
         while read -r c; do [ -z "$c" ] && continue
+          [ "$c" = "${if gpu == "nvidia" then "Hyprland" else ""}" ] && continue   # nvidia runs the distro Hyprland
           [ -x "${act gpu}/home-path/bin/$c" ] || { echo "NO-CMD $c"; fail=1; }
         done < ${../tests/expected-commands.txt}
         [ $fail = 0 ] && touch $out
