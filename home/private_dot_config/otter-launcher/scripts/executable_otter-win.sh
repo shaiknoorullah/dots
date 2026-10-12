@@ -27,7 +27,7 @@ list_windows() {
         return 1
     fi
 
-    echo "$clients_json" | jq -r '.[] | "\(.address)\t\(.class) — \(.title)"' 2>/dev/null
+    echo "$clients_json" | jq -r '.[] | "\(.address)\t\(.class | gsub("[\t\n\r]"; " ")) — \(.title | gsub("[\t\n\r]"; " "))"' 2>/dev/null
 }
 
 # Debug/verification hook: print the raw list and exit, skipping fzf.
@@ -46,4 +46,6 @@ selection="$(echo "$windows" | fzf --delimiter=$'\t' --with-nth=2 --header=$'
 [[ -z "$selection" ]] && exit 0
 
 addr="$(cut -f1 <<<"$selection")"
+# only a hyprctl window address may reach the Lua dispatcher (titles are untrusted)
+[[ "$addr" =~ ^0x[0-9a-fA-F]+$ ]] || { echo "not a window address: $addr" >&2; exit 1; }
 hyprctl dispatch "hl.dsp.focus({ window = \"address:$addr\" })" >/dev/null 2>&1
