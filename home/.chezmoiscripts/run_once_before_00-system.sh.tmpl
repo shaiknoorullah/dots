@@ -45,7 +45,7 @@ OPT=(keyd greetd tuigreet polkitd pkexec policykit-1 hyprlock{{ if not $org }} p
 KEYD_BUILD_DEPS=(build-essential git)
 HW=(seatd systemd-zram-generator)
 avail()       { [ -n "$(apt-cache madison "$1" 2>/dev/null)" ]; }
-pkg_install() { sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "$@"; }
+pkg_install() { sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y "$@"; }
 {{- else }}
 
 # ---- Fedora / RHEL family: package lists ----
@@ -103,7 +103,7 @@ sudo apt-get update
 # wireshark capture permission (dumpcap setuid for the wireshark group): preseed before wireshark-common (in REQ)
 echo 'wireshark-common wireshark-common/install-setuid boolean true' | sudo debconf-set-selections
 pkg_install "${REQ[@]}"
-sudo DEBIAN_FRONTEND=noninteractive dpkg-reconfigure -f noninteractive wireshark-common   # applies it if already installed
+sudo env DEBIAN_FRONTEND=noninteractive dpkg-reconfigure -f noninteractive wireshark-common   # applies it if already installed
 if avail polkitd; then opt_install polkitd pkexec || true; else opt_install policykit-1 || true; fi
 {{- if not $org }}
 # R63: powerprofilesctl for dots-ops power-profile/perf-mode; tlp and power-profiles-daemon conflict, tlp wins
