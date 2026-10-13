@@ -1,0 +1,14 @@
+# Google Chrome (nixpkgs): allow unprivileged user namespaces so Chromium's namespace sandbox works.
+# Ubuntu 23.10+ blocks them unless an AppArmor profile grants userns, and the read-only Nix store cannot
+# hold Chromium's setuid sandbox helper, so without this the app aborts at start ("SUID sandbox helper
+# ... not configured correctly"). The app stays sandboxed; unconfined only names it. Same shape as
+# Ubuntu's own /etc/apparmor.d/brave. The store-hash glob survives nixpkgs updates.
+
+abi <abi/4.0>,
+include <tunables/global>
+
+profile chrome-nix /nix/store/*/share/google/chrome/chrome flags=(unconfined) {
+  userns,
+
+  include if exists <local/chrome-nix>
+}
