@@ -285,15 +285,6 @@ if [ -x /usr/lib/systemd/system-generators/zram-generator ] || [ -x /lib/systemd
     sudo systemctl start systemd-zram-setup@zram0.service || echo "zram: zram0 starts on next boot" >&2
   fi
 fi
-# Nix-built Chromium/Electron apps (Brave, Chrome, VS Code, Slack, Electron): where AppArmor restricts
-# unprivileged user namespaces (Ubuntu 23.10+), each needs a profile granting `userns` or it aborts at start,
-# since the Nix store cannot hold Chromium's setuid sandbox helper. See system/apparmor/*-nix.
-if [ "$(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns 2>/dev/null)" = 1 ] && command -v apparmor_parser >/dev/null; then
-  for p in {{ joinPath .chezmoi.workingTree "system/apparmor" | quote }}/*-nix; do
-    n="${p##*/}"
-    sudo install -Dm644 "$p" "/etc/apparmor.d/$n" && sudo apparmor_parser -r "/etc/apparmor.d/$n" || echo "apparmor: could not load $n" >&2
-  done
-fi
 getent group wireshark >/dev/null || sudo groupadd -r wireshark
 sudo usermod -aG wireshark "$me"
 echo "log out and back in for the docker and wireshark groups to apply"
