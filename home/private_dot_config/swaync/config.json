@@ -33,6 +33,12 @@
   "hide-on-clear": false,
   "hide-on-action": true,
   "script-fail-notify": true,
+  "scripts": {
+    "dots-sound": {
+      "exec": "dots-sound message",
+      "run-on": "receive"
+    }
+  },
   "text-empty": "No Notifications",
   "widgets": [
     "title",
