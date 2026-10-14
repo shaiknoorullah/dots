@@ -79,4 +79,5 @@ _ensure_cache
 selection="$(fzf --delimiter=$'\t' --with-nth=2 --header=$' apps' < "$CACHE")"
 [[ -z "$selection" ]] && exit 0
 app_id="$(cut -f1 <<<"$selection")"
-setsid -f gtk-launch "$app_id" >/dev/null 2>&1
+# dots-launch: starts the app detached and notifies if it dies within 15 s (gtk-launch alone hid crashes)
+setsid -f dots-launch "$app_id" >/dev/null 2>&1

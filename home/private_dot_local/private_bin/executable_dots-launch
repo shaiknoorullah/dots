@@ -1,0 +1,110 @@
+#!/usr/bin/env python3
+"""dots-launch <desktop-id>: start a desktop app detached and report it if it dies right away.
+
+gtk-launch only spawns the app and exits 0, so a crash at start (a Chromium sandbox abort, a stale profile lock)
+was invisible from the launcher. This runs the entry's Exec itself, watches it for WATCH seconds, and sends a
+notification with the last lines of its stderr when it exits non-zero or by a signal in that window. A clean
+exit (an app handing off to its running instance) or still running at the deadline is success. Terminal and
+D-Bus-activated entries keep going through gtk-launch. Output: $XDG_STATE_HOME/dots/launch/<id>.log
+"""
+import configparser
+import os
+import shlex
+import shutil
+import signal
+import subprocess
+import sys
+import time
+
+WATCH = 15  # seconds
+FIELD_CODES = ('%f', '%F', '%u', '%U', '%d', '%D', '%n', '%N', '%i', '%c', '%k', '%v', '%m')
+
+
+def find_entry(app_id):
+    home = os.environ.get('XDG_DATA_HOME') or os.path.expanduser('~/.local/share')
+    dirs = [home] + (os.environ.get('XDG_DATA_DIRS') or '/usr/local/share:/usr/share').split(':')
+    for d in dirs:
+        p = os.path.join(d, 'applications', app_id + '.desktop')
+        if os.path.isfile(p):
+            return p
+    return None
+
+
+def notify(summary, body):
+    if shutil.which('notify-send'):
+        subprocess.run(['notify-send', '-a', 'dots-launch', '-u', 'normal', '-i', 'dialog-error', summary, body],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def gtk_launch(app_id):
+    os.execvp('gtk-launch', ['gtk-launch', app_id])
+
+
+def main():
+    if len(sys.argv) != 2:
+        sys.exit('usage: dots-launch <desktop-id>')
+    app_id = sys.argv[1]
+    path = find_entry(app_id)
+    if not path:
+        gtk_launch(app_id)
+    cp = configparser.RawConfigParser(interpolation=None, strict=False)
+    cp.optionxform = str
+    try:
+        cp.read(path, encoding='utf-8')
+        e = cp['Desktop Entry']
+    except (configparser.Error, KeyError, UnicodeDecodeError):
+        gtk_launch(app_id)
+    name = e.get('Name', app_id)
+    exe = e.get('Exec', '')
+    if not exe or e.get('Terminal', 'false').lower() == 'true' or e.get('DBusActivatable', 'false').lower() == 'true':
+        gtk_launch(app_id)
+
+    exe = exe.replace('%%', '\x00')
+    for code in FIELD_CODES:
+        exe = exe.replace(code, '')
+    try:
+        argv = [a.replace('\x00', '%') for a in shlex.split(exe)]
+    except ValueError:
+        gtk_launch(app_id)
+    if not argv:
+        gtk_launch(app_id)
+
+    state = os.environ.get('XDG_STATE_HOME') or os.path.expanduser('~/.local/state')
+    logdir = os.path.join(state, 'dots', 'launch')
+    os.makedirs(logdir, exist_ok=True)
+    log = os.path.join(logdir, app_id + '.log')
+    cwd = e.get('Path') or None
+    with open(log, 'w') as out:
+        out.write(f'$ {shlex.join(argv)}\n')
+        out.flush()
+        try:
+            proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=out, stderr=out, cwd=cwd,
+                                    start_new_session=True)
+        except OSError as err:
+            notify(f'{name} failed to start', f'{argv[0]}: {err.strerror}')
+            return
+    deadline = time.monotonic() + WATCH
+    while time.monotonic() < deadline:
+        rc = proc.poll()
+        if rc is not None:
+            break
+        time.sleep(0.25)
+    else:
+        return  # still running: started fine; it keeps running in its own session
+    if rc == 0:
+        return
+    try:
+        why = f'killed by {signal.Signals(-rc).name}' if rc < 0 else f'exit code {rc}'
+    except ValueError:
+        why = f'killed by signal {-rc}'
+    try:
+        with open(log, errors='replace') as f:
+            tail = [l.rstrip() for l in f.readlines()[1:] if l.strip()][-3:]
+    except OSError:
+        tail = []
+    tail = [t[:160] for t in tail]
+    notify(f'{name} failed to start ({why})', '\n'.join(tail + [f'log: {log}']))
+
+
+if __name__ == '__main__':
+    main()
