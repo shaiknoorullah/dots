@@ -27,7 +27,9 @@ hl.env("NVD_BACKEND", "direct")
 {{- end }}
 
 -- ── Monitors (catch-all: preferred mode, auto position) ────────────────
-hl.monitor({ output = "", mode = "highrr", position = "auto", scale = 1 })  -- highest refresh: 1080p60 is a CEA mode, so NVIDIA HDMI sends limited RGB (washed-out); high-rate modes get full range
+-- preferred (1080p60): the BenQ GW2790 is visibly soft at 100 Hz over HDMI. 1080p60 is a CEA mode, for which the
+-- NVIDIA driver sends limited-range RGB (washed-out blacks): set the monitor's HDMI RGB range to full (0-255) instead.
+hl.monitor({ output = "", mode = "preferred", position = "auto", scale = 1 })
 
 -- ── Appearance — Dracula, glass ON ─────────────────────────────────────
 hl.config({
