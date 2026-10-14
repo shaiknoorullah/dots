@@ -1,0 +1,14 @@
+#!/bin/sh
+# Display-manager session entry (run_once system script installs hyprland-dots.desktop -> here).
+export PATH="$HOME/.local/bin:$HOME/.nix-profile/bin:$PATH"
+{{- if eq .gpu "nvidia" }}
+# NVIDIA on a non-NixOS distro: Nix's Hyprland cannot load the host GBM backend (it looks in the NixOS-only
+# /run/opengl-driver), so it aborts in initServer. The session runs the distro/PPA build that 00-system installs.
+[ -x /usr/bin/start-hyprland ] && exec /usr/bin/start-hyprland "$@"
+[ -x /usr/bin/Hyprland ] && exec /usr/bin/Hyprland "$@"
+echo "start-hyprland-dots: no system Hyprland in /usr/bin (needed on NVIDIA); trying the Nix build" >&2
+{{- end }}
+# --no-nixgl: on non-NixOS, start-hyprland (0.56+) refuses a Nix-built Hyprland unless it finds nixGL.
+# The dots wrap Hyprland themselves (nvidia: nix-gl-host, mesa: nixGL), and this launcher already runs
+# inside that wrapper, so its GL environment reaches Hyprland; the flag only skips the redundant check.
+exec start-hyprland --no-nixgl "$@"
