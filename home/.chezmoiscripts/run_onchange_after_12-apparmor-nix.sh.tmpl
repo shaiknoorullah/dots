@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# nix tree hash (same trigger as 10-nix, so it re-runs after every home-manager switch that can change app paths):
+# {{ output "sh" "-c" (printf "cd %s && find nix system/apparmor -type f -print0 2>/dev/null | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum" (quote .chezmoi.workingTree)) | trim }}
+# AppArmor userns profiles for the Nix-built Chromium/Electron apps of THIS home-manager profile (see
+# system/apparmor/nix-userns.sh for why, and why exact store paths instead of a /nix/store/* glob).
+set -euo pipefail
+{{- if ne .gpu "nixos" }}
+[ "$(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns 2>/dev/null)" = 1 ] || exit 0   # no restriction here
+command -v apparmor_parser >/dev/null || exit 0
+[ -e /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh ] && . /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh
+prof="$(readlink -f "$HOME/.nix-profile")" || exit 0
+args=()
+# only paths inside the closure of the user's own profile: nothing added to the store by other means can match
+while IFS= read -r p; do
+  for spec in brave:opt/brave.com/brave/brave chrome:share/google/chrome/chrome code:lib/vscode/code \
+              slack:lib/slack/slack electron:libexec/electron/electron; do
+    name=${spec%%:*} rel=${spec#*:}
+    [ "$name" = electron ] && [[ $p != *-electron-unwrapped-* ]] && continue
+    # the real binary only: AppArmor attaches to the resolved path, and the profile/wrapper farms reach the same
+    # file through symlinks
+    if [ -f "$p/$rel" ] && [ "$(readlink -f "$p/$rel")" = "$p/$rel" ]; then
+      args+=("$name-$(basename "$p" | cut -c1-8)=$p/$rel")   # store-hash suffix: one profile per version in use
+    fi
+  done
+done < <(nix-store -qR "$prof")
+echo "apparmor: ${#args[@]} Nix Chromium/Electron app(s) in the profile; loading their userns profiles (sudo)"
+sudo bash {{ joinPath .chezmoi.workingTree "system/apparmor/nix-userns.sh" | quote }} "${args[@]}"
+{{- end }}
