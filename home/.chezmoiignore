@@ -2,6 +2,7 @@ README.md
 {{- if ne .multiplexer "herdr" }}
 .config/herdr
 .config/systemd/user/herdr.service
+.config/terminal-browser
 {{- end }}
 {{- if ne .multiplexer "tmux" }}
 .config/tmux/tmux.conf
