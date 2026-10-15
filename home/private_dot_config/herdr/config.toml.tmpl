@@ -131,7 +131,7 @@ prefix = "ctrl+space"            # same prefix as tmux-config
 
 # ── tmux parity: these mirror tmux.conf (same prefix, same letters) ────────
 # herdr tab = tmux window, herdr workspace = tmux session.
-help = ["prefix+?", "prefix+shift+k"]                # tmux ? (palette) / K (key list)
+help = "prefix+?"                                    # tmux ? (palette); prefix+K is the filterable list below
 settings = "prefix+comma"                            # tmux has none; frees prefix+s for split
 detach = "prefix+d"                                  # tmux d
 open_notification_target = "prefix+i"                # frees prefix+o for the session picker
@@ -184,6 +184,13 @@ command = "~/.config/dots-mux/pass-menu.sh"
 key = "prefix+ctrl+s"                                # prefix+S is the session picker, as in tmux
 type = "popup"
 command = "~/.config/dots-mux/ssh-menu.sh"
+
+[[keys.command]]
+key = "prefix+shift+k"                               # tmux K (key list): searchable list of every herdr key
+type = "popup"
+command = "~/.config/dots-mux/herdr-keys.sh"
+width = "80%"
+height = "80%"
 
 [[keys.command]]
 key = "prefix+b"                                     # tmux b
@@ -240,7 +247,7 @@ type = "plugin_action"
 command = "herdr-projects.open-popup"
 
 [[keys.command]]
-key = "prefix+shift+a"
+key = "prefix+shift+a"                               # Automations board (scheduled agent prompts)
 type = "shell"
 command = "herdr plugin pane open --plugin dnzzl.automations --entrypoint board"
 

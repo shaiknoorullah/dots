@@ -64,6 +64,7 @@ f herdr .config/herdr/config.toml
 x all .config/dots-mux/pass-menu.sh
 x all .config/dots-mux/ssh-menu.sh
 x all .config/dots-mux/ssh-askpass.sh
+x all .config/dots-mux/herdr-keys.sh
 x all .config/dots-mux/task-status.sh
 x all .config/dots-mux/git-status.sh
 x all .local/bin/adhd-block-pick.sh
