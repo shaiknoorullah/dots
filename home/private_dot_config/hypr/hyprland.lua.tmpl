@@ -99,7 +99,7 @@ hl.animation({ leaf = "layers",     enabled = true, speed = 6, bezier = "snappy"
 -- Keep terminals fully opaque (don't translucent them via the global opacity).
 hl.window_rule({ match = { class = "^(com[.]mitchellh[.]ghostty)$" }, opaque = true })
 
-hl.window_rule({ match = { class = "^(zen-alpha|zen-browser|firefox|Firefox)$" },      workspace = "2 silent" })
+hl.window_rule({ match = { class = "^(zen-alpha|zen-beta|zen-browser|firefox|Firefox)$" }, workspace = "2 silent" })
 hl.window_rule({ match = { class = "^([Cc]ode|code-oss|Cursor)$" },                    workspace = "3 silent" })
 hl.window_rule({ match = { class = "^([Ss]lack)$" },                                   workspace = "4 silent" })
 hl.window_rule({ match = { class = "^([Tt]hunderbird)$" },                             workspace = "5 silent" })
