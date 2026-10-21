@@ -1,0 +1,55 @@
+{{- if eq .multiplexer "herdr" -}}
+#!/usr/bin/env bash
+# herdr plugins, pinned to the commit last reviewed (re-runs when this list changes).
+# Keys for these live in ~/.config/herdr/config.toml (herdr ignores manifest keys).
+# Already-installed plugins at the pinned commit are skipped; a different commit is reinstalled.
+# Bump a pin: `herdr plugin install --yes --ref <sha> <spec>`, then update the line below.
+set -uo pipefail
+
+PLUGINS=(
+  # spec                                      commit                                    plugin id
+  "jeffarese/herdr-bar                        e22455068e26340b6be02cec8a07707fc1f11ae1" # herdr-bar
+  "eliasstravik/herdr-projects                4e4548c3c43888e6be1c96906215998f07dc63f0" # herdr-projects
+  "ChmaraX/herdr-nvim                         e2ec32e7bbbb1eefd64363414b5806f84eedd6bc" # chmarax.herdr-nvim
+  "aemrebarut/herdr-dagr                      52991f9a95a2b8c11518ed66f9530d938c1ba254" # herdr-dagr
+  "Crokily/herdr-lazygit                      ac955e59caae5cbc34b74ccf949e11f085269b4d" # herdr-lazygit
+  "DnzzL/herdr-automations                    2bae3f9ad2c016bd694dcb39a95fb02578378c17" # dnzzl.automations (scheduler idle until you add schedules)
+  "VedangP57/gitty/herdr-plugin               6c158936e5f92646a272aaf0646fdd4216af7fb9" # vedangp57.gitty
+  "StructuPath/herdr-browser                  7cee8e981706a157b9b0a9f180ff981c9c04e790" # structupath.browser
+  "qintmb/herdr-theme-picker                  c320385fd4119331abf65a39ac725457fc8ebb6e" # herdr-theme-picker
+  "arronKler/pairfob                          617f69116d4d96428e89acb872e69d0e9dc5e7cb" # pairfob (unbound; nothing runs until you pair a phone)
+  "yuk1ty/herdr-spreader                      206ae55aff2de0828623ea4e8fc9c6ab28519935" # herdr-spreader (cargo build)
+  "smarzban/tsk                               ade0385fa49f28035c35dc846ce90158c4117207" # herdr-tsk (cargo build)
+  "zenbu-labs/terminal-browser/herdr-plugin   2165ae76c9639e3996829ab0e6d54ddbd4f06ad8" # zenbu-labs.terminal-browser
+)
+
+command -v herdr >/dev/null || { echo "herdr-plugins: herdr not on PATH yet; skipping" >&2; exit 0; }
+# terminal-browser's installer honours these; tsk's daily update check too
+export DO_NOT_TRACK=1 TERMINAL_BROWSER_NO_TELEMETRY=1 TSK_NO_UPDATE_CHECK=1
+
+installed=$(python3 - "${XDG_CONFIG_HOME:-$HOME/.config}/herdr/plugins.json" <<'EOF'
+import json, os, sys
+if os.path.exists(sys.argv[1]):
+    for p in json.load(open(sys.argv[1])):
+        s = p.get("source", {})
+        if s.get("kind") == "github":
+            print(f'{s["owner"]}/{s["repo"]}' + (f'/{s["subdir"]}' if s.get("subdir") else ""), s["resolved_commit"], p["plugin_id"])
+EOF
+)
+
+fail=0
+for entry in "${PLUGINS[@]}"; do
+  read -r spec ref <<<"$entry"
+  have=$(awk -v s="$spec" '$1 == s {print $2 " " $3}' <<<"$installed")
+  if [ "${have%% *}" = "$ref" ]; then continue; fi
+  if [ -n "$have" ]; then
+    echo "herdr-plugins: re-pinning $spec to ${ref:0:12}"
+    herdr plugin uninstall "${have#* }" </dev/null >/dev/null 2>&1 || true
+  else
+    echo "herdr-plugins: installing $spec @ ${ref:0:12}"
+  fi
+  herdr plugin install --yes --ref "$ref" "$spec" </dev/null || { echo "herdr-plugins: FAILED $spec" >&2; fail=1; }
+done
+herdr server reload-config >/dev/null 2>&1 || true
+exit $fail
+{{ end -}}

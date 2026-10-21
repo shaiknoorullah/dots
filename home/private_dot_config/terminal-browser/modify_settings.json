@@ -1,0 +1,12 @@
+#!/usr/bin/env python3
+# terminal-browser (herdr plugin) owns this file; only force its telemetry off and keep
+# every other setting the app writes. TERMINAL_BROWSER_NO_TELEMETRY in environment.d backs it up.
+import json, sys
+
+raw = sys.stdin.read()
+try:
+    settings = json.loads(raw) if raw.strip() else {}
+except ValueError:
+    settings = {}
+settings.update({"telemetry.usage": "off", "telemetry.crashReports": "off"})
+sys.stdout.write(json.dumps(settings, indent=2) + "\n")
