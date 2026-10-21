@@ -7,7 +7,7 @@ if ! systemctl --user show-environment >/dev/null 2>&1; then
   exit 0
 fi
 systemctl --user daemon-reload
-systemctl --user enable --now adhd-prayer-times.timer adhd-salah-schedule.timer aw-server.service
+systemctl --user enable --now adhd-prayer-times.timer adhd-salah-schedule.timer aw-server.service awatcher.service
 # Kube tunnel units are copied by hand (docs/install.md §2), never shipped here, so enable whatever this machine
 # was given. Each unit's own ConditionPathExists keeps it skipped until its secret is in place. reverse-tunnel.service
 # IS shipped by dots, so it is excluded here and enabled per profile below.
@@ -37,8 +37,9 @@ systemctl --user enable --now dots-ops-backup-watch.timer dots-ops-backup-check.
 systemctl --user enable --now dots-ops-pins-check.timer
 {{- end }}
 systemctl --user enable --now dots-ops-relay.path dots-ops-relay.service
+systemctl --user enable --now dots-ops-vault-backup.timer dots-ops-vault-watch.timer
 {{- if .timetrack }}
-systemctl --user enable --now awatcher.service timetrack-logind.service timetrack-rollup.timer timetrack-sync.timer
+systemctl --user enable --now timetrack-logind.service timetrack-rollup.timer timetrack-sync.timer
 {{- end }}
 {{- if eq .multiplexer "tmux" }}
 systemctl --user enable --now tmux.service; systemctl --user disable --now herdr.service 2>/dev/null || true

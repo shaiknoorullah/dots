@@ -1,0 +1,10 @@
+[Unit]
+Description=dots-ops personal vault backup (daily)
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+Unit=dots-ops@vault-backup.service
+
+[Install]
+WantedBy=timers.target
