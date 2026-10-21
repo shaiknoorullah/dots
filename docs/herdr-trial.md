@@ -38,5 +38,9 @@ Decision: Herdr wins only if 1–5 and 8 pass. Record the decision and date here
   (`~/.config/dots-mux/assets/claude.png`): it used to sit under `~/.config/tmux/scripts` and bail out
   unless `$TMUX` was set, so under Herdr the Claude Code hook raised nothing at all — and its icon was
   dropped anyway, since the herdr profile ignores `.config/tmux`. It now recognises both multiplexers
-  and jumps back via `herdr workspace focus` + `herdr tab focus` (herdr can only focus panes
-  directionally, so it lands on the tab, which is exact for a single-pane agent tab).
+  and records where to jump. The click itself is handled by `claude-focus.sh`, which SwayNC runs
+  on action (`scripts.claude-focus.run-on = "action"`); it focuses the terminal window via
+  Hyprland and then `herdr workspace focus` + `herdr tab focus`. herdr can only focus panes
+  directionally, so it lands on the tab — exact for a single-pane agent tab. The hook cannot wait
+  for the click itself: `notify-send --action` implies `--wait`, and a hook that blocks stalls
+  Claude, while a backgrounded listener is orphaned and never receives ActionInvoked.

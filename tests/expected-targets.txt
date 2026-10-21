@@ -64,6 +64,7 @@ x all .config/dots-mux/pass-menu.sh
 x all .config/dots-mux/ssh-menu.sh
 x all .config/dots-mux/ssh-askpass.sh
 x all .config/dots-mux/claude-notify.sh
+x all .config/dots-mux/claude-focus.sh
 f all .config/dots-mux/assets/claude.png
 x all .config/dots-mux/herdr-keys.sh
 x all .config/dots-mux/task-status.sh

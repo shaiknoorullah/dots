@@ -9,7 +9,7 @@
   // ext/workspaces, not hyprland/workspaces: waybar's hyprland click sends the legacy
   // `dispatch workspace <n>`, which Hyprland 0.56 wraps as Lua (`hl.dispatch(workspace 3)`)
   // and rejects, so clicking did nothing. This activates over ext-workspace-v1 instead.
-  "ext/workspaces": { "format": "{name}" },
+  "ext/workspaces": { "on-click": "activate", "format": "{name}" },
   "clock": { "format": "{:%a %d %b  %H:%M}", "tooltip-format": "<tt>{calendar}</tt>" },
   "custom/salah":    { "exec": "{{ .chezmoi.homeDir }}/.local/bin/waybar-salah.sh",    "return-type": "json", "interval": 60, "on-click": "ghostty --class=dots.otter --gtk-single-instance=false --config-file={{ .chezmoi.homeDir }}/.config/ghostty/popup -e ~/.local/bin/adhd-focus.sh status" },
   "custom/tracking": { "exec": "{{ .chezmoi.homeDir }}/.local/bin/waybar-tracking.sh", "return-type": "json", "interval": 15, "on-click": "ghostty --class=dots.tasktui --gtk-single-instance=false --config-file={{ .chezmoi.homeDir }}/.config/ghostty/popup-tasktui -e ~/.local/bin/tw-tui" },
