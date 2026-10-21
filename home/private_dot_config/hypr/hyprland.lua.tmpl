@@ -81,7 +81,12 @@ hl.config({
   misc = {
     disable_hyprland_logo = true,
     disable_splash_rendering = true,
-    focus_on_activate = false,
+    -- Honour xdg-activation: an app that asks to be raised gets focus, and Hyprland switches to its
+    -- workspace. Required for notification clicks to reach the app that sent them — Slack, Electron
+    -- apps and browsers all raise themselves this way, and with this false Hyprland silently ignored
+    -- the request, so clicking a Slack notification did nothing. The trade-off is accepted: an app
+    -- can now pull focus when it asks to.
+    focus_on_activate = true,
   },
   dwindle = {
     preserve_split = true,
