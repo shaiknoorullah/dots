@@ -1,0 +1,13 @@
+# Personal data backed up by the `vault-backup` job, to a LOCAL restic repo only.
+# This list is deliberately explicit and version-controlled: it is the answer to
+# "what does your backup contain?". Work repositories are NOT here by design --
+# company and system data are covered by Timeshift, separately.
+# Lines are paths; ~/ is expanded; missing paths are skipped and counted.
+
+~/powerhouse                      # Obsidian vault: health, meds, salah, daily notes
+~/.local/share/timetrack          # work.db + private.db (own time records)
+~/.local/share/adhd               # salah log
+~/.local/share/timewarrior        # human work intervals
+~/.task                           # taskwarrior: tickets + AI-generated subtasks
+~/.config/timetrack               # payroll + holiday policy (unmanaged, sensitive)
+~/.config/adhd                    # prayer + iqamah times

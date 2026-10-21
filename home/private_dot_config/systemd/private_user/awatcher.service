@@ -8,3 +8,9 @@ Type=simple
 ExecStart=%h/.nix-profile/bin/awatcher
 Restart=on-failure
 RestartSec=5
+
+# Without this the unit is `static`: `enable --now` starts it once and it never comes
+# back after a reboot, silently ending window/AFK capture. aw-server.service uses the
+# same target.
+[Install]
+WantedBy=default.target

@@ -1,0 +1,10 @@
+[Unit]
+Description=dots-ops vault backup freshness check (daily)
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+Unit=dots-ops@vault-watch.service
+
+[Install]
+WantedBy=timers.target

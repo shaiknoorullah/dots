@@ -128,6 +128,11 @@ f personal .config/systemd/user/dots-ops-backup-watch.timer
 f personal .config/systemd/user/dots-ops-backup-check.timer
 f personal .config/systemd/user/dots-ops-pins-check.timer
 f personal .config/systemd/user/dots-ops-dots-update.timer
+f all .config/dots-ops/vault-paths
+f all .local/lib/dots-ops/jobs/vault-backup.sh
+f all .local/lib/dots-ops/jobs/vault-watch.sh
+f all .config/systemd/user/dots-ops-vault-backup.timer
+f all .config/systemd/user/dots-ops-vault-watch.timer
 x all .local/bin/pi-watch
 x all .local/bin/pi-fleet-monitor
 x all .local/bin/pnats-agent-browser

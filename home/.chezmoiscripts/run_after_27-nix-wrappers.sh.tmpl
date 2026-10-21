@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# Nix binaries built for NixOS look for setuid helpers under /run/wrappers/bin, which only
+# NixOS provides. On a non-NixOS host the lookup fails and the caller usually dies badly:
+# hyprpolkitagent-0.1.3 retries the missing polkit-agent-helper-1 until the QML stack
+# overflows and the process SEGVs, which silently breaks EVERY GUI privilege prompt
+# (pkexec, Timeshift, GParted, ...). polkitd only reports "FAILED to authenticate".
+#
+# The Nix installer already set this precedent for PAM in /etc/tmpfiles.d/nix-pam-chkpwd.conf
+# (d /run/wrappers/bin + L+ unix_chkpwd); this adds the polkit helper the same way. The setuid
+# bit lives on the target, so the symlink grants nothing new.
+#
+# Never makes `chezmoi apply` interactive: without passwordless sudo it prints the one command
+# to run and exits 0. Deliberately `run_` (every apply) and not `run_onchange_`: an onchange
+# script that exits 0 without doing the work gets its hash recorded and never retries, which
+# would leave GUI auth broken with nothing ever asking again. This is idempotent -- when the
+# bridge is already in place it early-exits after two stat calls.
+set -uo pipefail
+{{- if ne .chezmoi.osRelease.id "nixos" }}
+helper=""
+for c in /usr/lib/polkit-1/polkit-agent-helper-1 /usr/libexec/polkit-agent-helper-1 /usr/lib/polkit-1/polkit-agent-helper; do
+  [ -u "$c" ] || [ -x "$c" ] && { helper=$c; break; }
+done
+if [ -z "$helper" ]; then
+  echo "nix-wrappers: no polkit-agent-helper-1 on this host; nothing to bridge" >&2
+  exit 0
+fi
+conf=/etc/tmpfiles.d/nix-polkit-wrapper.conf
+want="d /run/wrappers/bin 0755 root root -
+L+ /run/wrappers/bin/polkit-agent-helper-1 - - - - $helper"
+if [ "$(cat "$conf" 2>/dev/null)" = "$want" ] && [ -e /run/wrappers/bin/polkit-agent-helper-1 ]; then
+  exit 0
+fi
+if ! sudo -n true 2>/dev/null; then
+  echo "nix-wrappers: GUI privilege prompts are broken until this is run once (needs root):" >&2
+  echo "  printf '%s\\n' '$want' | sudo tee $conf >/dev/null && sudo systemd-tmpfiles --create $conf" >&2
+  exit 0
+fi
+printf '%s\n' "$want" | sudo tee "$conf" >/dev/null
+sudo systemd-tmpfiles --create "$conf"
+echo "nix-wrappers: bridged polkit-agent-helper-1 -> $helper"
+{{- end }}
+exit 0

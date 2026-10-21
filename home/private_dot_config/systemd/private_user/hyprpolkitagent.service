@@ -2,6 +2,12 @@
 Description=Hyprland polkit agent
 PartOf=graphical-session.target
 [Service]
+# This is a Nix-built Qt Quick app on a non-NixOS host, so it cannot see the system's
+# GPU drivers: "EGL not available" -> "Failed to create RHI" -> no dialog is ever drawn
+# -> PAM's conversation fails with "auth could not identify password" -> SIGABRT. A
+# password prompt needs no GPU, so render it in software and skip the driver problem
+# entirely (the alternative is wrapping the binary in nixGL).
+Environment=QT_QUICK_BACKEND=software
 ExecStart=%h/.nix-profile/libexec/hyprpolkitagent
 Restart=on-failure
 [Install]
