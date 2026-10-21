@@ -437,7 +437,9 @@ status_indicators = "dots"
 # herdr = show in-app toasts
 # terminal = ask the outer terminal to show a desktop notification
 # system = ask the OS notification service directly
-delivery = "system"
+# Keep "herdr": "system" makes herdr raise its own desktop notification (app "Herdr") next to the
+# one claude-notify.sh sends, so every Claude event shows twice and the herdr copy is click-dead.
+delivery = "herdr"
 # delay_seconds = 1
 
 [ui.toast.herdr]
