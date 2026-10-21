@@ -27,6 +27,12 @@ Decision: Herdr wins only if 1–5 and 8 pass. Record the decision and date here
   (as in tmux). Herdr's default `previous_tab` (`prefix+p`) was rebound to `prefix+comma`; `prefix+?` lists the
   active bindings.
 - Toasts: `[ui.toast] delivery = "system"` sends background notifications through the OS service (SwayNC).
+- What chezmoi owns here: `~/.config/herdr/config.toml` (templated) and the plugin set —
+  `.chezmoiscripts/28-herdr-plugins.sh` installs all 13 plugins pinned to reviewed commits and
+  re-pins when the list changes. herdr's own runtime state (installed plugin trees and their built
+  binaries, `plugins.json`, sockets, logs, `session.json`, session snapshots) is deliberately
+  unmanaged and is listed in `.chezmoiignore`, so `chezmoi add -r ~/.config/herdr` cannot sweep
+  sockets or session state into this public repo.
 - The shared scripts (pass-menu, ssh-menu, task-status, git-status, ssh-askpass, herdr-keys) live in
   `~/.config/dots-mux` under both multiplexers. `claude-notify.sh` moved there too, with its icon
   (`~/.config/dots-mux/assets/claude.png`): it used to sit under `~/.config/tmux/scripts` and bail out

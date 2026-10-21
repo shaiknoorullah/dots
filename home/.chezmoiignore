@@ -4,6 +4,21 @@ README.md
 .config/systemd/user/herdr.service
 .config/terminal-browser
 {{- end }}
+
+{{- /* On a herdr machine the config.toml above IS managed, and the 13 plugins are installed pinned by
+       .chezmoiscripts/28-herdr-plugins.sh. Everything below is herdr's own runtime state — installed
+       plugin trees and their built binaries, sockets, logs, session snapshots. It is deliberately not
+       managed, and these entries stop `chezmoi add -r ~/.config/herdr` from ever committing sockets,
+       logs or session state to this public repo. */}}
+.config/herdr/plugins
+.config/herdr/plugins.json
+.config/herdr/.plugins.lock
+.config/herdr/*.log
+.config/herdr/*.sock
+.config/herdr/*.sock.*
+.config/herdr/session.json
+.config/herdr/session-snapshots
+.config/herdr/release-notes.json
 {{- if ne .multiplexer "tmux" }}
 .config/tmux/tmux.conf
 .config/tmux/tmux.remote.conf
