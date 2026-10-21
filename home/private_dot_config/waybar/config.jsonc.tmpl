@@ -27,7 +27,7 @@
   "custom/notification": {
     "return-type": "json", "escape": true, "exec-if": "command -v swaync-client",
     "exec": "swaync-client -swb | jq --unbuffered -c 'if .alt == \"none\" then .text = \"\" else .text = \" \" + .text end'",
-    "format": "{icon}{}",
+    "format": "{icon}{text}",
     "format-icons": { "notification": "󰂚", "none": "󰂜",
                       "dnd-notification": "󰂛", "dnd-none": "󰂛",
                       "inhibited-notification": "󰂚", "inhibited-none": "󰂜",
