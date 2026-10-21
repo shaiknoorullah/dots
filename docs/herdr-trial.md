@@ -27,7 +27,10 @@ Decision: Herdr wins only if 1–5 and 8 pass. Record the decision and date here
   (as in tmux). Herdr's default `previous_tab` (`prefix+p`) was rebound to `prefix+comma`; `prefix+?` lists the
   active bindings.
 - Toasts: `[ui.toast] delivery = "system"` sends background notifications through the OS service (SwayNC).
-- The shared scripts (pass-menu, ssh-menu, task-status, git-status, ssh-askpass) live in `~/.config/dots-mux`
-  under both multiplexers. `claude-notify.sh` stays deployed under `~/.config/tmux/scripts` in both modes (the Claude Code hook points
-  there; it exits early outside tmux); Herdr does its own
-  agent notifications.
+- The shared scripts (pass-menu, ssh-menu, task-status, git-status, ssh-askpass, herdr-keys) live in
+  `~/.config/dots-mux` under both multiplexers. `claude-notify.sh` moved there too, with its icon
+  (`~/.config/dots-mux/assets/claude.png`): it used to sit under `~/.config/tmux/scripts` and bail out
+  unless `$TMUX` was set, so under Herdr the Claude Code hook raised nothing at all — and its icon was
+  dropped anyway, since the herdr profile ignores `.config/tmux`. It now recognises both multiplexers
+  and jumps back via `herdr workspace focus` + `herdr tab focus` (herdr can only focus panes
+  directionally, so it lands on the tab, which is exact for a single-pane agent tab).

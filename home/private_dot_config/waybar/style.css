@@ -29,7 +29,8 @@ window#waybar {
 #custom-ops,
 #custom-ctx,
 #wireplumber,
-#network {
+#idle_inhibitor,
+#custom-notification {
   background: #343746;
   border-radius: 8px;
   padding: 2px 12px;
@@ -52,6 +53,20 @@ window#waybar {
 #custom-ctx.ctx-lab      { color: #50fa7b; }
 #custom-ctx.ctx-agents   { color: #bd93f9; }
 #custom-ctx.ctx-personal { color: #ffb86c; }
-#wireplumber, #network   { color: #f8f8f2; }
+#wireplumber             { color: #f8f8f2; }
+
+/* caffeine: dim when off, amber while it is holding idle/lock off */
+#idle_inhibitor.deactivated { color: #6272a4; }
+#idle_inhibitor.activated   { color: #ffb86c; }
+
+/* swaync: dim bell when clear, amber with a count, red-dimmed while DND silences it */
+#custom-notification.none                  { color: #6272a4; }
+#custom-notification.notification          { color: #ffb86c; }
+#custom-notification.inhibited-none        { color: #6272a4; }
+#custom-notification.inhibited-notification { color: #ffb86c; }
+#custom-notification.dnd-none,
+#custom-notification.dnd-notification,
+#custom-notification.dnd-inhibited-none,
+#custom-notification.dnd-inhibited-notification { color: #ff5555; }
 
 #tray { padding: 0 8px; margin: 4px 3px; }
