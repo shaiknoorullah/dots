@@ -5,7 +5,7 @@
   "spacing": 6,
   "modules-left": ["ext/workspaces"],
   "modules-center": ["clock", "custom/salah"],
-  "modules-right": ["custom/tracking", "custom/project", "custom/kube", "custom/ops", "custom/ctx", "idle_inhibitor", "custom/notification", "wireplumber", "tray"],
+  "modules-right": ["custom/tracking", "custom/project", "custom/kube", "custom/ops", "custom/ctx", "idle_inhibitor", "custom/notification", "wireplumber", "group/tray"],
   // ext/workspaces, not hyprland/workspaces: waybar's hyprland click sends the legacy
   // `dispatch workspace <n>`, which Hyprland 0.56 wraps as Lua (`hl.dispatch(workspace 3)`)
   // and rejects, so clicking did nothing. This activates over ext-workspace-v1 instead.
@@ -33,5 +33,14 @@
                       "inhibited-notification": "󰂚", "inhibited-none": "󰂜",
                       "dnd-inhibited-notification": "󰂛", "dnd-inhibited-none": "󰂛" },
     "on-click": "swaync-client -t -sw", "on-click-right": "swaync-client -d -sw" },
+  // The tray is tucked into a drawer: the bar shows one icon, the items slide out on hover.
+  // (swaync cannot host it — it is not a StatusNotifierItem host and has no tray widget,
+  // its widgets being title/dnd/label/mpris/menubar/buttons-grid/slider/volume/backlight/
+  // inhibitors/notifications. This is the closest thing to keeping it off the bar.)
+  "group/tray": {
+    "orientation": "inherit",
+    "drawer": { "transition-duration": 250, "children-class": "tray-item", "transition-left-to-right": false },
+    "modules": ["custom/tray-toggle", "tray"] },
+  "custom/tray-toggle": { "format": "󰀻", "tooltip-format": "tray — hover to expand" },
   "tray": { "spacing": 8 }
 }

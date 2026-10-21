@@ -43,9 +43,9 @@ if [[ $MUX == tmux ]]; then
     # A client already on the pane's session wins, else the most recently active one.
     mux_clients() {
         local session; session=$(tmux display-message -p -t "$TMUX_PANE" '#S' 2>/dev/null)
-        tmux list-clients -F '#{client_activity} #{client_session} #{client_name} #{client_pid}' 2>/dev/null |
-            awk -v s="$session" '{ print ($2 == s ? 1 : 0), $0 }' | sort -k1,1nr -k2,2nr |
-            awk '{ print $4, $5 }'
+        tmux list-clients -F '#{client_activity}\t#{client_session}\t#{client_name}\t#{client_pid}' 2>/dev/null |
+            awk -F'\t' -v s="$session" '{ print ($2 == s ? 1 : 0) "\t" $0 }' | sort -t$'\t' -k1,1nr -k2,2nr |
+            awk -F'\t' '{ print $4 "\t" $5 }'
     }
     mux_jump() {
         local client=$1
@@ -59,10 +59,18 @@ else
     tab_no=$(hget tab "$HERDR_TAB_ID" '.result.tab.number')
     tab_label=$(hget tab "$HERDR_TAB_ID" '.result.tab.label')
     location="${ws_label:-$HERDR_WORKSPACE_ID}${tab_no:+:$tab_no}${tab_label:+ $tab_label}"
-    mux_toast() { herdr notification show "Claude Code" --body "$1" --sound request >/dev/null 2>&1; }
+    mux_toast() { local m=${1//[$'\n\r\t']/ }; herdr notification show "Claude Code" --body="$m" --sound=request >/dev/null 2>&1; }
     # herdr panes are children of the server, so the window belongs to a client process:
     # one whose argv is just the herdr binary, with no subcommand.
-    mux_clients() { ps -eo pid=,args= | awk 'NF==2 && $2 ~ /(^|\/)herdr$/ { print "-", $1 }'; }
+    mux_clients() {
+        local real p
+        real=$(readlink -f "$(command -v herdr)" 2>/dev/null) || return 0
+        # own processes only, and the executable must really be that binary: argv[0] is attacker-settable
+        ps -u "$(id -u)" -o pid=,args= | awk 'NF==2 && $2 ~ /(^|\/)herdr$/ { print $1 }' |
+        while read -r p; do
+            [[ "$(readlink -f "/proc/$p/exe" 2>/dev/null)" == "$real" ]] && printf -- '-\t%s\n' "$p"
+        done
+    }
     # Pane-level focus is directional only in herdr, so this lands on the right tab, not the
     # exact pane; a single-pane tab (the usual agent layout) is therefore exact.
     mux_jump() { herdr workspace focus "$HERDR_WORKSPACE_ID" >/dev/null 2>&1
@@ -78,6 +86,7 @@ mux_toast "$message"
 # workspace. Panes often carry a stale/empty HYPRLAND_INSTANCE_SIGNATURE, so fall back to the live socket.
 focus_terminal() {
     local client_pid=$1 pid address d windows
+    [[ $client_pid =~ ^[0-9]+$ ]] || return 1   # [[ x -gt 1 ]] evaluates arithmetic: keep it numeric
     command -v hyprctl &>/dev/null || return 1
     if [[ ! -S "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/hypr/${HYPRLAND_INSTANCE_SIGNATURE:-}/.socket.sock" ]]; then
         for d in "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"/hypr/*/; do
@@ -90,6 +99,7 @@ focus_terminal() {
         address=$(jq -r --argjson p "$pid" 'map(select(.pid == $p)) | .[0].address // empty' <<<"$windows")
         [[ -n "$address" ]] && break
         pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')
+        [[ $pid =~ ^[0-9]+$ ]] || return 1
     done
     [[ -n "$address" ]] || return 1
     # Lua dispatcher (Hyprland 0.55+) first; fall back to the pre-Lua syntax
@@ -101,11 +111,11 @@ focus_terminal() {
 (
     action=$(notify-send --app-name="Claude Code" --icon="$icon" \
         --urgency=normal --expire-time=10000 \
-        --action=default=Focus --wait \
+        --action=default=Focus --wait -- \
         "$summary" "$body" 2>/dev/null)
     if [[ "$action" == "default" ]]; then
         client=""
-        while read -r name pid; do
+        while IFS=$'\t' read -r name pid; do
             [[ -n "$pid" ]] || continue
             if focus_terminal "$pid"; then client=$name; break; fi
         done < <(mux_clients)
