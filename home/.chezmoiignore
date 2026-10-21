@@ -10,7 +10,6 @@ README.md
 .config/tmux/plugins.lock
 .config/tmux/plugins
 .config/tmux/LICENSE
-.config/tmux/assets
 .config/tmux/scripts/fzf-*.sh
 .config/tmux/scripts/mux-picker.sh
 .config/tmux/scripts/pr-status.sh
