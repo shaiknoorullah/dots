@@ -10,7 +10,10 @@
 # bit lives on the target, so the symlink grants nothing new.
 #
 # Never makes `chezmoi apply` interactive: without passwordless sudo it prints the one command
-# to run and exits 0.
+# to run and exits 0. Deliberately `run_` (every apply) and not `run_onchange_`: an onchange
+# script that exits 0 without doing the work gets its hash recorded and never retries, which
+# would leave GUI auth broken with nothing ever asking again. This is idempotent -- when the
+# bridge is already in place it early-exits after two stat calls.
 set -uo pipefail
 {{- if ne .chezmoi.osRelease.id "nixos" }}
 helper=""
