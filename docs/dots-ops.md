@@ -194,7 +194,7 @@ User config: `~/.config/dots-ops/config.toml` (chezmoi). Defaults are used for a
 | `disk.warn` / `disk.crit` | 85 / 95 | `disk-watch` |
 | `backup.keep_daily` / `keep_weekly` / `keep_monthly` | 7 / 4 / 6 | `backup` forget policy |
 | `backup.max_age_hours` | 48 | `backup-watch` |
-| `k8s.contexts` | `["admin@onprem-s2a", "ovh"]` | `k8s-health` |
+| `k8s.contexts` | `[]` — empty means every context in this machine's kubeconfig | `k8s-health` |
 | `pins.lock_max_days` | 30 | `pins-check`, `pins-bump` (nixpkgs lock age) |
 | `jobs.<job>.enabled` | `true` | any job: set `false` to disable |
 
@@ -277,8 +277,10 @@ What is off when `orgManaged = true`:
 - **Personal infrastructure.** The Nix packages in `personalOnly` (nix/home.nix: chat and media apps, age,
   cloudflared, sshpass, CUDA, ...) are left out through `DOTS_ORG_MANAGED=1`, and extra tools marked
   `personal: true` are not installed. (Tailscale is not in the dotfiles on any profile; `net-watch` only checks
-  it if the binary exists.) The personal OVH tunnel (`ovh-k8s-tunnel.service`) is not deployed or enabled, and the `ovh` kube
-  context is not in `k8s.contexts`. The company cluster tunnel stays.
+  it if the binary exists.) The personal reverse tunnel (`reverse-tunnel.service`) is not deployed or enabled.
+  Kube tunnel units are not shipped on any profile: they are copied by hand, and `24-systemd` enables whatever
+  `*-tunnel.service` the machine has (see docs/install.md §2). `k8s.contexts` is discovered from the machine's
+  own kubeconfig, so an org machine sees exactly the clusters it was given.
 
 Kept (user level only, no root, no open ports): `disk-watch` (warn only), `disk-clean-user`, `net-watch`,
 `containers`, `containers-prune`, `k8s-health`, `perf-mode`, the relay, the Waybar module and `dots-ops status`.
@@ -286,7 +288,7 @@ Kept (user level only, no root, no open ports): `disk-watch` (warn only), `disk-
 Switching an existing machine to `orgManaged` removes the root side on the next `chezmoi apply`: the installer
 disables and deletes the dots-ops system units, the sudoers rule, the udev rule, `/usr/local/lib/dots-ops`,
 `/usr/local/bin/dots-ops-{run,job}`, `/etc/dots-ops` and the `dots-ops` group. `/var/lib/dots-ops` (old status
-data) is left alone. The OVH tunnel is stopped and disabled. User files already deployed (backup jobs, timers) are
+data) is left alone. The personal reverse tunnel is stopped and disabled. User files already deployed (backup jobs, timers) are
 not removed by chezmoi; disable them with `systemctl --user disable --now` and delete them by hand. Nothing
 already installed (packages) is uninstalled.
 

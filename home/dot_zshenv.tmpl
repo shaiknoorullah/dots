@@ -3,7 +3,8 @@
 [ -r "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
 typeset -U path PATH
 path=($HOME/.local/bin(N-/) $HOME/.nix-profile/bin(N-/) $path)
-export KUBECONFIG="$HOME/.kube/onprem-s2a.yaml"
+# KUBECONFIG is discovered per machine by kube-discover.sh (this repo names no cluster); none found -> unset
+[ -r "${XDG_CONFIG_HOME:-$HOME/.config}/dots/kube.env" ] && . "${XDG_CONFIG_HOME:-$HOME/.config}/dots/kube.env"
 export EDITOR=nvim VISUAL=nvim
 
 # Ubuntu/Debian /etc/zsh/zshrc runs compinit before ~/.zshrc; zimfw/completion does it (with its own dumpfile), so skip the global one

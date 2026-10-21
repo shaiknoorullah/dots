@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Publish this machine's KUBECONFIG to ~/.config/dots/kube.env and ~/.config/environment.d/50-kube.conf.
+# Numbered before 24-systemd so the user manager has the value before any unit is enabled.
+# Re-runs when the helper changes, or when a kubeconfig is added to or removed from ~/.kube.
+# helper: {{ include "private_dot_local/private_bin/executable_kube-discover.sh" | sha256sum }}
+# kube dir: {{ output "sh" "-c" (printf "ls -1 %s/.kube 2>/dev/null | LC_ALL=C sort | sha256sum" .chezmoi.homeDir) | trim }}
+set -uo pipefail
+[ -x "$HOME/.local/bin/kube-discover.sh" ] || exit 0
+exec "$HOME/.local/bin/kube-discover.sh"

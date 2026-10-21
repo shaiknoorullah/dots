@@ -1,4 +1,8 @@
 # dots-ops — automated system maintenance (design)
+> Note: cluster, tunnel and kubeconfig names in this record were replaced with placeholders
+> (`<cluster-a>`, `<cluster-b>`) when the kube tunnel was unmanaged from dots — this repo is
+> public and names no cluster. See `docs/install.md` §2.
+
 
 Date: 2026-10-07 · Repo: `dots` (branch `consolidate`, second plan after the consolidation plan)
 Owner: Shaik Noorullah · Status: approved in conversation section by section; written for review.
@@ -74,7 +78,7 @@ missed); if no notification daemon is running, notifications queue in `pending/`
 | | `perf-mode` | keybind / Waybar click | toggle focus mode (performance + SwayNC do-not-disturb) | — |
 | Network | `net-watch` | 5 min + NetworkManager dispatcher | connectivity, DNS, tailscale, kube tunnels; restart a tunnel unit once, then alert | — |
 | Containers | `containers` | hourly | alert on unhealthy/restart-looping containers; prune dangling images when idle | — |
-| Clusters | `k8s-health` | 15 min | per context (onprem-s2a, ovh): NotReady nodes, CrashLoop pods, certs < 14 d, failed Argo syncs; dedupe per issue | — |
+| Clusters | `k8s-health` | 15 min | per context (<cluster-a>, <cluster-b>): NotReady nodes, CrashLoop pods, certs < 14 d, failed Argo syncs; dedupe per issue | — |
 | Backups | `backup` | daily, idle | restic backup of `$HOME` (excludes) + dots repo; weekly `restic check` | restore; `forget --prune` beyond policy |
 | | `backup-watch` | daily | alert if last good backup > 48 h | — |
 

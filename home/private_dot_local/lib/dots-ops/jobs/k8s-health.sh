@@ -55,6 +55,13 @@ job_main() {
     ctx=$(sed -E 's/^[[:space:]]*-?[[:space:]]*//; s/^["'\'']//; s/["'\'',]*[[:space:]]*$//' <<< "$ctx")
     if [ -n "$ctx" ] && [ "$ctx" != '[]' ]; then contexts+=("$ctx"); fi
   done <<< "$raw"
+  # An empty [k8s] contexts list means discover: every context this machine's kubeconfig knows. The repo names no
+  # cluster, so the machine's own kubeconfig (copied by hand) is the only source of context names.
+  if [ ${#contexts[@]} -eq 0 ]; then
+    while IFS= read -r ctx; do
+      [ -n "$ctx" ] && contexts+=("$ctx")
+    done < <(kubectl config get-contexts -o name 2>/dev/null)
+  fi
   [ ${#contexts[@]} -gt 0 ] || { ops_state k8s-health ok "n/a: no k8s contexts configured"; return 0; }
   # R62: contexts this host's kubeconfig does not have are n/a here (if the list itself fails, check them all)
   if known=$(kubectl config get-contexts -o name 2>/dev/null); then

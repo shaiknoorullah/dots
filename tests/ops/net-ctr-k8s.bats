@@ -11,6 +11,13 @@ setup() {
   export BIN="$BATS_TEST_TMPDIR/bin"; mkdir -p "$BIN"
   export STUB_LOG="$BATS_TEST_TMPDIR/calls.log"; : > "$STUB_LOG"
   export OPS_ASK_UI=0 KDIR="$BATS_TEST_TMPDIR/kube"; mkdir -p "$KDIR"
+  # net-watch discovers tunnel units from here rather than being told their names. The names below are
+  # deliberately generic: a real machine's units are hand-copied and this repo names no cluster.
+  export XDG_CONFIG_HOME="$BATS_TEST_TMPDIR/config"; export SYSD_USER="$XDG_CONFIG_HOME/systemd/user"
+  mkdir -p "$SYSD_USER"
+  : > "$SYSD_USER/alpha-tunnel.service"
+  : > "$SYSD_USER/beta-tunnel.service"
+  : > "$SYSD_USER/not-a-match.service"   # only *-tunnel.service is picked up
   mkstub getent 'exit ${STUB_DNS_RC:-0}'
   mkstub curl 'exit ${STUB_NET_RC:-0}'
   # systemctl --user <verb> ... <unit>.service ; STUB_NOUNIT / STUB_COND_NO / STUB_INACTIVE are space-separated unit names
@@ -33,7 +40,7 @@ exit 0'
   # kubectl: files in $KDIR: <ctx>.down | <ctx>.nodes | <ctx>.pods | <ctx>.certs | <ctx>.apps ; <ctx>.crd-cert / .crd-argo = CRD exists
   # <ctx>.fail-<nodes|pods|crd|certs|apps> = that one query fails (timeout/RBAC); $KDIR/contexts = `config get-contexts -o name`
   mkstub kubectl 'echo "kubectl $*" >> "$STUB_LOG"
-if [ "$1" = config ]; then [ "$2 $3 $4" = "get-contexts -o name" ] || exit 9; cat "$KDIR/contexts" 2>/dev/null || printf "c1\nc2\nadmin@onprem-s2a\novh\n"; exit 0; fi
+if [ "$1" = config ]; then [ "$2 $3 $4" = "get-contexts -o name" ] || exit 9; cat "$KDIR/contexts" 2>/dev/null || printf "c1\nc2\n"; exit 0; fi
 [ "$3" = "--request-timeout=10s" ] || exit 9
 c=$2; shift 3
 [ -e "$KDIR/$c.down" ] && exit 1
@@ -69,32 +76,48 @@ ustate() { jq -r ".$2" "$OPS_STATE/state/$1.json"; }
   ! grep -q 'restart' "$STUB_LOG"
 }
 @test "net-watch: DNS and connectivity both down -> warn offline, tunnels not touched" {
-  STUB_DNS_RC=2 STUB_NET_RC=6 STUB_INACTIVE="onprem-kube-tunnel" runjob "$UJ/net-watch.sh"
+  STUB_DNS_RC=2 STUB_NET_RC=6 STUB_INACTIVE="alpha-tunnel" runjob "$UJ/net-watch.sh"
   [ "$(ustate net-watch status)" = warn ]
   [ "$(ustate net-watch summary)" = offline ]
   ! grep -q 'restart' "$STUB_LOG"
 }
 @test "net-watch: inactive tunnel restarted once and recorded, still inactive next run -> fail naming it" {
-  export STUB_INACTIVE="ovh-k8s-tunnel"
+  export STUB_INACTIVE="beta-tunnel"
   runjob "$UJ/net-watch.sh"
   [ "$(ustate net-watch status)" = warn ]
-  [ "$(grep -c 'systemctl --user restart ovh-k8s-tunnel.service' "$STUB_LOG")" = 1 ]
-  [ -n "$(jq -r '.["ovh-k8s-tunnel"].restarted_at' "$OPS_STATE/net-watch-tunnels.json")" ]
-  ! grep -q 'restart onprem' "$STUB_LOG"
+  [ "$(grep -c 'systemctl --user restart beta-tunnel.service' "$STUB_LOG")" = 1 ]
+  [ -n "$(jq -r '.["beta-tunnel"].restarted_at' "$OPS_STATE/net-watch-tunnels.json")" ]
+  ! grep -q 'restart alpha' "$STUB_LOG"
   runjob "$UJ/net-watch.sh"
   [ "$(ustate net-watch status)" = fail ]
-  [[ "$(ustate net-watch summary)" == *ovh-k8s-tunnel* ]]
+  [[ "$(ustate net-watch summary)" == *beta-tunnel* ]]
   [ "$(grep -c 'restart' "$STUB_LOG")" = 1 ]   # no second restart
 }
 @test "net-watch: tunnel that recovers clears its restarted_at" {
-  STUB_INACTIVE="ovh-k8s-tunnel" runjob "$UJ/net-watch.sh"
+  STUB_INACTIVE="beta-tunnel" runjob "$UJ/net-watch.sh"
   runjob "$UJ/net-watch.sh"   # active again (no STUB_INACTIVE)
   [ "$(ustate net-watch status)" = ok ]
-  [ "$(jq -r 'has("ovh-k8s-tunnel")' "$OPS_STATE/net-watch-tunnels.json")" = false ]
+  [ "$(jq -r 'has("beta-tunnel")' "$OPS_STATE/net-watch-tunnels.json")" = false ]
 }
 @test "net-watch: condition not met or unit missing -> n/a, never restarted or failed" {
-  export STUB_INACTIVE="onprem-kube-tunnel ovh-k8s-tunnel" STUB_COND_NO="onprem-kube-tunnel" STUB_NOUNIT="ovh-k8s-tunnel"
+  export STUB_INACTIVE="alpha-tunnel beta-tunnel" STUB_COND_NO="alpha-tunnel" STUB_NOUNIT="beta-tunnel"
   runjob "$UJ/net-watch.sh"
+  runjob "$UJ/net-watch.sh"
+  [ "$(ustate net-watch status)" = ok ]
+  ! grep -q 'restart' "$STUB_LOG"
+}
+@test "net-watch: tunnel units are discovered, not named; a unit dropped in later is picked up" {
+  rm -f "$SYSD_USER/beta-tunnel.service"
+  STUB_INACTIVE="beta-tunnel" runjob "$UJ/net-watch.sh"
+  [ "$(ustate net-watch status)" = ok ]          # gone from the dir -> not watched at all
+  ! grep -q 'restart' "$STUB_LOG"
+  : > "$SYSD_USER/beta-tunnel.service"           # hand-copied onto this machine
+  STUB_INACTIVE="beta-tunnel" runjob "$UJ/net-watch.sh"
+  [ "$(grep -c 'systemctl --user restart beta-tunnel.service' "$STUB_LOG")" = 1 ]
+  ! grep -q 'not-a-match' "$STUB_LOG"            # only *-tunnel.service matches
+}
+@test "net-watch: no tunnel units at all -> still ok, nothing restarted" {
+  rm -f "$SYSD_USER"/*-tunnel.service
   runjob "$UJ/net-watch.sh"
   [ "$(ustate net-watch status)" = ok ]
   ! grep -q 'restart' "$STUB_LOG"
@@ -163,13 +186,21 @@ bad_pod() { printf '{"items":[{"metadata":{"namespace":"app","name":"%s"},"statu
   [ "$(ustate k8s-health status)" = ok ]
   [[ "$(ustate k8s-health summary)" == n/a* ]]
 }
-@test "k8s-health: no contexts -> ok n/a; list from yq is parsed" {
+@test "k8s-health: empty list discovers every context in the kubeconfig; none there -> ok n/a" {
+  : > "$KDIR/contexts"                      # this machine's kubeconfig knows no context
   runjob "$UJ/k8s-health.sh"
   [[ "$(ustate k8s-health summary)" == n/a* ]]
-  ops_cfg() { if [ "$1" = k8s.contexts ]; then printf -- '- admin@onprem-s2a\n- ovh\n'; else echo "$2"; fi; }
+  printf 'c1\nc2\n' > "$KDIR/contexts"      # now it does: both are checked without the repo naming either
   runjob "$UJ/k8s-health.sh"
-  grep -q 'kubectl --context admin@onprem-s2a --request-timeout=10s get nodes' "$STUB_LOG"
-  grep -q 'kubectl --context ovh --request-timeout=10s get nodes' "$STUB_LOG"
+  grep -q 'kubectl --context c1 --request-timeout=10s get nodes' "$STUB_LOG"
+  grep -q 'kubectl --context c2 --request-timeout=10s get nodes' "$STUB_LOG"
+}
+@test "k8s-health: an explicit list narrows the discovered set; list from yq is parsed" {
+  printf 'c1\nc2\n' > "$KDIR/contexts"
+  ops_cfg() { if [ "$1" = k8s.contexts ]; then printf -- '- c1\n'; else echo "$2"; fi; }
+  runjob "$UJ/k8s-health.sh"
+  grep -q 'kubectl --context c1 --request-timeout=10s get nodes' "$STUB_LOG"
+  ! grep -q 'kubectl --context c2 --request-timeout=10s get nodes' "$STUB_LOG"
 }
 @test "k8s-health: same issue twice -> one notification; new issue -> second; cleared -> recovered" {
   k8s_ctx; export K8S_CTX=c1
@@ -214,12 +245,12 @@ bad_pod() { printf '{"items":[{"metadata":{"namespace":"app","name":"%s"},"statu
   [ "$(notified)" = 1 ]
 }
 @test "R62 k8s-health: a configured context missing from kubeconfig is n/a (skipped), not unreachable" {
-  ops_cfg() { if [ "$1" = k8s.contexts ]; then printf -- '- c1\n- ovh\n'; else echo "$2"; fi; }
+  ops_cfg() { if [ "$1" = k8s.contexts ]; then printf -- '- c1\n- c9\n'; else echo "$2"; fi; }
   printf 'c1\n' > "$KDIR/contexts"
   runjob "$UJ/k8s-health.sh"
   [ "$(ustate k8s-health status)" = ok ]
-  [[ "$(ustate k8s-health summary)" != *unreachable* ]]; [[ "$(ustate k8s-health summary)" == *"n/a here: ovh"* ]]
-  ! grep -q 'context ovh' "$STUB_LOG"
+  [[ "$(ustate k8s-health summary)" != *unreachable* ]]; [[ "$(ustate k8s-health summary)" == *"n/a here: c9"* ]]
+  ! grep -q 'context c9' "$STUB_LOG"
   : > "$KDIR/contexts"; runjob "$UJ/k8s-health.sh"   # none of them on this host
   [ "$(ustate k8s-health status)" = ok ]; [[ "$(ustate k8s-health summary)" == n/a:* ]]
   [ "$(notified)" = 0 ]

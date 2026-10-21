@@ -45,7 +45,6 @@ f all .config/qtengine/config.json
 f all .config/nvim/init.lua
 f all .config/adhd/iqamah.conf
 f all .config/timewarrior/timewarrior.cfg
-f all .config/onprem-kube-tunnel.conf
 f all .config/environment.d/10-dots-path.conf
 f all .config/zsh/aliases.zsh
 f all .zsh_plugins.txt
@@ -89,7 +88,7 @@ x all .local/bin/dots-ops
 x all .local/bin/dots-ops-job
 x all .local/bin/dots-ops-ask
 f all .config/dots-ops/config.toml
-x all .local/bin/kube-tunnel.sh
+x all .local/bin/kube-discover.sh
 x all .local/bin/start-hyprland-dots
 f all .config/systemd/user/adhd-prayer-times.service
 f all .config/systemd/user/adhd-prayer-times.timer
@@ -104,8 +103,6 @@ f all .config/systemd/user/dots-ops-fallback.service
 f all .config/systemd/user/dots-ops-relay.path
 f all .config/systemd/user/dots-ops-relay.service
 f all .config/systemd/user/hyprpolkitagent.service
-f all .config/systemd/user/onprem-kube-tunnel.service
-f personal .config/systemd/user/ovh-k8s-tunnel.service
 f personal .config/systemd/user/reverse-tunnel.service
 x personal .local/bin/capture-window.py
 x personal .local/bin/capture-mirror.py

@@ -7,7 +7,9 @@ keep_weekly = 4
 keep_monthly = 6
 max_age_hours = 48
 [k8s]
-contexts = ["admin@onprem-s2a"{{ if not (get . "orgManaged" | default false) }}, "ovh"{{ end }}]
+# empty = every context in this machine's kubeconfig (k8s-health discovers them);
+# name contexts here only to narrow that down. The repo names no cluster.
+contexts = []
 [jobs.k8s-health]
 enabled = true
 # Root side of dots-ops (sudo runner, system units). false on an orgManaged machine: company IT owns that layer,
