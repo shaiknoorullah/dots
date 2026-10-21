@@ -8,18 +8,23 @@ if ! systemctl --user show-environment >/dev/null 2>&1; then
 fi
 systemctl --user daemon-reload
 systemctl --user enable --now adhd-prayer-times.timer adhd-salah-schedule.timer aw-server.service
-# kube tunnels: always enabled; each unit's ConditionPathExists skips it until its hand-copied secret exists
+# Kube tunnel units are copied by hand (docs/install.md §2), never shipped here, so enable whatever this machine
+# was given. Each unit's own ConditionPathExists keeps it skipped until its secret is in place. reverse-tunnel.service
+# IS shipped by dots, so it is excluded here and enabled per profile below.
+for f in "${XDG_CONFIG_HOME:-$HOME/.config}"/systemd/user/*-tunnel.service; do
+  [ -e "$f" ] || continue
+  u=${f##*/}
+  [ "$u" = reverse-tunnel.service ] && continue
+  systemctl --user enable --now "$u" 2>/dev/null || true
+done
 {{- if get . "orgManaged" | default false }}
-# orgManaged: the company cluster tunnel stays; the personal OVH tunnel does not exist here (stop it if an earlier apply enabled it)
-systemctl --user enable --now onprem-kube-tunnel.service
-systemctl --user disable --now ovh-k8s-tunnel.service 2>/dev/null || true
+# orgManaged: no personal reverse tunnel here (stop it if an earlier apply enabled it)
 systemctl --user disable --now reverse-tunnel.service 2>/dev/null || true
 # personal window-title capture never runs on a work machine (stop it if an earlier apply enabled it)
 systemctl --user disable --now capture-window.service 2>/dev/null || true
 {{- else }}
 # window-focus capture (raw titles) on personal machines only; capture-mirror reads what it writes
 systemctl --user enable --now capture-window.service
-systemctl --user enable --now onprem-kube-tunnel.service ovh-k8s-tunnel.service
 # personal reverse tunnel (autossh); skipped until the hand-copied ~/.config/reverse-tunnel.env exists, or while the old system unit is installed
 systemctl --user enable --now reverse-tunnel.service
 {{- end }}

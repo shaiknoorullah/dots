@@ -1,4 +1,8 @@
 # dots Consolidation Implementation Plan (rev 2)
+> Note: cluster, tunnel and kubeconfig names in this record were replaced with placeholders
+> (`<cluster-a>`, `<cluster-b>`) when the kube tunnel was unmanaged from dots — this repo is
+> public and names no cluster. See `docs/install.md` §2.
+
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -116,8 +120,8 @@ README.md
 {{- if not .hasAgeKey }}
 .secrets
 .kube/config
-.kube/onprem-s2a.yaml
-.kube/ovh-k8s.conf
+.kube/<cluster-a>.yaml
+.kube/<cluster-b>.conf
 {{- end }}
 {{- if ne .multiplexer "herdr" }}
 .config/herdr
@@ -328,7 +332,7 @@ f all .config/qtengine/config.json
 f all .config/nvim/init.lua
 f all .config/adhd/iqamah.conf
 f all .config/timewarrior/timewarrior.cfg
-f all .config/onprem-kube-tunnel.conf
+f all .config/<cluster-a>-tunnel.conf
 f all .config/environment.d/10-dots-path.conf
 f all .config/zsh/aliases.zsh
 f all .zsh_plugins.txt
@@ -370,8 +374,8 @@ f all .config/systemd/user/aw-server.service
 f all .config/systemd/user/awatcher.service
 f all .config/systemd/user/foot-server.service
 f all .config/systemd/user/hyprpolkitagent.service
-f all .config/systemd/user/onprem-kube-tunnel.service
-f all .config/systemd/user/ovh-k8s-tunnel.service
+f all .config/systemd/user/<cluster-a>-tunnel.service
+f all .config/systemd/user/<cluster-b>-tunnel.service
 f tmux .config/systemd/user/tmux.service
 f herdr .config/systemd/user/herdr.service
 ```
@@ -459,14 +463,14 @@ add ~/.config/hypr/hyprland.lua ~/.config/hypr/hypridle.conf ~/.config/hypr/hypr
     ~/.config/clipse/config.json ~/.config/clipse/custom_theme.json ~/.config/mako/config \
     ~/.config/swayosd/style.css ~/.config/starship.toml ~/.config/starship/scripts/pipeline.sh \
     ~/.config/gtk-3.0 ~/.config/gtk-4.0 ~/.config/qtengine ~/.config/nvim ~/.config/adhd/iqamah.conf \
-    ~/.config/timewarrior/timewarrior.cfg ~/.config/onprem-kube-tunnel.conf ~/.taskrc \
+    ~/.config/timewarrior/timewarrior.cfg ~/.config/<cluster-a>-tunnel.conf ~/.taskrc \
     ~/.task/hooks/on-modify.timewarrior ~/.zshrc ~/.zshenv ~/.tmux.conf
 for s in adhd-block-pick.sh adhd-break.sh adhd-break-end.sh adhd-capture.sh adhd-focus.sh adhd-salah-pick.sh \
          adhd-prayer-times.sh adhd-salah-schedule.sh adhd-salah-nudge.sh keybind-help.sh screenshot.sh \
          yazi-launch.sh tw-tui wallpaper waybar-ctx.sh waybar-kube.sh waybar-project.sh waybar-salah.sh \
          waybar-tracking.sh ctx kube-tunnel.sh; do add ~/.local/bin/$s; done
 for u in adhd-prayer-times.service adhd-prayer-times.timer adhd-salah-schedule.service adhd-salah-schedule.timer \
-         aw-server.service awatcher.service onprem-kube-tunnel.service ovh-k8s-tunnel.service tmux.service; do
+         aw-server.service awatcher.service <cluster-a>-tunnel.service <cluster-b>-tunnel.service tmux.service; do
   add ~/.config/systemd/user/$u; done
 ```
 
@@ -505,7 +509,7 @@ git add -A && git commit -m "feat(chezmoi): import live work-PC files verbatim (
 
 > **Superseded 2026-10-07 (owner):** the repo is public, so secrets stay out of it entirely — see spec D8 and `docs/install.md` §2. Steps below are kept for history only; do not run them.
 
-**Files:** Modify `home/.chezmoi.toml.tmpl` (recipient); create `home/encrypted_private_dot_secrets.age`, `home/dot_kube/encrypted_private_config.age`, `home/dot_kube/encrypted_private_onprem-s2a.yaml.age`, `home/dot_kube/encrypted_private_ovh-k8s.conf.age`.
+**Files:** Modify `home/.chezmoi.toml.tmpl` (recipient); create `home/encrypted_private_dot_secrets.age`, `home/dot_kube/encrypted_private_config.age`, `home/dot_kube/encrypted_private_<cluster-a>.yaml.age`, `home/dot_kube/encrypted_private_<cluster-b>.conf.age`.
 
 - [ ] **Step 1 (owner): set the recipient**
 
@@ -520,7 +524,7 @@ Expected: `1`.
 
 ```bash
 cfg=$(mktemp); chezmoi --source "$PWD/home" execute-template --init < home/.chezmoi.toml.tmpl > "$cfg"
-chezmoi --source "$PWD/home" --config "$cfg" add --encrypt ~/.secrets ~/.kube/config ~/.kube/onprem-s2a.yaml ~/.kube/ovh-k8s.conf
+chezmoi --source "$PWD/home" --config "$cfg" add --encrypt ~/.secrets ~/.kube/config ~/.kube/<cluster-a>.yaml ~/.kube/<cluster-b>.conf
 grep -L 'age-encryption.org' home/encrypted_private_dot_secrets.age home/dot_kube/encrypted_* || echo "all encrypted"
 ```
 Expected: `all encrypted`.
@@ -584,7 +588,7 @@ Expected now: FAIL (no environment.d file; packages empty until Task 5 — re-ru
 ```
 PATH=${HOME}/.local/bin:${HOME}/.nix-profile/bin:/usr/local/bin:/usr/bin:/bin
 XDG_DATA_DIRS=${HOME}/.nix-profile/share:/usr/local/share:/usr/share
-KUBECONFIG=${HOME}/.kube/onprem-s2a.yaml
+KUBECONFIG=${HOME}/.kube/<cluster-a>.yaml
 ```
 Delete the old live `20-kubeconfig.conf` if `chezmoi add` imported it (`git rm -q home/dot_config/environment.d/20-kubeconfig.conf 2>/dev/null; true`).
 
@@ -866,7 +870,7 @@ git add -A && git commit -m "feat(foot): replace kitty — foot (ligature fork),
 typeset -U path PATH
 path=($HOME/.local/bin(N-/) $HOME/.nix-profile/bin(N-/) $path)
 [ -r "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
-export KUBECONFIG="$HOME/.kube/onprem-s2a.yaml"
+export KUBECONFIG="$HOME/.kube/<cluster-a>.yaml"
 export EDITOR=nvim VISUAL=nvim
 ```
 
@@ -1007,7 +1011,7 @@ At the top of `hyprland.lua.tmpl`, replace the literal env lines (NVIDIA vars, `
 local HOME = os.getenv("HOME")
 hl.env("PATH", HOME .. "/.local/bin:" .. HOME .. "/.nix-profile/bin:/usr/local/bin:/usr/bin:/bin")
 hl.env("XDG_DATA_DIRS", HOME .. "/.nix-profile/share:/usr/local/share:/usr/share")
-hl.env("KUBECONFIG", HOME .. "/.kube/onprem-s2a.yaml")
+hl.env("KUBECONFIG", HOME .. "/.kube/<cluster-a>.yaml")
 hl.env("ELECTRON_OZONE_PLATFORM_HINT", "auto")
 {{- if eq .gpu "nvidia" }}
 hl.env("LIBVA_DRIVER_NAME", "nvidia")
@@ -1293,7 +1297,7 @@ nix run home-manager/master -- switch --impure --flake {{ joinPath .chezmoi.work
 # units hash: {{ output "sh" "-c" (printf "cat %s/dot_config/systemd/user/* | sha256sum" .chezmoi.sourceDir) }}
 set -uo pipefail
 systemctl --user daemon-reload
-systemctl --user enable --now adhd-prayer-times.timer adhd-salah-schedule.timer aw-server.service onprem-kube-tunnel.service ovh-k8s-tunnel.service foot-server.service
+systemctl --user enable --now adhd-prayer-times.timer adhd-salah-schedule.timer aw-server.service <cluster-a>-tunnel.service <cluster-b>-tunnel.service foot-server.service
 {{- if eq .multiplexer "tmux" }}
 systemctl --user enable --now tmux.service; systemctl --user disable --now herdr.service 2>/dev/null || true
 {{- else }}

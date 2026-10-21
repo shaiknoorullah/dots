@@ -30,14 +30,37 @@ note() {
 SSH_DIR="$HOME/.ssh"
 ASKPASS="$HOME/.config/dots-mux/ssh-askpass.sh"
 
-# Key registry: name|file|description
-KEYS=(
-    "github_keys|$SSH_DIR/github_keys|GitHub (personal)"
-    "pnow-github|$SSH_DIR/pnow-devsupreme-github|GitHub (pnow)"
-    "wbslk_platform|$SSH_DIR/wbslk_platform|Contabo (wbslk)"
-    "hostinger|$SSH_DIR/hostinger|Hostinger VPS"
-    "aws-hg-keypair|$SSH_DIR/aws-hg-keypair.pem|AWS (hg)"
-)
+# Key registry: discovered, never hard-coded — this repo is public and names no host or company.
+# An optional ~/.config/dots-mux/ssh-keys.conf (hand-copied, never in the repo) labels and orders the
+# keys you care about, one "name|file|description" line each; file may be bare or absolute. Everything
+# it does not mention is still discovered from ~/.ssh, so a new key appears without editing dots.
+REGISTRY="$HOME/.config/dots-mux/ssh-keys.conf"
+KEYS=()
+listed=""
+if [ -r "$REGISTRY" ]; then
+    while IFS='|' read -r name file desc; do
+        case "$name" in ''|\#*) continue ;; esac
+        case "$file" in /*) ;; *) file="$SSH_DIR/${file:-$name}" ;; esac
+        KEYS+=("$name|$file|${desc:-$name}")
+        listed="$listed $file"
+    done < "$REGISTRY"
+fi
+# then every other private key in ~/.ssh: a file with a matching .pub, plus bare .pem keys
+for pub in "$SSH_DIR"/*.pub; do
+    [ -e "$pub" ] || continue
+    file=${pub%.pub}
+    [ -f "$file" ] || continue
+    case " $listed " in *" $file "*) continue ;; esac
+    # a .pub carries the key's own comment; that is a better label than the filename when present
+    desc=$(awk '{ $1=""; $2=""; sub(/^ */, ""); print }' "$pub" 2>/dev/null)
+    KEYS+=("${file##*/}|$file|${desc:-${file##*/}}")
+done
+for file in "$SSH_DIR"/*.pem; do
+    [ -f "$file" ] || continue
+    case " $listed " in *" $file "*) continue ;; esac
+    KEYS+=("${file##*/}|$file|${file##*/}")
+done
+[ ${#KEYS[@]} -gt 0 ] || { note "ssh-menu: no SSH keys found in $SSH_DIR"; exit 0; }
 
 # Get fingerprints currently loaded in agent
 loaded_fps=$(ssh-add -l 2>/dev/null | awk '{print $2}' || true)

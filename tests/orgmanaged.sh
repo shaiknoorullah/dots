@@ -96,15 +96,24 @@ for d in "$org:$out" "$per:$perout"; do
     [ -f "${d#*:}/.config/systemd/user/$t" ] || bad "systemd script enables $t, which is not deployed (${d%%:*})"
   done
 done
-# the personal OVH tunnel: not deployed, not enabled (and stopped if it was) on org machines; the company tunnel stays
-render "$org" run_onchange_after_24-systemd.sh.tmpl "$work/org-sysd.sh" && {
-  grep -qE 'enable .*ovh-k8s-tunnel' "$work/org-sysd.sh" && bad "org systemd script enables the OVH tunnel"
-  grep -q 'disable --now ovh-k8s-tunnel.service' "$work/org-sysd.sh" || bad "org systemd script does not stop a previously enabled OVH tunnel"
-  grep -q 'enable --now onprem-kube-tunnel.service' "$work/org-sysd.sh" || bad "org systemd script lost the company tunnel"
-}
-render "$per" run_onchange_after_24-systemd.sh.tmpl "$work/per-sysd.sh" && { grep -q 'enable --now onprem-kube-tunnel.service ovh-k8s-tunnel.service' "$work/per-sysd.sh" || bad "personal systemd script lost the OVH tunnel"; }
-[ ! -e "$out/.config/systemd/user/ovh-k8s-tunnel.service" ] || bad "OVH tunnel unit deployed on org machine"
-# the personal reverse tunnel: same rules as the OVH tunnel
+# Kube tunnels are never shipped: unit, conf and helper are copied by hand (docs/install.md §2). Asserted by
+# shape, not by name, so this test does not name a cluster either.
+render "$org" run_onchange_after_24-systemd.sh.tmpl "$work/org-sysd.sh" || bad "org systemd script failed to render"
+render "$per" run_onchange_after_24-systemd.sh.tmpl "$work/per-sysd.sh" || bad "personal systemd script failed to render"
+for d in "$out" "$perout"; do
+  shipped=$(find "$d" \( -name '*kube-tunnel*' -o -name '*k8s-tunnel*' \) -print 2>/dev/null)
+  [ -z "$shipped" ] || bad "the repo ships a kube tunnel target ($shipped); it must be copied by hand"
+done
+# instead, both profiles enable whatever hand-copied *-tunnel.service the machine has
+for f in "$work/org-sysd.sh" "$work/per-sysd.sh"; do
+  grep -q 'systemd/user/\*-tunnel.service' "$f" || bad "$f lost the tunnel-unit discovery loop"
+  grep -q 'reverse-tunnel.service ] && continue' "$f" || bad "$f would double-handle the shipped reverse tunnel"
+done
+# KUBECONFIG is discovered too: the helper ships, and no render names a kubeconfig
+for d in "$out" "$perout"; do
+  [ -x "$d/.local/bin/kube-discover.sh" ] || bad "kube-discover.sh not deployed executable ($d)"
+done
+# the personal reverse tunnel
 [ ! -e "$out/.config/systemd/user/reverse-tunnel.service" ] || bad "reverse tunnel unit deployed on org machine"
 grep -qE 'enable .*reverse-tunnel' "$work/org-sysd.sh" && bad "org systemd script enables the reverse tunnel"
 grep -q 'disable --now reverse-tunnel.service' "$work/org-sysd.sh" || bad "org systemd script does not stop a previously enabled reverse tunnel"
@@ -124,6 +133,13 @@ grep -q '^EnvironmentFile=-%h/.config/reverse-tunnel.env$' "$ru" || bad "reverse
 grep -q '^ConditionPathExists=%h/.config/reverse-tunnel.env$' "$ru" || bad "reverse tunnel is not skipped without its env file"
 grep -q 'StrictHostKeyChecking=yes' "$ru" || bad "reverse tunnel does not check the host key"
 grep -vE '^[[:space:]]*#' "$ru" | grep -qE '([0-9]{1,3}\.){3}[0-9]{1,3}|[A-Za-z0-9_.-]+@[A-Za-z0-9-]+\.' && bad "reverse tunnel unit hard-codes a host"
-grep -qi ovh "$out/.config/dots-ops/config.toml" && bad "org config.toml names the ovh context"
-grep -q 'contexts = \["admin@onprem-s2a", "ovh"\]' "$perout/.config/dots-ops/config.toml" || bad "personal config.toml lost the ovh context"
+# k8s contexts come from the machine's kubeconfig, so neither profile's config.toml may name a cluster
+for d in "$out" "$perout"; do
+  grep -q '^contexts = \[\]$' "$d/.config/dots-ops/config.toml" || bad "config.toml does not leave k8s contexts to discovery ($d)"
+done
+# R-pub: this repo is public. No rendered target may carry a private address or a cluster/context name.
+for d in "$out" "$perout"; do
+  leak=$(grep -rIn --exclude-dir=.git -E '(^|[^0-9.])(10\.[0-9]{1,3}|192\.168|172\.(1[6-9]|2[0-9]|3[01])\.)[0-9]{1,3}\.[0-9]{1,3}' "$d" 2>/dev/null | head -3)
+  [ -z "$leak" ] || bad "rendered target carries a private IP (this repo is public): $leak"
+done
 exit $fail

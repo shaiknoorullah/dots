@@ -1,7 +1,15 @@
-# net-watch: every 5 min (also covers network changes; no NetworkManager hook, R7). DNS + connectivity, tailscale, kube tunnels.
+# net-watch: every 5 min (also covers network changes; no NetworkManager hook, R7). DNS + connectivity, tailscale, SSH tunnels.
+# Tunnel units are discovered, never named: every user unit matching *-tunnel.service. The units themselves are copied
+# by hand (docs/install.md §2), so this repo names no cluster and each machine watches exactly what it was given.
 # A tunnel whose unit condition is not met (secret not copied on this machine) or that does not exist is n/a: never restarted, never failed.
 # An inactive tunnel is restarted once (restarted_at in net-watch-tunnels.json); still inactive on the next run -> fail.
-_nw_tunnels="onprem-kube-tunnel ovh-k8s-tunnel"
+_nw_tunnels() {
+  local d="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user" f u
+  for f in "$d"/*-tunnel.service; do
+    [ -e "$f" ] || continue
+    u=${f##*/}; printf '%s\n' "${u%.service}"
+  done
+}
 job_main() {
   local dns=1 net=1 problems=() restarted=() failed=() u cond f="$OPS_STATE/net-watch-tunnels.json" js
   getent hosts one.one.one.one >/dev/null 2>&1 || dns=0
@@ -14,7 +22,8 @@ job_main() {
     [ "$bs" = Running ] || problems+=("tailscale ${bs:-unknown}")
   fi
   js=$(cat "$f" 2>/dev/null) || true; jq -e type >/dev/null 2>&1 <<< "$js" || js='{}'
-  for u in $_nw_tunnels; do
+  while IFS= read -r u; do
+    [ -n "$u" ] || continue
     systemctl --user cat "$u.service" >/dev/null 2>&1 || continue
     cond=$(systemctl --user show -p ConditionResult --value "$u.service" 2>/dev/null)
     [ "$cond" = no ] && continue
@@ -27,7 +36,7 @@ job_main() {
       js=$(jq -c --arg u "$u" --argjson t "$(ops_now)" '.[$u]={restarted_at:$t}' <<< "$js")
       restarted+=("$u")
     fi
-  done
+  done < <(_nw_tunnels)
   printf '%s\n' "$js" > "$f.tmp" && mv "$f.tmp" "$f"
   local IFS=,
   if [ ${#failed[@]} -gt 0 ]; then ops_state net-watch fail "tunnel still down after restart: ${failed[*]}"

@@ -18,7 +18,16 @@ hl.env("XDG_DATA_DIRS", HOME .. "/.nix-profile/share:/run/current-system/sw/shar
 hl.env("PATH", HOME .. "/.local/bin:" .. HOME .. "/.nix-profile/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/bin")
 hl.env("XDG_DATA_DIRS", HOME .. "/.nix-profile/share:/usr/local/share:/usr/share")
 {{- end }}
-hl.env("KUBECONFIG", HOME .. "/.kube/onprem-s2a.yaml")   -- default kube cluster (waybar kube module + GUI-launched shells)
+-- default kube cluster (waybar kube module + GUI-launched shells): discovered per machine by
+-- kube-discover.sh, so this repo names no cluster. Absent -> KUBECONFIG simply stays unset.
+local kube_env = io.open((os.getenv("XDG_CONFIG_HOME") or (HOME .. "/.config")) .. "/dots/kube.env")
+if kube_env then
+  for line in kube_env:lines() do
+    local v = line:match("^export KUBECONFIG=(.+)$")
+    if v then hl.env("KUBECONFIG", v) end
+  end
+  kube_env:close()
+end
 hl.env("ELECTRON_OZONE_PLATFORM_HINT", "auto")
 {{- if eq .gpu "nvidia" }}
 hl.env("LIBVA_DRIVER_NAME", "nvidia")

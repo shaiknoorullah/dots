@@ -1,4 +1,8 @@
 # dots consolidation — design (rev 2)
+> Note: cluster, tunnel and kubeconfig names in this record were replaced with placeholders
+> (`<cluster-a>`, `<cluster-b>`) when the kube tunnel was unmanaged from dots — this repo is
+> public and names no cluster. See `docs/install.md` §2.
+
 
 Date: 2026-10-07 · Branch: `consolidate` (fork `snoorullah/dots`) · Owner: Shaik Noorullah
 Rev 2 replaces rev 1 (HM-owns-everything). Changes are owner decisions made 2026-10-07.
@@ -71,7 +75,7 @@ point puts the Nix profile first:
 | D5 | Shell | zsh with **antidote + zimfw modules** (owner decision 2026-10-07). antidote (from Nix) loads `~/.zsh_plugins.txt` (chezmoi) as a static bundle; every line carries `pin:<commit>`. Modules: `zimfw/environment`, `zimfw/input`, `zimfw/utility`, `zimfw/git` (alias prefix `g`, oh-my-zsh-style names), `zimfw/completion`, `zsh-users/zsh-autosuggestions`, `MichaelAquilina/zsh-you-should-use` (replaces alias-finder), `zdharma-continuum/fast-syntax-highlighting` (last). Vi mode: built-in `bindkey -v`. Own `aliases.zsh` for non-git aliases. Dropped: oh-my-zsh and its 15 plugins (incl. Ubuntu-only `debian`, `command-not-found`), forgit, asdf/envman/linuxbrew/bun sources. History stays disabled (live choice, 2026-09-22). Rationale: zsh-bench first-command lag oh-my-zsh 84 ms vs zim 57 ms / static loaders ~66 ms; reproducible via `pin:`. |
 | D6 | Multiplexer | Swappable via chezmoi data `multiplexer = "tmux" | "herdr"`. Default **tmux** (`tmux-config@archdesk`). **Herdr trial**: both installed; `docs/herdr-trial.md` defines pass/fail criteria; the loser is removed after the trial. Never both active. |
 | D7 | Launcher | otter-launcher only. rofi removed: `adhd-capture.sh` uses an fzf prompt in a foot popup. |
-| D8 | Secrets | **Not in the repo** (owner decision 2026-10-07: the repo is public, so not even age-encrypted copies). `~/.secrets`, `~/.kube/{config,onprem-s2a.yaml,ovh-k8s.conf}` and tunnel SSH keys are copied by hand (`docs/install.md` §2). Consumers degrade: shells skip a missing `~/.secrets`; kube tunnel units carry `ConditionPathExists`. |
+| D8 | Secrets | **Not in the repo** (owner decision 2026-10-07: the repo is public, so not even age-encrypted copies). `~/.secrets`, `~/.kube/{config,<cluster-a>.yaml,<cluster-b>.conf}` and tunnel SSH keys are copied by hand (`docs/install.md` §2). Consumers degrade: shells skip a missing `~/.secrets`; kube tunnel units carry `ConditionPathExists`. |
 | D9 | Laptop timetrack units | behind data flag `timetrack = false` (not running on work PC). |
 | D10 | Obsolete | caelestia/quickshell, eww, rofi, kitty (+`kitty.app`), X11 fallback (i3/picom/polybar), adhd distrobox bridge, `adhd-salah-tasks`, `clip-prune`, swaync mask, hyprland-config hyprlang, `signoz-tunnel.service` (owner: not needed). |
 | D11 | Wallpapers | `~/walls` cloned by `run_once_after_` from `snoorullah/walls` (569 MB, never in the Nix store). |

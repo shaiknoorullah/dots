@@ -10,21 +10,35 @@ Fedora/RHEL). NixOS gets the root layer from `nix/hosts/nixos-laptop`.
 sh -c "$(curl -fsLS get.chezmoi.io)" -- -b ~/.local/bin
 ```
 
-## 2. Secrets (copied by hand, optional)
+## 2. Secrets and private infrastructure (copied by hand, optional)
 
-This repo is public, so it holds no secrets, not even encrypted ones. Copy them from an existing
-machine, each with mode 0600: `~/.secrets`, `~/.kube/{config,onprem-s2a.yaml,ovh-k8s.conf}` and
-the SSH keys the tunnels use (`~/.ssh/ovh_key`, plus the keys listed in
-`~/.config/onprem-kube-tunnel.conf`). For example:
+This repo is public, so it holds no secrets — not even encrypted ones — and it names no cluster, host
+or private repository. Copy the following from an existing machine, each with mode 0600:
+
+- `~/.secrets`.
+- `~/.kube/*` — every kubeconfig this machine should see. `kube-discover.sh` finds them on each apply
+  and writes `KUBECONFIG` into `~/.config/dots/kube.env` (sourced by zsh, waybar and Hyprland) and
+  `~/.config/environment.d/50-kube.conf` (read by the systemd user manager). Neither file is managed
+  by chezmoi, so no cluster name reaches the repo. To pin one kubeconfig instead of using every file
+  found, put its path in `~/.config/dots/kube.default`.
+- The kube tunnel, if this machine needs one: its `~/.config/<name>-tunnel.conf`, its
+  `~/.config/systemd/user/<name>-tunnel.service`, the `~/.local/bin/kube-tunnel.sh` helper the unit
+  runs, and the SSH keys named in the conf. `24-systemd` enables every `*-tunnel.service` it finds and
+  `net-watch` restarts whichever of them go inactive, so the machine supplies the names and the repo
+  supplies only the mechanism.
 
 ```bash
-scp -p oldhost:'.secrets' ~/ && scp -p oldhost:'.kube/{config,onprem-s2a.yaml,ovh-k8s.conf}' ~/.kube/
-chmod 600 ~/.secrets ~/.kube/*
+scp -p oldhost:'.secrets' ~/ && scp -p oldhost:'.kube/*' ~/.kube/
+scp -p oldhost:'.config/*-tunnel.conf' ~/.config/
+scp -p oldhost:'.config/systemd/user/*-tunnel.service' ~/.config/systemd/user/
+scp -p oldhost:'.local/bin/kube-tunnel.sh' ~/.local/bin/
+chmod 600 ~/.secrets ~/.kube/* ~/.config/*-tunnel.conf
 ```
 
-Without them everything else works: shells skip `~/.secrets`, and each kube tunnel unit is skipped
-(`ConditionPathExists`) until its file exists. After copying, run
-`systemctl --user restart onprem-kube-tunnel ovh-k8s-tunnel`.
+Without any of it everything else still works: shells skip `~/.secrets`, `KUBECONFIG` stays unset,
+`k8s-health` reports n/a, `net-watch` watches no tunnel, and each tunnel unit is skipped by its own
+`ConditionPathExists` until its kubeconfig exists. After copying, run `chezmoi apply` so discovery
+re-runs, then `systemctl --user restart <name>-tunnel`.
 
 Personal machines only: the reverse SSH tunnel (`reverse-tunnel.service`, autossh) reads its remote host from
 `~/.config/reverse-tunnel.env` (mode 0600), which is never in the repo:
