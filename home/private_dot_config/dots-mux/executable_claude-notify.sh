@@ -60,7 +60,7 @@ else
     tab_label=$(hget tab "$HERDR_TAB_ID" '.result.tab.label')
     location="${ws_label:-$HERDR_WORKSPACE_ID}${tab_no:+:$tab_no}${tab_label:+ $tab_label}"
     toast=${message//[$'\n\r\t']/ }
-    herdr notification show "Claude Code" --body="$toast" --sound=request >/dev/null 2>&1
+    herdr notification show "Claude Code" --body "$toast" --sound request >/dev/null 2>&1
     # herdr panes are children of the server, so the window belongs to a client process: one whose
     # argv is just the herdr binary. Own processes only, and /proc/PID/exe must be that binary --
     # argv[0] is attacker-settable.
