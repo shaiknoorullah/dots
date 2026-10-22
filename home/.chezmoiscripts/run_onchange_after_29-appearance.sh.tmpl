@@ -16,7 +16,7 @@ set -uo pipefail
 {{- $want := dict
       "color-scheme" "prefer-dark"
       "gtk-theme"    "Breeze-Dark"
-      "icon-theme"   "breeze-dark" }}
+      "icon-theme"   "Phosphor-Dark" }}
 # desired: {{ range $k, $v := $want }}{{ $k }}={{ $v }} {{ end }}
 # live:    {{ output "sh" "-c" "command -v gsettings >/dev/null && gsettings list-keys org.gnome.desktop.interface >/dev/null 2>&1 && for k in color-scheme gtk-theme icon-theme; do printf '%s=%s ' \"$k\" \"$(gsettings get org.gnome.desktop.interface $k 2>/dev/null | tr -d \\\"\\')\"; done || echo no-gsettings" | trim }}
 if ! command -v gsettings >/dev/null; then
