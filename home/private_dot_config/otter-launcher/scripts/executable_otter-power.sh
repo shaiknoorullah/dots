@@ -7,12 +7,21 @@
 set -uo pipefail
 source "$HOME/.config/otter-launcher/scripts/_otter-fzf.sh"
 
-# Icons match legacy-menu-power.sh exactly (same codepoints, same glyphs).
-lock=$'lock'
-suspend=$'⏾  suspend'
-logout=$'\U000f0343  logout'
-reboot=$'reboot'
-shutdown=$'⏻  shutdown'
+# A top-level destination list, so every item carries an icon (second-level action lists
+# do not -- see _otter-fzf.sh). All five come from dots-icon-font at plane 16.
+#
+# The comment that used to sit here claimed these matched legacy-menu-power.sh "same
+# codepoints, same glyphs", and had not been true since the glyph purge: lock and reboot
+# had no icon at all, suspend and shutdown had stray Unicode technical symbols drawn in a
+# different style from everything else on this desktop, and logout was still a Nerd Font
+# private-use codepoint (U+F0343) -- written as a \U escape, which is the only reason the
+# glyph lint never saw it. These strings are also the case-match keys below, so they are
+# written once here and matched by variable, never by literal.
+lock=$'􁐦  lock'
+suspend=$'􁖔  suspend'
+logout=$'􁱦  logout'
+reboot=$'􀋈  reboot'
+shutdown=$'􁧘  shutdown'
 
 options="$lock
 $suspend
@@ -25,11 +34,11 @@ $shutdown"
 # Returns: 0 if "Yes" was chosen, 1 otherwise (including Esc/no selection).
 confirm_action() {
     local answer
-    answer="$(printf 'Yes\nNo\n' | fzf --header="$1" --prompt='  ')"
+    answer="$(printf 'Yes\nNo\n' | fzf --header="􂊖  $1" --prompt=$'􀜌  ')"
     [[ "$answer" == "Yes" ]]
 }
 
-chosen="$(echo "$options" | fzf --header=$'⏻ power')"
+chosen="$(echo "$options" | fzf --header=$'􁧘  power')"
 
 case "$chosen" in
     "$lock")

@@ -32,7 +32,7 @@ fi
 # --delimiter/--with-nth restrict the *displayed* field to the title while
 # fzf still fuzzy-matches against it; the url stays attached (tab-
 # separated) so it can be pulled back out of the selected line below.
-chosen="$(echo "$bookmarks" | fzf --ansi --delimiter='\t' --with-nth=1 --header='bookmarks')"
+chosen="$(echo "$bookmarks" | fzf --ansi --delimiter='\t' --with-nth=1 --header=$'􀔔  bookmarks')"
 [[ -z "$chosen" ]] && exit 0
 
 url="$(cut -f2 <<<"$chosen")"

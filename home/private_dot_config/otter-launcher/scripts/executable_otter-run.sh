@@ -7,7 +7,7 @@
 set -uo pipefail
 source "$HOME/.config/otter-launcher/scripts/_otter-fzf.sh"
 
-result="$(compgen -c | sort -u | fzf --print-query --header=$'run')"
+result="$(compgen -c | sort -u | fzf --print-query --header=$'􁥲  run')"
 
 # --print-query prints the typed query on line 1, and (only if the user
 # actually selected a match rather than just hitting Enter on the query

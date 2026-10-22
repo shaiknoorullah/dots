@@ -37,7 +37,7 @@ list_dir() {
 
 while true; do
     display="${CUR/#$HOME/\~}"
-    chosen="$(list_dir "$CUR" | fzf --header="  $display")"
+    chosen="$(list_dir "$CUR" | fzf --header="􀼖  $display")"
 
     [[ -z "$chosen" ]] && exit 0
 

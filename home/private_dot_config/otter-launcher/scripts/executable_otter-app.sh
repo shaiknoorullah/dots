@@ -76,7 +76,7 @@ case "${1:-}" in
 esac
 
 _ensure_cache
-selection="$(fzf --delimiter=$'\t' --with-nth=2 --header=$' apps' < "$CACHE")"
+selection="$(fzf --delimiter=$'\t' --with-nth=2 --header=$'􁷲  apps' < "$CACHE")"
 [[ -z "$selection" ]] && exit 0
 app_id="$(cut -f1 <<<"$selection")"
 # dots-launch: starts the app detached and notifies if it dies within 15 s (gtk-launch alone hid crashes)

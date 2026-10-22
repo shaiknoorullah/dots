@@ -16,12 +16,14 @@ get_track_info() {
     echo "${artist:-Unknown} - ${title:-No Track}"
 }
 
-# Icons match legacy-menu-media.sh exactly (same codepoints as the reference script).
-prev=$'previous'
-play_pause=$'play/pause'
-next=$'next'
-shuffle=$'shuffle'
-loop=$'loop'
+# Destination list, so every item carries an icon from dots-icon-font (see _otter-fzf.sh).
+# The comment here used to claim these matched legacy-menu-media.sh's codepoints; the purge
+# left all five as bare words. These strings are the case-match keys below.
+prev=$'􁲊  previous'
+play_pause=$'􁥸  play/pause'
+next=$'􁲖  next'
+shuffle=$'􁰼  shuffle'
+loop=$'􁪶  loop'
 
 options="$prev
 $play_pause
@@ -30,7 +32,7 @@ $shuffle
 $loop"
 
 track_info="$(get_track_info)"
-chosen="$(echo "$options" | fzf --header=$''"$track_info")"
+chosen="$(echo "$options" | fzf --header="􁥸  $track_info")"
 
 case "$chosen" in
     "$prev")        playerctl previous ;;

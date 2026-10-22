@@ -50,7 +50,7 @@ if [[ -z "$projects" ]]; then
     exit 0
 fi
 
-chosen="$(echo "$projects" | fzf --header=$'dir projects')"
+chosen="$(echo "$projects" | fzf --header=$'􀼢  projects')"
 [[ -z "$chosen" ]] && exit 0
 
 # Strip the leading icon token (and the spaces after it) to recover the

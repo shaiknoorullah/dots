@@ -9,7 +9,7 @@ source "$HOME/.config/otter-launcher/scripts/zen-utils.sh"
 
 sel="$(bt list 2>/dev/null | fzf \
     --ansi --delimiter='\t' --with-nth=2.. --tabstop=4 --no-multi \
-    --header='zen tabs    enter switch   ctrl-d close   ctrl-y copy-url' --header-first \
+    --header=$'􀖰  zen tabs   ·   enter switch · ctrl-d close · ctrl-y copy-url' \
     --bind='ctrl-d:execute-silent(bt close {1})+reload(bt list)' \
     --bind='ctrl-y:execute-silent(printf %s {3} | wl-copy)+abort')" || exit 0
 

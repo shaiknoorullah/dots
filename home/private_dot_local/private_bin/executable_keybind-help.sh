@@ -77,7 +77,7 @@ EOF
 
 printf '%s\n' "$ROWS" | "$FZF" \
   --exact --reverse --no-sort --cycle --border=rounded --info=inline \
-  --prompt='  keybinds  ' --pointer='▌' \
-  --header='type to filter  ·  Esc to close' --header-first \
+  --prompt=$'􀜌  ' --pointer='▌' \
+  --header=$'􁌆  keybinds   ·   type to filter · Esc to close' --header-first \
   --color='bg+:#44475a,bg:#282a36,fg:#f8f8f2,fg+:#ffffff,hl:#bd93f9,hl+:#ff79c6,pointer:#ff79c6,prompt:#8be9fd,border:#6272a4,header:#6272a4,info:#6272a4,gutter:#282a36' \
   >/dev/null 2>&1 || true

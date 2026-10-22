@@ -26,15 +26,15 @@ daily() {
 
 search() {
     local n
-    n="$(find "$VAULT" -name '*.md' -type f -printf '%P\n' | sort | fzf --header='search notes')" || return 0
+    n="$(find "$VAULT" -name '*.md' -type f -printf '%P\n' | sort | fzf --header=$'􁙠  search notes')" || return 0
     [ -n "$n" ] && open_note "$VAULT/$n"
 }
 
 create() {
     local dir name path
-    dir="$(printf '.\n%s\n' "$(find "$VAULT" -type d -printf '%P\n' | grep -v '^\.' | sort)" | fzf --header='new note - pick folder')" || return 0
+    dir="$(printf '.\n%s\n' "$(find "$VAULT" -type d -printf '%P\n' | grep -v '^\.' | sort)" | fzf --header=$'􁙠  new note · pick folder')" || return 0
     [ -n "$dir" ] || return 0
-    name="$(printf '' | fzf --print-query --header='new note - type a name (no .md), then Enter' 2>/dev/null | head -1)"
+    name="$(printf '' | fzf --print-query --header=$'􁙠  new note · name it, then Enter' 2>/dev/null | head -1)"
     [ -n "$name" ] || return 0
     if [ "$dir" = "." ]; then path="$VAULT/$name.md"; else mkdir -p "$VAULT/$dir"; path="$VAULT/$dir/$name.md"; fi
     if [ -f "$path" ]; then
@@ -46,7 +46,7 @@ create() {
     open_note "$path"
 }
 
-action="$(printf '%s\n' 'daily note' 'open vault' 'search notes' 'new note' | fzf --header='obsidian')" || exit 0
+action="$(printf '%s\n' 'daily note' 'open vault' 'search notes' 'new note' | fzf --header=$'􁙠  obsidian')" || exit 0
 case "$action" in
     'daily note')   daily ;;
     'open vault')   open_vault ;;

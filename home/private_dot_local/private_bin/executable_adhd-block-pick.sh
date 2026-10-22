@@ -17,8 +17,8 @@ for t in ts:
     print(f"{i:>4} {mark} {d}{proj}")
 ')"
 
-out="$(printf '%s\n' "$list" | fzf --print-query --prompt='  focus → ' --height=100% --reverse --no-info \
-    --header='enter: start block · no match: add as new +today task' \
+out="$(printf '%s\n' "$list" | fzf --print-query --prompt=$'􀜌  focus ' --height=100% --reverse --no-info \
+    --header=$'􂁖  focus block   ·   enter start · no match: add as new +today task' \
     --color='bg:-1,bg+:-1,fg:-1,fg+:15,hl:5,hl+:13,pointer:5,prompt:5,marker:5,header:8' \
     2>/dev/null)"
 query="$(sed -n 1p <<<"$out")"; pick="$(sed -n 2p <<<"$out")"
