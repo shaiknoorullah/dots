@@ -55,6 +55,43 @@ def cmd_backfill_git(a):
     return 0
 
 
+def cmd_ingest_aw(a):
+    from .backfill import aw
+    with dbs.open_work() as conn:
+        rep = aw.write(conn, since=None, until=None)
+    print(f"wrote {len(rep['written'])} day(s): {', '.join(rep['written']) or 'none'}")
+    if rep["skipped_existing"]:
+        # never silently overwrite a higher-confidence source
+        print(f"skipped {len(rep['skipped_existing'])} day(s) that already have a session")
+    return 0
+
+
+def cmd_compare_aw(a):
+    from .backfill import aw
+    month = _month(a.month)
+    with dbs.open_work(readonly=True) as conn:
+        rows = aw.compare(conn, month)
+    hm = derive.hhmm
+    print(f"{'day':12}{'recorded':10}{'aw':10}{'delta':10}{'ratio':8}source")
+    ratios = []
+    for r in rows:
+        if r["ratio"]:
+            ratios.append(r["ratio"])
+        aw_s = hm(r["aw_minutes"]) if r["aw_minutes"] is not None else "-"
+        delta = hm(r["delta_minutes"]) if r["delta_minutes"] is not None else "-"
+        ratio = f"{r['ratio']:.2f}" if r["ratio"] else "-"
+        print(f"{r['day']:12}{hm(r['recorded_minutes']):10}{aw_s:10}{delta:10}"
+              f"{ratio:8}{r['recorded_source']}")
+    if ratios:
+        ratios.sort()
+        mid = ratios[len(ratios) // 2]
+        print(f"\n{len(ratios)} comparable day(s); median recorded/aw = {mid:.2f}")
+        print("  that ratio is what a calibration factor would have to be derived FROM.")
+    else:
+        print("\nno day has both a recorded figure and AW presence; nothing to calibrate against")
+    return 0
+
+
 def cmd_status(a):
     month = _month(a.month)
     with dbs.open_work(readonly=True) as conn:
@@ -140,6 +177,13 @@ def main(argv=None):
     s.add_argument("--since", required=True)
     s.add_argument("--until", required=True)
     s.set_defaults(fn=cmd_backfill_git)
+
+    s = sub.add_parser("ingest-aw", help="write AW-derived sessions for days with none")
+    s.set_defaults(fn=cmd_ingest_aw)
+
+    s = sub.add_parser("compare-aw", help="cross-validate recorded days against AW presence")
+    s.add_argument("--month")
+    s.set_defaults(fn=cmd_compare_aw)
 
     s = sub.add_parser("status", help="where the month stands")
     s.add_argument("--month")
