@@ -58,14 +58,22 @@
   border-left: 3px solid @sel;
 }
 
-.notification-row .notification-background .notification.low      { border-left-color: @sel; }
-.notification-row .notification-background .notification.normal   { border-left-color: @accent; }
-.notification-row .notification-background .notification.critical { border-left-color: @red; }
+/* swaync has moved the urgency class between .notification-background and .notification
+   across releases, and its own bundled sheet only shows one of the two. Match BOTH rather
+   than depend on which one 0.12.6 happens to use -- a miss here is silent, and the colour
+   simply never appears. */
+.notification-row .notification-background .notification.low,
+.notification-row .notification-background.low .notification      { border-left-color: @sel; }
+.notification-row .notification-background .notification.normal,
+.notification-row .notification-background.normal .notification   { border-left-color: @accent; }
+.notification-row .notification-background .notification.critical,
+.notification-row .notification-background.critical .notification { border-left-color: @red; }
 
 /* A critical notification is the one case where the card itself may take a tint: it has to
    survive being the fourth card in a stack you are scrolling past. */
-.notification-row .notification-background .notification.critical {
-  background: alpha(@red, 0.12);
+.notification-row .notification-background .notification.critical,
+.notification-row .notification-background.critical .notification {
+  background-color: alpha(@red, 0.12);
 }
 
 .notification-row .notification-background .notification .notification-default-action {

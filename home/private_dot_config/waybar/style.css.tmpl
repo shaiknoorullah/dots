@@ -60,7 +60,7 @@
 }
 
 window#waybar {
-  background: alpha(@bg, 0.78);
+  background-color: alpha(@bg, 0.78);
   color: @fg;
   /* A hairline reads as an edge on glass; the old 2px slab read as a second bar. */
   border-bottom: 1px solid alpha(@sel, 0.85);
@@ -92,7 +92,7 @@ window#waybar {
 /* urgent is the one workspace state allowed to shout; ext/workspaces may never emit it on
    this compositor, in which case the rule simply never matches. */
 #workspaces button.urgent   { color: @red; border-bottom-color: @red; }
-#workspaces button:hover    { color: @fg; background: alpha(@sel, 0.55); }
+#workspaces button:hover    { color: @fg; background-color: alpha(@sel, 0.55); }
 
 /* ── the slab ──────────────────────────────────────────────────────────────
    One background, one divider, rounded only at the two ends. The tray group is NOT in this
@@ -108,7 +108,7 @@ window#waybar {
 #idle_inhibitor,
 #custom-notification,
 #wireplumber {
-  background: alpha(@sel, 0.55);
+  background-color: alpha(@sel, 0.55);
   color: @fg;
   padding: 0 10px;
   margin: 4px 0;
@@ -145,18 +145,18 @@ window#waybar {
    purpose, because both mean "this segment is not resting":
      amber/red  something needs you
      green      a state you are holding open */
-#custom-ops.warn               { background: alpha(@orange, 0.20); color: @orange; }
-#custom-ops.fail               { background: alpha(@red,    0.22); color: @red; }
-#custom-kube.kube-down         { background: alpha(@red,    0.22); color: @red; }
-#custom-tracking.tracking-on   { background: alpha(@green,  0.18); color: @green; }
-#idle_inhibitor.activated      { background: alpha(@orange, 0.18); }
+#custom-ops.warn               { background-color: alpha(@orange, 0.20); color: @orange; }
+#custom-ops.fail               { background-color: alpha(@red,    0.22); color: @red; }
+#custom-kube.kube-down         { background-color: alpha(@red,    0.22); color: @red; }
+#custom-tracking.tracking-on   { background-color: alpha(@green,  0.18); color: @green; }
+#idle_inhibitor.activated      { background-color: alpha(@orange, 0.18); }
 
 /* The unread badge. Bold, because a count is the one number in the bar you are meant to
    read rather than monitor. `inhibited` is swaync's "an app asked for silence" flavour of
    the same two states, so it gets the same pair. */
 #custom-notification.notification,
 #custom-notification.inhibited-notification {
-  background: alpha(@orange, 0.20);
+  background-color: alpha(@orange, 0.20);
   color: @orange;
   font-weight: bold;
 }
@@ -169,7 +169,7 @@ window#waybar {
 #custom-notification.dnd-notification,
 #custom-notification.dnd-inhibited-none,
 #custom-notification.dnd-inhibited-notification {
-  background: alpha(@purple, 0.20);
+  background-color: alpha(@purple, 0.20);
   color: @purple;
 }
 
@@ -188,7 +188,7 @@ window#waybar {
 #idle_inhibitor:hover,
 #custom-notification:hover,
 #wireplumber:hover {
-  background: alpha(@sel, 0.95);
+  background-color: alpha(@sel, 0.95);
 }
 
 /* ── tray drawer ───────────────────────────────────────────────────────────
@@ -204,7 +204,7 @@ window#waybar {
    and the handle and the item strip inside it are transparent — which is why no radius has
    to move when the drawer opens, and why the corner is correct in both states. */
 .modules-right > widget > #tray {
-  background: alpha(@sel, 0.55);
+  background-color: alpha(@sel, 0.55);
   margin: 4px 0;
   border-radius: 0 8px 8px 0;
 }
@@ -214,7 +214,7 @@ window#waybar {
   margin: 0;
 }
 #custom-tray-toggle { min-width: 30px; padding: 0; }
-#custom-tray-toggle:hover { background: alpha(@sel, 0.95); border-radius: 0 8px 8px 0; }
+#custom-tray-toggle:hover { background-color: alpha(@sel, 0.95); border-radius: 0 8px 8px 0; }
 /* A tray item is an app's OWN icon, so the drawer is the one place in the bar that is not
    monochrome. Nothing here tries to tame that; the items just sit on the group's material,
    and the menu they open is pulled onto the palette so it is not a stock Breeze popup. */
@@ -226,7 +226,7 @@ window#waybar {
    log), and every one of them was handing its text to a stock Breeze tooltip that matched
    nothing else on screen. Panel-scale radius, because a tooltip is a small panel. */
 tooltip {
-  background: alpha(@bg, 0.96);
+  background-color: alpha(@bg, 0.96);
   border: 1px solid alpha(@sel, 0.9);
   border-radius: 12px;
 }
