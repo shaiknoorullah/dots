@@ -128,10 +128,32 @@ def drain(conn):
 
 
 def pending_spool():
-    """Spool entries that cannot be attached yet -- what doctor reports."""
+    """Spool entries not yet turned into rows. Undrained is NORMAL -- the hourly capture
+    job drains them -- so a caller judging health must look at AGE, not count."""
     if not SPOOL.exists():
         return []
     return sorted(p.name for p in SPOOL.glob("*.json"))
+
+
+def spool_age(now=None):
+    """Seconds since the oldest undrained entry was written, or None if the spool is empty.
+
+    This is the signal worth alerting on. A count says only that something happened since
+    the last drain; an age says a drain that should have happened did not -- which is how
+    a reap or a timeout ends up recorded nowhere while every component looks fine.
+    """
+    now = now or time.time()
+    names = pending_spool()
+    if not names:
+        return None
+    stamps = []
+    for name in names:
+        head = name.split("-", 1)[0]
+        try:
+            stamps.append(int(head))
+        except ValueError:
+            stamps.append(int((SPOOL / name).stat().st_mtime))
+    return now - min(stamps)
 
 
 # --- the daily attestation -------------------------------------------------

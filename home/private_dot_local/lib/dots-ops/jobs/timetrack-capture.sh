@@ -36,6 +36,13 @@ job_main() {
     return 0
   fi
 
+  # Drain the attestation spool before doctor looks at it. The panel launcher and the
+  # dead-man's reaper cannot write to the database themselves -- layer 2 imports nothing
+  # on purpose -- so this is the hourly step that turns what they saw into rows. Without
+  # it a reaped panel is recorded nowhere and every component still reports healthy.
+  "$tt" attest --drain >/dev/null 2>&1 || \
+    ops_state timetrack-capture warn "attest --drain failed; the enforcement spool is not being recorded"
+
   out=$("$tt" doctor 2>&1); rc=$?
   summary=$(printf '%s' "$out" | tail -1)
   if [ "$rc" -ne 0 ]; then

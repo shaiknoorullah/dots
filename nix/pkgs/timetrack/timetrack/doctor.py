@@ -265,13 +265,19 @@ def _enforcement(results):
             else:
                 results.append(_r("clockd", OK, f"running, cache {age:.0f}s old"))
 
-    stuck = attest.pending_spool()
-    if stuck:
-        results.append(_r("attest:spool", WARN,
-                          f"{len(stuck)} spooled attestation(s) cannot be attached",
-                          "they describe a day with no work_session; backfill it first"))
-    else:
+    stuck, age = attest.pending_spool(), attest.spool_age()
+    if not stuck:
         results.append(_r("attest:spool", OK, "spool empty"))
+    elif age is not None and age > 2 * 3600:
+        # Undrained is normal for an hour; undrained for two means the drain itself is not
+        # running, and a reap or a timeout is then recorded NOWHERE while the reaper, the
+        # panel and the daemon all look healthy. That is the shape of the original bug.
+        results.append(_r("attest:spool", WARN,
+                          f"{len(stuck)} attestation(s) undrained for {age / 3600:.0f}h",
+                          "timetrack attest --drain; the capture job should do this hourly"))
+    else:
+        results.append(_r("attest:spool", OK,
+                          f"{len(stuck)} entry(s) awaiting the next drain"))
 
 
 def _attestation(results, conn, month):

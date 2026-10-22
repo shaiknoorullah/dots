@@ -44,6 +44,11 @@ rep = attest.drain(conn)
 check("no session: nothing written", rep["written"], 0)
 check("no session: kept in spool", rep["unattached"], 1)
 check("spool still has it", len(attest.pending_spool()), 1)
+# the signal doctor alerts on is AGE, not count: undrained for an hour is normal (the
+# capture job drains hourly), undrained for hours means the drain itself stopped running
+age = attest.spool_age(now=now)
+check("age is measured from when it happened", 595 < age < 605, True)
+check("empty spool has no age", attest.spool_age() if not attest.pending_spool() else None, None)
 
 # 3. with a session open, the same spooled fact becomes an append-only attest row, stamped
 #    at the time it HAPPENED, not the time it was drained.
@@ -111,5 +116,5 @@ if fails:
     print("attest FAILED:")
     for f in fails: print("  " + f)
     raise SystemExit(1)
-print("attest ok (6 scenarios, 17 assertions)")
+print("attest ok (6 scenarios, 19 assertions)")
 PY
