@@ -267,3 +267,9 @@ status	notification-active	bell-ringing	fill
 status	notification-disabled	bell-slash	regular
 status	changes-prevent	lock	fill
 status	changes-allow	lock-open	regular
+
+# ── waybar module icons (consumed by CSS -gtk-icontheme(), not by any font) ─
+status	caffeine-active	coffee	fill
+status	caffeine-inactive	coffee	regular
+actions	tray-expand	tray	fill
+status	notification-inactive	bell	regular

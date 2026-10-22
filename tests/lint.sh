@@ -40,8 +40,10 @@ done
 # R-glyph: no Nerd Font icon glyphs. They are private-use codepoints, so they render as
 # tofu in any font that is not patched, they cannot be grepped or read aloud, and they look
 # nothing like the icon theme. Replaced by geometric Unicode from normal fonts.
-# The ONLY exception is U+E0B0-U+E0D4, the Powerline separator block: those draw starship's
-# segment shape rather than standing in for an icon.
+# Two exceptions. U+E0B0-U+E0D4 is the Powerline separator block, which draws starship's
+# segment shape rather than standing in for an icon. Plane 16 (U+100000+) is OUR font,
+# dots-icon-font, whose glyphs are Phosphor outlines -- Nerd Font never uses plane 16, so
+# allowing it cannot re-admit a single glyph this rule exists to keep out.
 for d in "$out" "$nixos"; do
   if LC_ALL=C.UTF-8 grep -rIlP '[\x{E000}-\x{E0AF}\x{E0D5}-\x{F8FF}\x{F0000}-\x{FFFFD}]' "$d"; then
     echo "LINT: files above use Nerd Font glyphs (banned; only U+E0B0-E0D4 separators are allowed)"; exit 1

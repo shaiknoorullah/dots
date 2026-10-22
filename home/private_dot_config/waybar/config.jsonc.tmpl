@@ -17,9 +17,11 @@
   "custom/kube":     { "exec": "{{ .chezmoi.homeDir }}/.local/bin/waybar-kube.sh",     "return-type": "json", "interval": 30, "on-click": "ghostty --class=dots.otter --gtk-single-instance=false --config-file={{ .chezmoi.homeDir }}/.config/ghostty/popup -e k9s" },
   "custom/ops":      { "exec": "{{ .chezmoi.homeDir }}/.local/bin/dots-ops waybar",         "return-type": "json", "interval": 30, "signal": 9, "on-click-right": "{{ .chezmoi.homeDir }}/.local/bin/dots-ops perf-mode", "on-click": "ghostty --class=dots.ops --gtk-single-instance=false --config-file={{ .chezmoi.homeDir }}/.config/ghostty/popup -e ~/.local/bin/dots-ops status" },
   "custom/ctx":      { "exec": "{{ .chezmoi.homeDir }}/.local/bin/waybar-ctx.sh",      "return-type": "json", "interval": 30, "signal": 8, "on-click": "{{ .chezmoi.homeDir }}/.local/bin/waybar-ctx.sh cycle" },
-  "wireplumber": { "format": "{icon} {volume}%", "format-muted": "⊘", "format-icons": ["▁","▄","█"], "on-click": "swayosd-client --output-volume mute-toggle" },
+  // icon comes from CSS -gtk-icontheme(); `states` is what gives the stylesheet a
+  // class per volume band, since a label can hold text but not an SVG.
+  "wireplumber": { "format": "{volume}%", "format-muted": " ", "states": { "high": 66, "medium": 33, "low": 1, "off": 0 }, "on-click": "swayosd-client --output-volume mute-toggle" },
   // Caffeine: inhibits idle/lock while activated.
-  "idle_inhibitor": { "format": "{icon}", "format-icons": { "activated": "◉", "deactivated": "◌" },
+  "idle_inhibitor": { "format": " ",
                       "tooltip-format-activated": "caffeine on — idle and lock inhibited",
                       "tooltip-format-deactivated": "caffeine off — normal idle and lock" },
   // swaync: icon + unread badge. Left click opens the panel, right click toggles do-not-disturb.
@@ -27,11 +29,7 @@
   "custom/notification": {
     "return-type": "json", "escape": true, "exec-if": "command -v swaync-client",
     "exec": "swaync-client -swb | jq --unbuffered -c 'if .alt == \"none\" then .text = \"\" else .text = \" \" + .text end'",
-    "format": "{icon}{text}",
-    "format-icons": { "notification": "⚑", "none": "⚐",
-                      "dnd-notification": "⊘", "dnd-none": "⊘",
-                      "inhibited-notification": "⚑", "inhibited-none": "⚐",
-                      "dnd-inhibited-notification": "⊘", "dnd-inhibited-none": "⊘" },
+    "format": " {text}",
     "on-click": "swaync-client -t -sw", "on-click-right": "swaync-client -d -sw" },
   // The tray is tucked into a drawer: the bar shows one icon, the items slide out on hover.
   // (swaync cannot host it — it is not a StatusNotifierItem host and has no tray widget,
@@ -41,6 +39,6 @@
     "orientation": "inherit",
     "drawer": { "transition-duration": 250, "children-class": "tray-item", "transition-left-to-right": false },
     "modules": ["custom/tray-toggle", "tray"] },
-  "custom/tray-toggle": { "format": "⊞", "tooltip-format": "tray — hover to expand" },
+  "custom/tray-toggle": { "format": " ", "tooltip-format": "tray — hover to expand" },
   "tray": { "spacing": 8 }
 }
