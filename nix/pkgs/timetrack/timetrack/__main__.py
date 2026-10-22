@@ -13,7 +13,7 @@ import sys
 from datetime import date
 from pathlib import Path
 
-from . import calendar_, config, dbs, derive, doctor, export_csv, migrate, submission
+from . import calendar_, config, dbs, derive, doctor, export_csv, interactive, migrate, submission
 
 
 def _month(arg):
@@ -93,6 +93,52 @@ def cmd_compare_aw(a):
         print("  that ratio is what a calibration factor would have to be derived FROM.")
     else:
         print("\nno day has both a recorded figure and AW presence; nothing to calibrate against")
+    return 0
+
+
+def cmd_backfill(a):
+    from . import interactive as iv
+    month = _month(a.month)
+    with dbs.open_work() as conn:
+        if not a.interactive:
+            gaps = iv.pending_gaps(conn, month)
+            days = iv.pending_days(conn, month)
+            print(f"{len(gaps)} unclassified gap(s), {len(days)} unexplained working day(s)")
+            for g in gaps:
+                print(f"  gap  {g['attendance_day']}  {derive.hhmm(round(g['minutes']))}")
+            for d in days:
+                print(f"  day  {d['attendance_day']}  no session")
+            if gaps or days:
+                print("\nrun with --interactive to answer them")
+            return 0
+        rep = iv.run(conn, month)
+    print(f"\n{rep['gaps_answered']} gap(s) and {rep['days_answered']} day(s) answered")
+    return 0
+
+
+def cmd_journald(a):
+    from .backfill import journald
+    month = _month(a.month)
+    with dbs.open_work(readonly=not a.clip) as conn:
+        rows = journald.audit(conn, month)
+        print(f"{'day':12}{'recorded':10}{'impossible':12}{'conf':6}source")
+        bad = 0
+        for r in rows:
+            flag = ""
+            if r["offline_minutes"] > 0:
+                bad += 1
+                flag = "  <-- machine was off"
+            unk = f" ({r['unknowable']} unknowable)" if r["unknowable"] else ""
+            print(f"{r['day']:12}{derive.hhmm(r['span_minutes']):10}"
+                  f"{derive.hhmm(r['offline_minutes']):12}{r['confidence'] or '-':<6}"
+                  f"{r['provenance']}{unk}{flag}")
+        print(f"\n{len(rows)} day(s) checked, {bad} with time the machine was not running")
+        if a.clip:
+            done = journald.clip(conn, month)
+            # confidence 1.0 is the user's own attestation; a contradiction there is a
+            # question for them, not a subtraction to make quietly
+            print(f"clipped {len(done)} interval(s) from reconstructed sources; "
+                  "confidence 1.0 left untouched")
     return 0
 
 
@@ -267,6 +313,17 @@ def main(argv=None):
     s = sub.add_parser("compare-aw", help="cross-validate recorded days against AW presence")
     s.add_argument("--month")
     s.set_defaults(fn=cmd_compare_aw)
+
+    s = sub.add_parser("backfill", help="list or answer the days that need a human")
+    s.add_argument("--month")
+    s.add_argument("--interactive", action="store_true", help="prompt for each one")
+    s.set_defaults(fn=cmd_backfill)
+
+    s = sub.add_parser("journald", help="check recorded time against boot windows")
+    s.add_argument("--month")
+    s.add_argument("--clip", action="store_true",
+                   help="remove impossible intervals from reconstructed sources only")
+    s.set_defaults(fn=cmd_journald)
 
     s = sub.add_parser("status", help="where the month stands")
     s.add_argument("--month")
