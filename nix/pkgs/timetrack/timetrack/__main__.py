@@ -13,7 +13,7 @@ import sys
 from datetime import date
 from pathlib import Path
 
-from . import calendar_, config, dbs, derive, export_csv, migrate
+from . import calendar_, config, dbs, derive, doctor, export_csv, migrate
 
 
 def _month(arg):
@@ -85,6 +85,20 @@ def cmd_status(a):
     return 0
 
 
+def cmd_doctor(a):
+    """Exit 1 on any fail. A warn alone exits 0 -- it is worth saying, not worth blocking."""
+    results = doctor.run(month=a.month)
+    mark = {"ok": "ok  ", "warn": "WARN", "fail": "FAIL"}
+    for r in results:
+        print(f"  {mark[r['status']]}  {r['check']:22} {r['detail']}")
+        if r["fix"] and r["status"] != "ok":
+            print(f"        -> {r['fix']}")
+    bad = sum(1 for r in results if r["status"] == "fail")
+    warn = sum(1 for r in results if r["status"] == "warn")
+    print(f"\n{len(results)} checks, {bad} failed, {warn} warned")
+    return 1 if bad else 0
+
+
 def cmd_export(a):
     month = _month(a.month)
     with dbs.open_work(readonly=True) as conn:
@@ -134,6 +148,10 @@ def main(argv=None):
     s = sub.add_parser("days", help="per-day table for a month")
     s.add_argument("--month")
     s.set_defaults(fn=cmd_days)
+
+    s = sub.add_parser("doctor", help="check every invariant; exit 1 on failure")
+    s.add_argument("--month")
+    s.set_defaults(fn=cmd_doctor)
 
     s = sub.add_parser("export", help="write the submission CSVs")
     s.add_argument("--month")
