@@ -1,14 +1,21 @@
-# dots-icons: one monospace fallback font carrying four MONOCHROME icon sets.
+# dots-icons: one monospace fallback font carrying two MONOCHROME icon sets.
 #
 # Why a font at all: starship, tmux, fzf headers and otter-launcher render CHARACTERS, so
 # no icon theme can reach them. GTK surfaces (waybar, swaync) use the real SVGs through
 # -gtk-icontheme() instead and are deliberately NOT served from here.
 #
-# Why these four: Phosphor is the UI vocabulary, but it has no brand or language marks --
-# which is exactly what a prompt and a launcher need. Simple Icons, Devicon Plain and
-# Codicons fill that gap and are all single-colour, so they inherit the terminal's
-# foreground like Phosphor does. The multicolour sets (SVG Logos, the coloured Devicon)
-# are excluded on purpose: a font glyph has no colour and they would flatten into blobs.
+# Why exactly two sets: Phosphor is the UI vocabulary but has no brand or language marks,
+# which is what a prompt and a launcher need. Simple Icons supplies those, and nothing else
+# earns a place -- consistency here means LOOK, not just colour:
+#   Codicons      excluded: a 16px pixel-snapped grid, squarer and thinner than Phosphor,
+#                 and it duplicates concepts Phosphor already has (git-merge, terminal,
+#                 bug, gear, folder, file, play, check).
+#   Devicon       excluded: a 128px grid where every mark carries its own geometry, and
+#                 Simple Icons already covers every language and tool mark that matters.
+#   SVG Logos     excluded: multicolour. A font glyph has no colour, so they would flatten
+#                 into blobs, and in the GTK theme they would fight dark mode.
+# Simple Icons earns its place by being solid silhouettes on a 24-unit grid -- the closest
+# possible match to Phosphor's fill weight.
 #
 # Shipped as its OWN font rather than patched into JetBrainsMono, so fontconfig falls back
 # per codepoint and the upstream font stays untouched.
@@ -20,9 +27,7 @@ let
     sha256 = hash;
   };
   bundles = {
-    simple-icons  = iconify "simple-icons"  "1.2.100" "0arwnvfsi6khnw2cxp2rpkqiask4v098hbg0qammn8d3q4cfr26j";
-    devicon-plain = iconify "devicon-plain" "1.2.62"  "03rr5clghjkr1b0rkvqsvqlq1q61kvihnm540fsjz01lp3rzw8y3";
-    codicon       = iconify "codicon"       "1.2.75"  "1bd8kfwazc4sppb048wp1v96x48jq4gr6s50qlr71n6gj3j375dw";
+    simple-icons = iconify "simple-icons" "1.2.100" "0arwnvfsi6khnw2cxp2rpkqiask4v098hbg0qammn8d3q4cfr26j";
   };
 in
 stdenvNoCC.mkDerivation {
@@ -75,9 +80,9 @@ stdenvNoCC.mkDerivation {
   '';
 
   meta = with lib; {
-    description = "Phosphor, Simple Icons, Devicon Plain and Codicons as one monospace fallback font";
+    description = "Phosphor and Simple Icons as one monospace fallback font";
     homepage = "https://github.com/phosphor-icons/core";
-    license = with licenses; [ mit cc0 cc-by-40 ];
+    license = with licenses; [ mit cc0 ];
     platforms = platforms.all;
   };
 }
