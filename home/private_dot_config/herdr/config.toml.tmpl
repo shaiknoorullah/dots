@@ -22,24 +22,6 @@ onboarding = false
 # Accepts: hex (#rrggbb), named colors, rgb(r,g,b), or panel_bg = "reset"
 name = "dracula"
 auto_switch = false
-[theme.custom]
-sidebar_bg = "{{ .palette.term.bg }}"
-# active_row_bg = "#1e1e2e"
-# selection_bg = "#313244"
-# panel_bg = "reset"
-accent = "{{ .palette.purple }}"
-# red = "#ff6188"
-# green = "#a6e3a1"
-
-# Layer appearance-specific overrides on top when auto_switch is enabled.
-# [theme.custom.light]
-# panel_bg = "#eff1f5"
-# text = "#4c4f69"
-#
-# [theme.custom.dark]
-# panel_bg = "#1e1e2e"
-# text = "#cdd6f4"
-
 [terminal]
 # Executable used for new interactive panes.
 # Empty means $SHELL, then /bin/sh.
@@ -513,3 +495,24 @@ pane_history = false
 # Maximum scrollback buffer size in bytes retained per pane terminal.
 # Matches Ghostty's default scrollback-limit behavior.
 # scrollback_limit_bytes = 10000000
+
+[theme.custom]
+panel_bg = "#282a36"
+sidebar_bg = "#22232d"
+active_row_bg = "#262626"
+selection_bg = "#44475a"
+surface0 = "#262626"
+surface1 = "#7b7f8b"
+surface_dim = "#242631"
+overlay0 = "#7b7f8b"
+overlay1 = "#f6f6f4"
+text = "#f6f6f4"
+subtext0 = "#f6f6f4"
+accent = "#bf9eee"
+mauve = "#f286c4"
+green = "#62e884"
+yellow = "#e7ee98"
+red = "#ee6666"
+blue = "#bf9eee"
+teal = "#97e1f1"
+peach = "#f07c7c"
