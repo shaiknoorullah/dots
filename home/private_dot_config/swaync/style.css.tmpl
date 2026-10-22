@@ -78,11 +78,13 @@
   background: alpha(@sel, 0.75);
 }
 
-/* The app icon on the left. Its SIZE is config.json's notification-icon-size (48), not a
-   CSS property: the -gtk-icon-size that used to sit here is GTK4-only and GTK3 rejected the
-   whole declaration with "not a valid property name", so it had never done anything. Only
-   the gutter between icon and text belongs here. */
+/* The app icon on the left. -gtk-icon-size IS valid here: swaync 0.12.6 links gtk4 and
+   gtk4-layer-shell, and GTK4 accepts the property (GTK3 is the one that rejects it with
+   "not a valid property name" -- so a GTK3 CssProvider is the wrong thing to validate this
+   sheet with). config.json's notification-icon-size still sets the surface the icon is
+   rendered into; this pins how large it is drawn. */
 .notification-row .notification-background .notification .notification-default-action .notification-content .image {
+  -gtk-icon-size: 48px;
   margin-right: 14px;
 }
 

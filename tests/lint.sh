@@ -48,6 +48,16 @@ for d in "$out" "$nixos"; do
   if LC_ALL=C.UTF-8 grep -rIlP '[\x{E000}-\x{E0AF}\x{E0D5}-\x{F8FF}\x{F0000}-\x{FFFFD}]' "$d"; then
     echo "LINT: files above use Nerd Font glyphs (banned; only U+E0B0-E0D4 separators are allowed)"; exit 1
   fi
+  # ...and the same glyphs written as shell ESCAPES. $'\xef\x80\x84' and $'\U000f0343' are
+  # U+F004 and U+F0343, but the file is pure ASCII, so the codepoint grep above sees nothing
+  # while the terminal happily paints a private-use glyph. Both forms were live in
+  # otter-launcher and survived the purge undetected.
+  if grep -rIlP '\\U000[eEfF][0-9a-fA-F]{4}' "$d"; then
+    echo "LINT: files above encode a Nerd Font glyph as a \\U escape"; exit 1
+  fi
+  if grep -rIlP '\\x[eE][eEfF]\\x[89aAbB][0-9a-fA-F]\\x[89aAbB][0-9a-fA-F]' "$d"; then
+    echo "LINT: files above encode a private-use glyph as UTF-8 \\x escapes"; exit 1
+  fi
 done
 
 # R28: everything uses ~/.nix-profile, NixOS included (home-manager.useUserPackages = false)
