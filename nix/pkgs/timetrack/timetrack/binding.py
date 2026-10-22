@@ -23,18 +23,48 @@ TIER_TOKEN, TIER_BRANCH, TIER_REPO = 1.0, 0.8, 0.5
 
 # feat/ABC-123, fix/ABC-123-thing, chore/ABC-1 -- anchored at a path-segment boundary, so
 # "my-feat/ABC-1" is not a typed-prefix match.
-BRANCH_RE = re.compile(r"(?:^|/)(?:feat|fix|chore|refactor|docs|test|perf)/([A-Z][A-Z0-9]+-\d+)")
+#
+# The trailing (?:-\d+)? is NOT cosmetic. The tickets this system has to bind are ERP
+# `Task` ids of the form TASK-2026-00512 -- three segments. Without it the pattern matched
+# TASK-2026 and stopped, because \b succeeds before the second hyphen: every ticket in the
+# year would have collapsed into one id called TASK-2026, and the per-ticket split that
+# makes the contribution visible would have had a single row in it. The group is greedy, so
+# the longest form wins; "feat/ABC-123-thing" still binds ABC-123 because "thing" is not
+# digits.
+TICKET = r"[A-Z][A-Z0-9]+-\d+(?:-\d+)?"
+BRANCH_RE = re.compile(r"(?:^|/)(?:feat|fix|chore|refactor|docs|test|perf)/(" + TICKET + r")")
 # A ticket shaped token ANYWHERE in the branch. This still resolves "my-feat/ABC-1" and
 # "ABC-1-hotfix" at tier 2, which is intended: the id is present and a human put it there.
 # Both forms share confidence 0.8 because both are the same kind of evidence -- a name,
 # not a statement. Only tier 1 is someone actually saying what they are working on.
-LOOSE_RE = re.compile(r"\b([A-Z][A-Z0-9]+-\d+)\b")
+LOOSE_RE = re.compile(r"\b(" + TICKET + r")\b")
 
 
 def from_metadata(pane):
-    """Tier 1. herdr returns reported tokens on the pane; a ttl'd one that lapsed is gone."""
-    meta = (pane or {}).get("metadata") or {}
-    tokens = meta.get("tokens") or meta
+    """Tier 1. herdr returns reported tokens on the pane; a ttl'd one that lapsed is gone.
+
+    VERIFIED against herdr 0.9.3 rather than assumed, because the assumption was wrong:
+
+        herdr pane report-metadata w4:p1 --source timetrack --token ticket=TTL-5 --ttl-ms 5000
+        -> agent_list entry gains  "tokens": {"ticket": "TTL-5"}   at the TOP LEVEL
+        -> eight seconds later     "tokens" is absent               (the ttl really expires)
+
+    The first version of this read pane["metadata"]["tokens"]. herdr has no "metadata"
+    key, so the lookup resolved to {} every time: tier 1 could never fire, and every
+    hook-reported ticket silently fell through to the branch at confidence 0.8. A
+    confidence that cannot be reached is worse than no tier at all -- the figure would
+    claim "the branch was named this" where the user had actually said it.
+
+    Note the CLI argument order too: the pane id must come FIRST. `report-metadata
+    --source timetrack w4:p1` is rejected with `unknown option: timetrack`.
+    """
+    pane = pane or {}
+    tokens = pane.get("tokens")
+    if not isinstance(tokens, dict):
+        # kept as a fallback, not as the primary: if a later herdr nests them, both shapes
+        # resolve, and this module does not need to be the thing that notices
+        meta = pane.get("metadata") or {}
+        tokens = meta.get("tokens") if isinstance(meta.get("tokens"), dict) else meta
     if isinstance(tokens, dict):
         for key in ("ticket", "issue", "task"):
             v = tokens.get(key)

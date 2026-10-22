@@ -29,7 +29,7 @@ import socket
 import time
 from datetime import date, datetime
 
-from . import binding, clock_state, config, dbs, herdr_proto, presence
+from . import attest, binding, clock_state, config, dbs, herdr_proto, presence
 
 SOCK = os.path.expanduser(herdr_proto.SOCKET)
 CACHE = config.STATE_DIR / "clock.json"
@@ -40,6 +40,11 @@ PRESENCE_SECONDS = 15
 GRACE_DEBOUNCE = 2.0        # R3
 SUSPEND_SKEW = 10.0         # R5: wall-vs-monotonic divergence that means we slept
 BACKOFF = (1, 2, 5, 10, 30) # R7
+# D1: a work_session closes after this much quiet and is BACK-DATED to the last activity.
+# 150 minutes rather than something tidier because the shift is 13:30-22:30 with a meal
+# break in it: an hour of quiet is a dinner, not the end of a day, and closing the session
+# there would split one attendance day into two and hand the second one the wrong date.
+QUIET_CLOSE_SECONDS = 150 * 60
 
 
 def sd_notify(state):
@@ -156,6 +161,72 @@ class Clockd:
         self.conn.commit()
         return 1
 
+    def adopt_session(self, now):
+        """Take over the session a previous life left open, or close it if it went quiet.
+
+        Without this a restart always opened a SECOND work_session for a day that already
+        had one. The day total survives that (v_day_span groups by attendance_day), but D1
+        says a session owns its attendance_day and inherits it to every event -- two live
+        sessions for one day means two answers to "which day is this", and the one that
+        loses is whichever the next event happens to pick.
+        """
+        row = self.conn.execute(
+            "SELECT id, attendance_day, opened_unix FROM work_session"
+            " WHERE closed_unix IS NULL ORDER BY opened_unix DESC LIMIT 1").fetchone()
+        if not row:
+            return None
+        last = self.conn.execute(
+            "SELECT MAX(ts_unix) FROM clock_event WHERE session_id = ?",
+            (row["id"],)).fetchone()[0] or row["opened_unix"]
+        if now - last >= QUIET_CLOSE_SECONDS:
+            self.session_id, self.attendance_day = row["id"], row["attendance_day"]
+            self.close_session(last, "quiet_recovered")
+            return "closed"
+        self.session_id, self.attendance_day = row["id"], row["attendance_day"]
+        return "adopted"
+
+    def close_session(self, at, trigger):
+        """Close the session at `at` -- an instant in the PAST, by design.
+
+        Back-dating to the last recorded activity is the whole point: the daemon cannot
+        know whether the quiet was a walk away from the desk or a closed laptop, and
+        stamping `now` would credit every one of those minutes. It also spools the day's
+        attestation, because the moment a day stops being added to is the moment it can be
+        signed off -- and asking at that point beats asking a week later from memory.
+        """
+        if self.session_id is None:
+            return
+        day = self.attendance_day
+        self.conn.execute(
+            "INSERT INTO clock_event(ts,ts_unix,attendance_day,session_id,kind,actor,"
+            "reason_code,provenance,ruleset,confidence)"
+            " VALUES(?,?,?,?,'session_close','system',?,?,?,?)",
+            (datetime.fromtimestamp(at).isoformat(timespec="seconds"), int(at), day,
+             self.session_id, trigger, "live", config.RULESET, 1.0))
+        self.conn.execute(
+            "UPDATE work_session SET closed_ts=?, closed_unix=?, close_trigger=?"
+            " WHERE id=?",
+            (datetime.fromtimestamp(at).isoformat(timespec="seconds"), int(at),
+             trigger, self.session_id))
+        self.conn.commit()
+        attest.spool_write("session_close_quiet", ts=int(at), day=day)
+        self.session_id = None
+        self.attendance_day = None
+
+    def maybe_close_session(self, now):
+        """R9 again, one level up: a session may only close while nothing is running."""
+        if self.session_id is None or self.run_open_at is not None:
+            return False
+        if self.clock.state is not clock_state.STOPPED:
+            return False
+        last = self.conn.execute(
+            "SELECT MAX(ts_unix) FROM clock_event WHERE session_id = ?",
+            (self.session_id,)).fetchone()[0]
+        if last is None or now - last < QUIET_CLOSE_SECONDS:
+            return False
+        self.close_session(last, "quiet")
+        return True
+
     def shutdown(self, now=None):
         """Close the open run on the way out, so a clean stop never leaves a dangling start."""
         now = now or time.time()
@@ -229,6 +300,7 @@ class Clockd:
             self.reconcile(now)
         self.clock.tick(now)
         self._settle(now)
+        self.maybe_close_session(now)
 
     def run(self, stop_after=None):
         start = time.time()
@@ -370,6 +442,10 @@ def main(stop_after=None):
         n = d.close_dangling(time.time())      # R2: a previous life may have been killed
         if n:
             d._attest("dangling_run_closed", time.time())
+        # order matters: the dangling RUN is closed first so its row is the session's last
+        # activity, and the session then closes at that instant rather than at the restart
+        d.adopt_session(time.time())
+        attest.drain(d.conn)                   # record what the panels and the reaper saw
         d.reconcile(time.time(), reason="restart")
         sd_notify("READY=1")
 

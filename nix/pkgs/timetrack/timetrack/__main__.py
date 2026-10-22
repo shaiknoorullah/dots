@@ -15,7 +15,8 @@ import time
 from datetime import date
 from pathlib import Path
 
-from . import calendar_, config, dbs, derive, doctor, export_csv, interactive, migrate, submission
+from . import (attest, calendar_, config, dbs, derive, doctor, export_csv, hotkey,
+               interactive, migrate, submission)
 
 
 def _month(arg):
@@ -139,6 +140,116 @@ def cmd_clock(a):
           + ("  DEGRADED" if p.get("degraded") else "") + f"  {p.get('detail','')}")
     for pane, a in (d.get("agents") or {}).items():
         print(f"  {pane:10} {a['sub']:9} {a['status']:8} {a.get('ticket') or '-'}")
+    return 0
+
+
+def cmd_hotkey(a):
+    """D4. `toggle` is what the keybind calls; the rest exist so a mistake is fixable."""
+    with dbs.open_work() as conn:
+        if a.action == "status":
+            st = hotkey.state()
+            if st["open"]:
+                print(f"open {st['minutes']} min" + (f"  ({st['note']})" if st["note"] else ""))
+            else:
+                print("no manual interval open")
+            return 0
+        if a.action == "start":
+            r = hotkey.start(a.note or "")
+        elif a.action == "stop":
+            r = hotkey.stop(conn, note=a.note or "")
+        else:
+            r = hotkey.toggle(conn, note=a.note or "")
+    act = r["action"]
+    if act == "started":
+        print("started: the clock counts this interval whatever AW thinks")
+    elif act == "already_open":
+        print(f"already open {r['minutes']} min")
+    elif act == "recorded":
+        print(f"recorded {r['seconds'] // 60} min on {r['day']} "
+              "(provenance hotkey, confidence 1.0)")
+    elif act == "covered":
+        # not a failure: the minutes were already counted once, and counting them twice
+        # is the one thing v_day_span cannot survive -- it sums intervals, never merges
+        print(f"covered: {r['why']}; {r['seconds'] // 60} min added nothing")
+    elif act == "too_short":
+        print(f"too_short: {r['seconds']}s is a mis-press, not an interval")
+    else:
+        print("not_open: nothing to stop")
+    return 0
+
+
+def cmd_attest(a):
+    """The day the user signs off on, and the spool the enforcement layers write to."""
+    month = _month(a.month)
+    with dbs.open_work() as conn:
+        rep = attest.drain(conn)
+        if rep["written"] or rep["unattached"] or rep["bad"]:
+            print(f"spool: {rep['written']} recorded, {rep['unattached']} unattachable, "
+                  f"{rep['bad']} unreadable")
+        if a.drain:
+            return 0
+        if a.day:
+            days = [a.day]
+        else:
+            pend = attest.pending_days(conn, month)
+            if not pend:
+                print(f"{month}: every past working day with recorded time is signed off")
+                return 0
+            if not a.all:
+                print(f"{len(pend)} day(s) awaiting sign-off:")
+                for r in pend:
+                    net = derive.hhmm(r["net_minutes"]) if r["net_minutes"] is not None else "-"
+                    print(f"  {r['day']}  span {derive.hhmm(r['span_minutes'])}  net {net}"
+                          f"  {r['provenance'] or '-'}")
+                print("\nsign one off with --day YYYY-MM-DD, or review them all with --all")
+                return 0
+            days = [r["day"] for r in pend]
+        for day in days:
+            row = conn.execute(
+                "SELECT span_minutes, deduction_minutes, net_minutes, target_minutes,"
+                " unconfirmed, provenance FROM v_day_worked WHERE attendance_day=?",
+                (day,)).fetchone()
+            if not row:
+                print(f"{day}: not classified; `timetrack seed` first", file=sys.stderr)
+                return 1
+            net = derive.hhmm(row["net_minutes"]) if row["net_minutes"] is not None else "-"
+            print(f"\n{day}  span {derive.hhmm(row['span_minutes'])}  "
+                  f"breaks {derive.hhmm(row['deduction_minutes'] or 0)}  net {net}  "
+                  f"target {derive.hhmm(row['target_minutes'])}  [{row['provenance'] or '-'}]")
+            if row["unconfirmed"]:
+                print(f"  !! {row['unconfirmed']} unconfirmed gap(s): the net figure is a guess")
+            verdict = a.verdict
+            if not verdict:
+                try:
+                    reply = input("  sign off? [y]es / [n]o-dispute / [s]kip: ").strip().lower()
+                except EOFError:
+                    reply = "s"
+                verdict = {"y": "confirmed", "n": "disputed"}.get(reply[:1] or "s")
+            if not verdict:
+                print("  skipped")
+                continue
+            attest.confirm(conn, day, verdict)
+            print(f"  {day} {verdict}")
+    return 0
+
+
+def cmd_panic(a):
+    """Layer 3. A convenience around `touch`; the file is the interface, not this."""
+    if a.state == "status":
+        print("PANIC engaged: enforcement off, collection continues" if config.panic()
+              else "PANIC not set: enforcement active")
+        return 0
+    if a.state == "on":
+        config.PANIC.parent.mkdir(parents=True, exist_ok=True)
+        config.PANIC.touch()
+        print(f"engaged {config.PANIC}\n  every enforcement path stands down; "
+              "timetrack-deadman reaps any panel on screen within 30s")
+    else:
+        try:
+            config.PANIC.unlink()
+        except FileNotFoundError:
+            pass
+        print("released: enforcement active again")
     return 0
 
 
@@ -351,6 +462,25 @@ def main(argv=None):
 
     s = sub.add_parser("clock", help="show what the daemon currently believes")
     s.set_defaults(fn=cmd_clock)
+
+    s = sub.add_parser("hotkey", help="open or close a manual work interval (D4)")
+    s.add_argument("action", nargs="?", default="toggle",
+                   choices=["toggle", "start", "stop", "status"])
+    s.add_argument("--note", help="what it was; stored locally, never exported")
+    s.set_defaults(fn=cmd_hotkey)
+
+    s = sub.add_parser("attest", help="sign off a day's figure; drain the enforcement spool")
+    s.add_argument("--month")
+    s.add_argument("--day", help="YYYY-MM-DD to review")
+    s.add_argument("--all", action="store_true", help="review every pending day")
+    s.add_argument("--drain", action="store_true", help="only record spooled attestations")
+    s.add_argument("--verdict", choices=["confirmed", "disputed"],
+                   help="answer without prompting")
+    s.set_defaults(fn=cmd_attest)
+
+    s = sub.add_parser("panic", help="disable all enforcement (collection continues)")
+    s.add_argument("state", nargs="?", default="status", choices=["on", "off", "status"])
+    s.set_defaults(fn=cmd_panic)
 
     s = sub.add_parser("journald", help="check recorded time against boot windows")
     s.add_argument("--month")

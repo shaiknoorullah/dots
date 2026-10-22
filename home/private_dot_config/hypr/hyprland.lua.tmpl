@@ -158,6 +158,7 @@ hl.window_rule({ match = { class = "^(dots[.].*)$" }, opaque = true })
 -- corners. Rounding is not listed here at all now; decoration.rounding (12) is the panel
 -- radius the whole desktop uses, swaync and the OSD included.
 for class, size in pairs({
+  ["dots[.]block"]     = "820 420",    -- the blocking panel: a question plus its escape route
   ["dots[.]capture"]   = "700 120",    -- one-line capture prompt
   ["dots[.]salahpick"] = "560 320",    -- four-item picker
   ["dots[.]otter"]     = "400 300",    -- the launcher itself
@@ -172,6 +173,29 @@ for class, size in pairs({
 }) do
   hl.window_rule({ match = { class = "^(" .. class .. ")$" }, size = size })
 end
+
+-- ── dots.block: the ONE window allowed to take the keyboard ───────────
+-- Everything above says stay_focused is deliberately absent, and that still holds for
+-- every launcher and picker: a window that will not release focus also blocks grim/slurp,
+-- so a screenshot of it becomes impossible, and Esc already dismisses all of them.
+--
+-- dots.block is the exception, and it is the exception on purpose. It is the timetrack
+-- enforcement panel: a question that has to be answered before the day's record can be
+-- defended. If Esc dismissed it, it would be dismissed -- which is the entire failure mode
+-- the system exists to correct. So the compositor enforces the grab (stay_focused) and
+-- the window ignores close requests (no_close).
+--
+-- That is a dangerous pair, and NOTHING may create such a window without the dead-man's
+-- switch already running. `timetrack-panel` refuses to launch while
+-- timetrack-deadman.timer is inactive, and three independent escapes exist on top of it:
+--
+--   touch ~/.config/timetrack/PANIC   reaped within 30s; tracking continues
+--   hyprctl reload                    re-reads this file and drops the rules
+--   systemctl --user stop timetrack-panel-<id>.service
+--
+-- The panel prints all three on itself, because remembering them is not a plan.
+hl.window_rule({ match = { class = "^(dots[.]block)$" }, stay_focused = true })
+hl.window_rule({ match = { class = "^(dots[.]block)$" }, no_close = true })
 
 -- (removed the title="^(focus-panel)$" block: float/center/size/dim_around/stay_focused/
 --  opaque for a window nothing has created since the caelestia focus panel was replaced by
@@ -262,6 +286,11 @@ hl.bind(mod .. " + SHIFT + A",      hl.dsp.exec_cmd("ghostty --class=dots.captur
 hl.bind(mod .. " + SHIFT + X",      hl.dsp.exec_cmd("~/.local/bin/adhd-focus.sh status"))
 hl.bind(mod .. " + SHIFT + Return", hl.dsp.exec_cmd("ghostty --class=dots.tasktui --gtk-single-instance=false --config-file={{ .chezmoi.homeDir }}/.config/ghostty/popup-tasktui -e ~/.local/bin/tw-tui"))  -- taskwarrior-tui daily driver (was caelestia focus panel)
 hl.bind(mod .. " + SHIFT + P", hl.dsp.exec_cmd("~/.local/bin/adhd-break.sh"))  -- pause + monitor-off + lock (break)
+-- D4: untracked work. One keypress, no prompt -- the time this captures is a whiteboard
+-- or a phone call, moments when a dialog asking "what are you doing?" is answered by not
+-- pressing the key at all. The toast says whether the interval was recorded or was
+-- already covered by the clock.
+hl.bind(mod .. " + SHIFT + U",      hl.dsp.exec_cmd("~/.local/bin/timetrack-hotkey"))  -- manual work interval (timetrack D4)
 hl.bind(mod .. " + SHIFT + semicolon", hl.dsp.exec_cmd("ghostty --class=dots.salahpick --gtk-single-instance=false --config-file={{ .chezmoi.homeDir }}/.config/ghostty/popup -e ~/.local/bin/adhd-salah-pick.sh"))  -- one-key salah logger
 hl.bind(mod .. " + D",              hl.dsp.exec_cmd("ghostty --class=dots.otter --gtk-single-instance=false --config-file={{ .chezmoi.homeDir }}/.config/ghostty/popup -e otter-launcher"))  -- otter-launcher (floating panel)
 hl.bind(mod .. " + SHIFT + N", hl.dsp.exec_cmd("swaync-client -t -sw"))  -- SwayNC control center (notification history + do-not-disturb switch)

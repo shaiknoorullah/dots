@@ -16,6 +16,12 @@ XDG_CONFIG = Path(os.environ.get("XDG_CONFIG_HOME") or HOME / ".config")
 XDG_DATA = Path(os.environ.get("XDG_DATA_HOME") or HOME / ".local/share")
 
 CONF_DIR = XDG_CONFIG / "timetrack"
+# Layer 3 of the dead-man's switch. Its existence is the whole interface: every
+# enforcement path checks for the file before it draws anything, and timetrack-deadman
+# reaps a panel already on screen within one 30-second cycle when it appears. A plain
+# `touch` has to be enough, because the state this exists for is one where the Python
+# here may be what is broken.
+PANIC = CONF_DIR / "PANIC"
 PAYROLL_TOML = CONF_DIR / "payroll.toml"
 HOLIDAYS_TOML = CONF_DIR / "holidays.toml"
 CATEGORIES_TOML = CONF_DIR / "categories.toml"
@@ -38,6 +44,12 @@ TIMEW = "timew"
 RULESET = "v1"
 
 _WEEKDAY = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6}
+
+
+def panic():
+    """True while enforcement is disabled. Collection is NOT affected, deliberately:
+    the user turning off the prompts must not also lose the record of the day."""
+    return PANIC.exists()
 
 
 def _load(path):

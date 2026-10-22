@@ -1,0 +1,134 @@
+#!/bin/sh
+# Launch a BLOCKING panel -- and make sure it cannot outlive its welcome.
+#
+#   timetrack-panel <id> <title> -- <command> [args...]
+#
+# The command's stdout is the answer. Nothing else is: a panel that times out, is reaped
+# or is dismissed produces NO answer, and the caller is told so (exit 2) rather than handed
+# a default. Defaulting a timed-out prompt is how a system starts recording things the
+# user never said.
+#
+# This is layers 1, 3 and 4 of the dead-man's switch; layer 2 is timetrack-deadman, and
+# this script REFUSES TO RUN WITHOUT IT. That refusal is the most important line in the
+# file. A dots.block window carries stay_focused (a compositor-enforced keyboard grab) and
+# no_close; if the reaper is not running, a wedge in the panel leaves the user with a
+# machine whose keyboard belongs to a modal they cannot close. The panel is allowed to
+# exist only while the thing that kills it is already running.
+#
+#   layer 1  systemd-run -p RuntimeMaxSec=600  -- PID 1 enforces a 10-minute ceiling
+#   layer 2  timetrack-deadman.timer           -- reaps a frozen panel (checked below)
+#   layer 3  ~/.config/timetrack/PANIC         -- checked FIRST, before anything is drawn
+#   layer 4  the escape route printed ON the panel, because nobody remembers it at 3am
+set -u
+
+STATE="${XDG_DATA_HOME:-$HOME/.local/share}/timetrack"
+PANELS="$STATE/panels"
+SPOOL="$STATE/attest-spool"
+CONF="${XDG_CONFIG_HOME:-$HOME/.config}/timetrack"
+PANIC="$CONF/PANIC"
+SELF="$HOME/.local/bin/timetrack-panel"
+MAX_SECONDS=600
+HEARTBEAT=10
+
+spool() {   # reason
+  mkdir -p "$SPOOL" 2>/dev/null || return 0
+  f="$SPOOL/$(date +%s)-$1-$$.json"
+  printf '{"reason":"%s","ts_unix":%s,"panel":"%s","confidence":1.0}\n' \
+    "$1" "$(date +%s)" "${id:-unknown}" > "$f.tmp" 2>/dev/null || return 0
+  mv -f "$f.tmp" "$f" 2>/dev/null || rm -f "$f.tmp"
+}
+
+# ── the inside of the panel ────────────────────────────────────────────────
+# Re-exec of this same script, so there is one file to read and the banner below cannot
+# drift away from the mechanism it describes.
+if [ "${1:-}" = "--inner" ]; then
+  id="$2"; title="$3"; shift 4   # --inner id title --
+  hb="$PANELS/$id.hb"
+  ans="$PANELS/$id.answer"
+  : > "$hb"
+  ( while :; do : > "$hb"; sleep "$HEARTBEAT"; done ) &
+  beat=$!
+  trap 'kill "$beat" 2>/dev/null' EXIT HUP INT TERM
+
+  printf '\033[1m%s\033[0m\n' "$title"
+  # LAYER 4. An ADHD brain at 3am will not remember any of this, and a modal with a
+  # keyboard grab is exactly the wrong moment to go looking for documentation.
+  printf '\033[2m%s\n%s\n%s\n%s\033[0m\n\n' \
+    "stuck? any one of these gets you out:" \
+    "  touch ~/.config/timetrack/PANIC            all enforcement off, tracking continues" \
+    "  hyprctl reload                             drops the keyboard grab" \
+    "  systemctl --user stop timetrack-panel-$id.service"
+  # "$@", never `sh -c "$*"`: re-joining the argv with spaces would mangle any argument
+  # containing one, and the command here is given by the caller.
+  "$@" > "$ans"
+  exit $?
+fi
+
+# ── the launcher ───────────────────────────────────────────────────────────
+[ "$#" -ge 3 ] || { echo "usage: timetrack-panel <id> <title> -- <command...>" >&2; exit 64; }
+id="$1"; title="$2"; shift 2
+[ "${1:-}" = "--" ] && shift
+case "$id" in *[!A-Za-z0-9_-]*|"") echo "timetrack-panel: id must be [A-Za-z0-9_-]" >&2; exit 64 ;; esac
+
+# LAYER 3, first and unconditionally. Enforcement stands down; collection is untouched.
+if [ -e "$PANIC" ]; then
+  spool panic_engaged
+  echo "timetrack-panel: PANIC is engaged ($PANIC); not drawing panel '$id'" >&2
+  exit 3
+fi
+
+# LAYER 2 is a PRECONDITION, not a backstop.
+if [ "${TIMETRACK_PANEL_NO_DEADMAN:-0}" != 1 ]; then
+  if ! systemctl --user is-active --quiet timetrack-deadman.timer; then
+    echo "timetrack-panel: refusing -- timetrack-deadman.timer is not active." >&2
+    echo "  A panel that grabs the keyboard may not exist without its reaper." >&2
+    echo "  systemctl --user enable --now timetrack-deadman.timer" >&2
+    exit 4
+  fi
+fi
+
+command -v systemd-run >/dev/null || { echo "timetrack-panel: no systemd-run" >&2; exit 69; }
+command -v ghostty >/dev/null || { echo "timetrack-panel: no ghostty" >&2; exit 69; }
+
+mkdir -p "$PANELS"
+rm -f "$PANELS/$id.answer" "$PANELS/$id.hb"
+
+gcfg="$HOME/.config/ghostty/popup"
+set -- "$SELF" --inner "$id" "$title" -- "$@"
+# The popup ghostty config is what gives every dots.* overlay its look. Absent (a machine
+# where the dotfiles are only partly applied) the panel still has to open, so the flag is
+# dropped rather than guessed at -- a missing theme is cosmetic, a panel that fails to
+# draw is a prompt the user never saw.
+if [ -f "$gcfg" ]; then
+  set -- --config-file="$gcfg" -e "$@"
+else
+  set -- -e "$@"
+fi
+
+# LAYER 1. RuntimeMaxSec is enforced by PID 1, so it holds even if everything in this
+# file is wrong. TimeoutStopSec is short on purpose: a panel that ignores SIGTERM must
+# still be gone promptly once the reaper has decided, and the default 90 seconds would
+# add a minute and a half of grabbed keyboard to a situation already going badly.
+systemd-run --user --collect --wait --quiet \
+  -u "timetrack-panel-$id" \
+  -p "RuntimeMaxSec=$MAX_SECONDS" -p TimeoutStopSec=5 -p KillMode=mixed \
+  -- ghostty --class=dots.block --gtk-single-instance=false "$@" \
+  >/dev/null 2>&1
+rc=$?
+
+ans="$PANELS/$id.answer"
+rm -f "$PANELS/$id.hb"
+if [ -s "$ans" ]; then
+  cat "$ans"
+  rm -f "$ans"
+  exit 0
+fi
+# No answer. Which of timeout, reap or dismissal it was is recorded, and the distinction
+# matters: a dismissal is a choice, a timeout is an absence, and a reap is a malfunction.
+if [ "$rc" -ne 0 ]; then
+  spool prompt_timeout
+else
+  spool panel_dismissed
+fi
+rm -f "$ans"
+exit 2

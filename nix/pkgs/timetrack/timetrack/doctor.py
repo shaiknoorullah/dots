@@ -10,14 +10,17 @@ cannot decide returns `warn`, never `ok` -- an unknown must never read as health
 
 Severity decides the exit code: any `fail` exits 1, warnings alone exit 0.
 """
+import json
 import os
+import shutil
 import sqlite3
+import subprocess
 import time
 import urllib.error
 import urllib.request
 from datetime import date
 
-from . import config, dbs, derive
+from . import attest, config, dbs, derive
 
 OK, WARN, FAIL = "ok", "warn", "fail"
 
@@ -194,6 +197,99 @@ def _dangling(results, conn):
         results.append(_r("clock", OK, "no dangling run intervals"))
 
 
+def _unit(name):
+    """is-active / is-enabled for a user unit, or None when systemd cannot be asked."""
+    if not shutil.which("systemctl"):
+        return None, None
+    def ask(verb):
+        try:
+            return subprocess.run(["systemctl", "--user", verb, name], capture_output=True,
+                                  text=True, timeout=5).stdout.strip()
+        except (OSError, subprocess.SubprocessError):
+            return None
+    return ask("is-active"), ask("is-enabled")
+
+
+def _enforcement(results):
+    """The dead-man's switch, and whether the live clock is actually alive.
+
+    These are checked here because `timetrack doctor` is wired into the hourly capture job,
+    so a failure turns the ops module amber on the bar. A blocking panel whose reaper is
+    not running is the single most dangerous state this system can be in -- it is the one
+    where a bug takes the keyboard away -- and it must not be discoverable only by
+    experiencing it.
+    """
+    if config.panic():
+        results.append(_r("panic", WARN, f"{config.PANIC} exists: enforcement is OFF",
+                          "timetrack panic off -- collection was never affected"))
+    else:
+        results.append(_r("panic", OK, "not set; enforcement active"))
+
+    active, enabled = _unit("timetrack-deadman.timer")
+    panels = config.STATE_DIR / "panels"
+    live = sorted(panels.glob("*.hb")) if panels.exists() else []
+    if active is None:
+        results.append(_r("deadman", WARN, "cannot query systemd --user"))
+    elif active == "active":
+        results.append(_r("deadman", OK, f"reaper armed, {len(live)} panel(s) on screen"))
+    elif live:
+        # the exact state the refusal in timetrack-panel exists to prevent, reached anyway
+        results.append(_r("deadman", FAIL,
+                          f"{len(live)} panel(s) live with NO reaper ({active})",
+                          "systemctl --user start timetrack-deadman.timer, "
+                          "or touch ~/.config/timetrack/PANIC"))
+    elif enabled in ("enabled", "static"):
+        results.append(_r("deadman", FAIL, f"timer is {active} but enabled",
+                          "systemctl --user start timetrack-deadman.timer"))
+    else:
+        results.append(_r("deadman", OK, "not installed; nothing creates blocking panels"))
+
+    active, enabled = _unit("timetrack-clockd.service")
+    cache = config.STATE_DIR / "clock.json"
+    if enabled not in ("enabled", "static"):
+        results.append(_r("clockd", OK,
+                          "not enabled; AW capture is the only live source"))
+    elif active != "active":
+        results.append(_r("clockd", FAIL, f"enabled but {active}",
+                          "systemctl --user status timetrack-clockd"))
+    else:
+        try:
+            age = time.time() - json.loads(cache.read_text())["updated_unix"]
+        except (OSError, ValueError, KeyError):
+            results.append(_r("clockd", FAIL, "running but has never written its cache",
+                              "the loop is wedged; WatchdogSec should have restarted it"))
+        else:
+            if age > 120:
+                results.append(_r("clockd", FAIL, f"cache is {age / 60:.0f} min stale",
+                                  "the loop stopped ticking while the process lives"))
+            else:
+                results.append(_r("clockd", OK, f"running, cache {age:.0f}s old"))
+
+    stuck = attest.pending_spool()
+    if stuck:
+        results.append(_r("attest:spool", WARN,
+                          f"{len(stuck)} spooled attestation(s) cannot be attached",
+                          "they describe a day with no work_session; backfill it first"))
+    else:
+        results.append(_r("attest:spool", OK, "spool empty"))
+
+
+def _attestation(results, conn, month):
+    """Unsigned days. A figure nobody reviewed is a measurement, not a claim."""
+    try:
+        pend = attest.pending_days(conn, month)
+    except sqlite3.Error as e:
+        results.append(_r("attest:days", WARN, f"{e}"))
+        return
+    if pend:
+        results.append(_r("attest:days", WARN,
+                          f"{len(pend)} past working day(s) never signed off: "
+                          f"{', '.join(r['day'] for r in pend[:4])}",
+                          "timetrack attest --all"))
+    else:
+        results.append(_r("attest:days", OK, "every past working day with time is signed off"))
+
+
 def _activitywatch(results):
     """Resolve buckets by TYPE, never by name.
 
@@ -243,9 +339,11 @@ def run(month=None):
             _calibration(results, conn)
             _month(results, conn, month)
             _dangling(results, conn)
+            _attestation(results, conn, month)
             conn.close()
         except sqlite3.Error as e:
             results.append(_r("queries", FAIL, f"{e}"))
     _activitywatch(results)
+    _enforcement(results)
     _backup(results)
     return results

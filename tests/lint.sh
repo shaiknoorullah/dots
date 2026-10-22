@@ -60,6 +60,40 @@ for d in "$out" "$nixos"; do
   fi
 done
 
+# R-deadman: layer 2 of the dead-man's switch must stay IMPORT-FREE.
+# timetrack-deadman exists for the case where a blocking panel with a compositor-enforced
+# keyboard grab has wedged, and the likeliest cause of a wedge is a bug in the Python that
+# drew it. A reaper that called into that Python would die of the same bug and leave the
+# machine unusable. The independence is the feature, so it is checked mechanically rather
+# than left as a comment someone later "tidies up".
+dm="$out/.local/bin/timetrack-deadman"
+[ -f "$dm" ] || { echo "LINT: timetrack-deadman is not rendered"; exit 1; }
+# comments are stripped first: the script's own header SAYS "no python", which is the
+# documentation of the rule, not a violation of it
+if grep -v '^[[:space:]]*#' "$dm" | grep -nE '(^|[^-[:alnum:]_/])python'; then
+  echo "LINT: timetrack-deadman invokes python (layer 2 must import nothing)"; exit 1
+fi
+if grep -v '^[[:space:]]*#' "$dm" | grep -nE '(^|[^-[:alnum:]_/.])timetrack +[a-z]'; then
+  echo "LINT: timetrack-deadman calls the timetrack CLI (layer 2 must import nothing)"; exit 1
+fi
+# R-escape: layer 4 is the escape route printed ON the panel. A modal that grabs the
+# keyboard and does not say how to get out of it is the failure mode, not a detail.
+pn="$out/.local/bin/timetrack-panel"
+[ -f "$pn" ] || { echo "LINT: timetrack-panel is not rendered"; exit 1; }
+for esc in 'timetrack/PANIC' 'hyprctl reload' 'systemctl --user stop timetrack-panel'; do
+  grep -qF "$esc" "$pn" || { echo "LINT: timetrack-panel does not print the escape '$esc'"; exit 1; }
+done
+grep -qF 'timetrack-deadman.timer' "$pn" || {
+  echo "LINT: timetrack-panel does not require the reaper before drawing"; exit 1; }
+# R-grab: dots.block is the ONLY window allowed to hold the keyboard. stay_focused on any
+# other popup also blocks grim/slurp, so a screenshot of it becomes impossible -- that is
+# why it was removed from the whole dots.* family, and the rule has drifted back before.
+for d in "$out" "$nixos"; do
+  if grep -n 'stay_focused' "$d/.config/hypr/hyprland.lua" | grep -v 'dots\[.\]block' | grep -v '^\s*[0-9]*:\s*--'; then
+    echo "LINT: stay_focused on a window other than dots.block (it blocks screenshots)"; exit 1
+  fi
+done
+
 # R28: everything uses ~/.nix-profile, NixOS included (home-manager.useUserPackages = false)
 if grep -rIl '/etc/profiles/per-user' "$out" "$nixos"; then echo "LINT: files above use /etc/profiles/per-user (R28: use ~/.nix-profile)"; exit 1; fi
 echo "lint ok"
