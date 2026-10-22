@@ -23,6 +23,7 @@ from .. import config, intervals
 BASE = "http://localhost:5600/api/0"
 PROVENANCE = "backfill:aw"
 MIN_PRESENT = 300  # seconds; below this a cluster is noise, not a workday
+MIN_GAP = 180      # seconds; a shorter gap is a pause, not a break worth asking about
 CONFIDENCE = 0.8
 
 
@@ -113,17 +114,37 @@ def write(conn, since=None, until=None):
             (_iso(d["open"]), int(d["open"].timestamp()), _iso(d["close"]),
              int(d["close"].timestamp()), d["day"], "aw", "aw", PROVENANCE))
         sid = cur.lastrowid
-        ev = [("session_open", d["open"]), ("session_close", d["close"])]
-        # one run pair per contiguous presence span, so gaps inside the day are real gaps
-        for a, b in d["runs"]:
-            ev += [("run_start", a), ("run_stop", b)]
+        # ONE run pair spanning open..close, matching how the sheet writes a day. The
+        # obvious alternative -- a run pair per presence span -- makes span mean ACTIVE
+        # time here and ELAPSED time there, and since v_day_worked computes
+        # net = span - deductions, writing the gaps as deductions on top of that would
+        # subtract them twice. Elapsed span plus explicit gap deductions keeps one
+        # meaning for span across every source.
+        ev = [("session_open", d["open"]), ("run_start", d["open"]),
+              ("run_stop", d["close"]), ("session_close", d["close"])]
         for kind, dt in ev:
             conn.execute(
                 "INSERT INTO clock_event(ts,ts_unix,attendance_day,session_id,kind,actor,"
                 "provenance,ruleset,confidence) VALUES(?,?,?,?,?,?,?,?,?)",
                 (_iso(dt), int(dt.timestamp()), d["day"], sid, kind, "human",
                  PROVENANCE, config.RULESET, CONFIDENCE))
-        written.append(d["day"])
+        # Each gap between presence runs becomes an UNCONFIRMED deduction. confirmed=0 is
+        # the whole point: the gap is real, but what it WAS is unknown, and an offline
+        # meeting is worked time while lunch is not. Reclassifying a gap as a meeting
+        # later deletes the deduction and the minutes return to the figure.
+        gaps = 0
+        prev = None
+        for a, b in d["runs"]:
+            if prev is not None and (a - prev).total_seconds() >= MIN_GAP:
+                mins = round((a - prev).total_seconds() / 60)
+                conn.execute(
+                    "INSERT INTO deduction(session_id,attendance_day,start_unix,end_unix,"
+                    "category,minutes,confirmed,provenance) VALUES(?,?,?,?,?,?,0,?)",
+                    (sid, d["day"], int(prev.timestamp()), int(a.timestamp()),
+                     "misc", mins, PROVENANCE))
+                gaps += 1
+            prev = b
+        written.append({"day": d["day"], "gaps": gaps})
     conn.commit()
     return {"written": written, "skipped_existing": skipped}
 

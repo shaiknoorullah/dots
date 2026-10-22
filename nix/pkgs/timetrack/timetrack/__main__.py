@@ -59,7 +59,10 @@ def cmd_ingest_aw(a):
     from .backfill import aw
     with dbs.open_work() as conn:
         rep = aw.write(conn, since=None, until=None)
-    print(f"wrote {len(rep['written'])} day(s): {', '.join(rep['written']) or 'none'}")
+    for w in rep["written"]:
+        print(f"wrote {w['day']}: {w['gaps']} unconfirmed gap(s) recorded as breaks")
+    if not rep["written"]:
+        print("no new day to write")
     if rep["skipped_existing"]:
         # never silently overwrite a higher-confidence source
         print(f"skipped {len(rep['skipped_existing'])} day(s) that already have a session")

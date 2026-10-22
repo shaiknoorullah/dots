@@ -142,10 +142,14 @@ hl.window_rule({ match = { class = "^(zen-tab-switcher)$" },                    
 -- stay_focused is deliberately NOT here, and the note on the retired focus-panel rules
 -- below says why: a window that refuses to give up focus also blocks grim/slurp, so a
 -- screenshot of a popup becomes impossible. Esc already closes every one of these.
-hl.window_rule({ match = { class = "^(dots[.])" }, float = true })
-hl.window_rule({ match = { class = "^(dots[.])" }, center = true })
-hl.window_rule({ match = { class = "^(dots[.])" }, dim_around = true })
-hl.window_rule({ match = { class = "^(dots[.])" }, opaque = true })
+-- NOTE the `.*$`: Hyprland matches a class rule against the WHOLE class, so "^(dots[.])"
+-- matches only a window whose class is literally "dots." and therefore matched nothing --
+-- every popup lost float/center/dim_around/opaque at once and opened as a tiled window.
+-- Every other rule in this file is anchored the same way (see com[.]mitchellh[.]ghostty).
+hl.window_rule({ match = { class = "^(dots[.].*)$" }, float = true })
+hl.window_rule({ match = { class = "^(dots[.].*)$" }, center = true })
+hl.window_rule({ match = { class = "^(dots[.].*)$" }, dim_around = true })
+hl.window_rule({ match = { class = "^(dots[.].*)$" }, opaque = true })
 -- Per-popup SIZE is the only thing left that is genuinely per popup: a one-line capture
 -- box and a file manager do not want the same rectangle. Nothing else varies, which is the
 -- point -- these used to be eleven separate four-to-six-line blocks, each repeating
