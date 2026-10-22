@@ -46,18 +46,35 @@ def bucket(kind):
         "awatcher is not reporting -- this is the silent-zero failure, not an empty day.")
 
 
-def not_afk(since=None, until=None):
-    """Merged [start,end) spans where the user was present, as local datetimes."""
+def not_afk(since=None, until=None, now=None):
+    """Merged [start,end) spans where the user was present, as local datetimes.
+
+    The NEWEST event is live and carries duration 0 until it closes -- ActivityWatch only
+    writes a duration when a state ends. Dropping zero-duration events therefore threw away
+    the run currently in progress, so today's session ended at the last CLOSED run and
+    every minute since was invisible. Worse, a break could never become an interior gap
+    while it was the most recent thing in the data: with nothing recorded after it, it read
+    as the session closing rather than as an absence between two runs.
+
+    So the newest event alone is extended to `now`. Any OTHER zero-duration event is
+    genuinely empty and still dropped -- that is noise, not a live state.
+    """
     events = _get(f"/buckets/{bucket('afkstatus')}/events?limit=100000")
+    now = now or datetime.now().astimezone()
+    # the API returns newest first; only that one may be in progress
+    newest_ts = events[0]["timestamp"] if events else None
     spans = []
     for e in events:
         if (e.get("data") or {}).get("status") != "not-afk":
             continue
         dur = e.get("duration") or 0
-        if dur <= 0:
-            continue
         start = datetime.fromisoformat(e["timestamp"].replace("Z", "+00:00")).astimezone()
-        end = start + timedelta(seconds=dur)
+        if dur <= 0:
+            if e["timestamp"] != newest_ts or start > now:
+                continue
+            end = now
+        else:
+            end = start + timedelta(seconds=dur)
         if since and end.date() < since:
             continue
         if until and start.date() > until:
