@@ -23,7 +23,7 @@ done < "$CONF"
 target="${target:-$upcoming}"
 [ -z "$target" ] && { notify-send "🕌 Salah" "All of today's prayers are logged." 2>/dev/null; exit 0; }
 
-choice="$(printf 'jamaah\nalone\nqaza\nmissed\n' | fzf --prompt="  $target → " --height=100% --reverse --no-info \
+choice="$(printf 'jamaah\nalone\nqaza\nmissed\n' | fzf --prompt=$'􀜌  '"$target"' ' --header=$'􁖬  how was it prayed?' --height=100% --reverse --no-info \
     --color='bg:-1,bg+:-1,fg:-1,fg+:15,hl:5,hl+:13,pointer:5,prompt:5,marker:5,header:8' \
     2>/dev/null || true)"
 [ -z "$choice" ] && exit 0

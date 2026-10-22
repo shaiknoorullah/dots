@@ -23,7 +23,7 @@ get_sessions() {
     echo "$kill_entry"
 }
 
-chosen="$(get_sessions | fzf --header=$'tmux')"
+chosen="$(get_sessions | fzf --header=$'􀦬  tmux sessions')"
 
 # Exit silently if the user dismissed the menu without choosing.
 [[ -z "$chosen" ]] && exit 0
@@ -33,7 +33,7 @@ if [[ "$chosen" == "$new_entry" ]]; then
     # fzf has no pure "text input" mode like `legacy-menu -lines 0`; emulate one
     # with --print-query over an empty candidate list so Enter yields
     # whatever the user typed.
-    session_name="$(printf '' | fzf --print-query --header='session name' --prompt='name> ' | sed -n '1p')"
+    session_name="$(printf '' | fzf --print-query --header=$'􀦬  new session' --prompt=$'􀜌  name ' | sed -n '1p')"
     if [[ -n "$session_name" ]]; then
         # Nesting "tmux new-session" inside an existing tmux client fails
         # ("sessions should be nested with care"); create detached and
@@ -54,7 +54,7 @@ elif [[ "$chosen" == "$kill_entry" ]]; then
         notify-send "Tmux" "No sessions to kill" -t 3000
         exit 0
     fi
-    target="$(echo "$sessions" | fzf --header='kill which session?')"
+    target="$(echo "$sessions" | fzf --header=$'􀦬  kill which session?')"
     if [[ -n "$target" ]]; then
         tmux kill-session -t "$target"
         notify-send "Tmux" "Killed session: $target" -t 3000

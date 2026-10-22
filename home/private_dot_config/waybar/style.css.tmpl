@@ -1,0 +1,340 @@
+/* ~/.config/waybar/style.css — rendered from style.css.tmpl.
+   A template, not a plain file, so the eleven Dracula hexes live in ONE place
+   (.chezmoidata/palette.yaml) instead of being retyped here and in swaync's sheet. The
+   waybar colours were the last hand-copied set; drifting from the palette was only a
+   matter of time.
+
+   ── The visual language this sheet settles ─────────────────────────────────
+   Every surface added after this one should follow these five rules, because the thing
+   that made the old bar look busy was ten differently-coloured pills, not any one pill.
+
+   1. TWO SLABS, NOT TEN PILLS. The centre and right modules share one background with
+      hairline dividers and are rounded only at the cluster's ends, so the eye parses the
+      bar as three objects (workspaces · clock+salah · status) rather than ten. Gaps are
+      CSS margins only — config.jsonc sets "spacing": 0 for exactly this reason.
+   2. 8px for bar-scale chips. 12px for panel-scale surfaces (swaync, popups), which is
+      also hyprland decoration.rounding, so a popup and a panel share one corner.
+   3. ICONS SAY WHAT, NEVER HOW URGENT. The theme bakes #fcfcfc into the scalable SVGs
+      (phosphor-icon-theme/build.sh), so an icon loaded through -gtk-icontheme() CANNOT be
+      tinted from here — and that is the right constraint rather than a limitation. State
+      is carried by the icon's SHAPE: the theme's fill/regular pair (solid = on/present,
+      outline = off/absent) already encodes it, which is why `tracking-off` is an outline
+      timer and not a greyed solid one.
+   4. COLOUR IS A CLAIM ON ATTENTION, so only two things may spend it:
+        · the chip's background, washed at ~20% alpha behind matching text, when something
+          either needs you (ops warn/fail, cluster unreachable, unread notifications) or is
+          a state YOU are holding open (timer running, caffeine, do-not-disturb);
+        · custom/ctx's text, because "which context am I in" is the one module whose entire
+          job is identity.
+      Everything else — clock, salah runway, project, volume — stays @fg on the neutral
+      chip. They used to be cyan/amber/green and that is precisely what drowned out the
+      red that mattered. Absent values go @dim rather than taking a colour.
+   5. HOVER LIFTS, it does not recolour: the segment goes to the neutral highlight and the
+      text keeps whatever colour its state gave it, so feedback never overwrites meaning.
+
+   The bar is translucent on purpose: hyprland.lua layer_rule's `blur = true` on the waybar
+   namespace was doing nothing at all against an opaque #282a36. */
+
+@define-color bg      {{ .palette.bg }};
+@define-color fg      {{ .palette.fg }};
+@define-color sel     {{ .palette.sel }};
+@define-color dim     {{ .palette.comment }};
+@define-color cyan    {{ .palette.cyan }};
+@define-color green   {{ .palette.green }};
+@define-color orange  {{ .palette.orange }};
+@define-color pink    {{ .palette.pink }};
+@define-color purple  {{ .palette.purple }};
+@define-color red     {{ .palette.red }};
+
+* {
+  /* The Nerd Font build is what is installed (nix/home.nix: nerd-fonts.jetbrains-mono).
+     Its private-use GLYPHS are banned, not the font itself — the family name has to stay. */
+  font-family: "JetBrainsMono Nerd Font", monospace;
+  font-size: 13px;
+  min-height: 0;
+  /* Nothing in the bar is keyboard-driven, so GTK's focus ring is pure noise. */
+  box-shadow: none;
+  text-shadow: none;
+  border: none;
+  border-radius: 0;
+}
+
+window#waybar {
+  background: alpha(@bg, 0.78);
+  color: @fg;
+  /* A hairline reads as an edge on glass; the old 2px slab read as a second bar. */
+  border-bottom: 1px solid alpha(@sel, 0.85);
+}
+
+/* Keep the slabs off the screen edges without asking any module to know it is an end. */
+.modules-left  { padding-left: 4px; }
+.modules-right { padding-right: 8px; }
+
+/* ── workspaces ────────────────────────────────────────────────────────────
+   Deliberately outside the slab treatment: the workspace row is navigation, not status,
+   and giving it a chip made it compete with the clock. Active is marked by an underline
+   plus plain white text rather than purple text alone — a 2px rule is readable at a
+   glance from the corner of the eye, a hue change is not. The transparent border on every
+   other state reserves that 2px so nothing shifts when focus moves. */
+#workspaces {
+  background: transparent;
+  margin: 0 2px;
+}
+#workspaces button {
+  color: @dim;
+  background: transparent;
+  padding: 0 9px;
+  margin: 0;
+  border-bottom: 2px solid transparent;
+}
+#workspaces button.active   { color: @fg; border-bottom-color: @purple; }
+#workspaces button.visible  { color: @fg; }
+/* urgent is the one workspace state allowed to shout; ext/workspaces may never emit it on
+   this compositor, in which case the rule simply never matches. */
+#workspaces button.urgent   { color: @red; border-bottom-color: @red; }
+#workspaces button:hover    { color: @fg; background: alpha(@sel, 0.55); }
+
+/* ── the slab ──────────────────────────────────────────────────────────────
+   One background, one divider, rounded only at the two ends. The tray group is NOT in this
+   list; it is handled separately further down, because waybar names both the group box and
+   the tray module `tray` and a shared rule would land on both and nest their margins. */
+#clock,
+#custom-salah,
+#custom-tracking,
+#custom-project,
+#custom-kube,
+#custom-ops,
+#custom-ctx,
+#idle_inhibitor,
+#custom-notification,
+#wireplumber {
+  background: alpha(@sel, 0.55);
+  color: @fg;
+  padding: 0 10px;
+  margin: 4px 0;
+  border-right: 1px solid alpha(@bg, 0.5);
+}
+
+/* Cluster ends, named explicitly rather than by :first-child/:last-child: custom/project
+   disappears whenever the focused window is not a project (waybar hides an empty label
+   outright), so position-based rounding would migrate between modules as you move around. */
+#clock              { border-radius: 8px 0 0 8px; font-weight: bold; }
+#custom-salah       { border-radius: 0 8px 8px 0; border-right: none; }
+#custom-tracking    { border-radius: 8px 0 0 8px; }
+
+/* ── identity (rule 4b) ────────────────────────────────────────────────────
+   custom/ctx is the only module that spends colour on identity. The hue IS the answer to
+   "which context", so it is on the text rather than a wash — a wash would read as a
+   warning. ctx-none is an absence, so it goes dim instead of picking up a sixth hue. */
+#custom-ctx.ctx-none     { color: @dim; }
+#custom-ctx.ctx-work     { color: @cyan; }
+#custom-ctx.ctx-lab      { color: @green; }
+#custom-ctx.ctx-agents   { color: @purple; }
+#custom-ctx.ctx-personal { color: @orange; }
+
+/* ── absence (rule 4, last line) ───────────────────────────────────────────
+   Nothing to report: the value recedes. The ICON stays white and switches to its outline
+   weight, which is what actually communicates "off" (rule 3). */
+#custom-tracking.tracking-off { color: @dim; }
+#custom-kube.kube-none        { color: @dim; }
+#custom-notification.none,
+#custom-notification.inhibited-none { color: @dim; }
+
+/* ── a claim on your attention (rule 4a) ───────────────────────────────────
+   A wash behind matching text. Two distinct reasons live here and they share one look on
+   purpose, because both mean "this segment is not resting":
+     amber/red  something needs you
+     green      a state you are holding open */
+#custom-ops.warn               { background: alpha(@orange, 0.20); color: @orange; }
+#custom-ops.fail               { background: alpha(@red,    0.22); color: @red; }
+#custom-kube.kube-down         { background: alpha(@red,    0.22); color: @red; }
+#custom-tracking.tracking-on   { background: alpha(@green,  0.18); color: @green; }
+#idle_inhibitor.activated      { background: alpha(@orange, 0.18); }
+
+/* The unread badge. Bold, because a count is the one number in the bar you are meant to
+   read rather than monitor. `inhibited` is swaync's "an app asked for silence" flavour of
+   the same two states, so it gets the same pair. */
+#custom-notification.notification,
+#custom-notification.inhibited-notification {
+  background: alpha(@orange, 0.20);
+  color: @orange;
+  font-weight: bold;
+}
+
+/* Do-not-disturb is a state YOU are holding, not a fault — the old sheet painted it red,
+   which made a deliberate choice look like a broken daemon. Purple is the accent the whole
+   desktop uses for "engaged by you". It washes the chip whether or not anything is waiting;
+   the bell-slash's fill weight is what says something IS waiting (see mapping.tsv). */
+#custom-notification.dnd-none,
+#custom-notification.dnd-notification,
+#custom-notification.dnd-inhibited-none,
+#custom-notification.dnd-inhibited-notification {
+  background: alpha(@purple, 0.20);
+  color: @purple;
+}
+
+/* ── hover (rule 5) ────────────────────────────────────────────────────────
+   After every wash above so it wins, and it touches `background` only: the text keeps the
+   colour its state gave it, so lifting a segment never hides what it says. Every segment
+   listed is clickable; the clock is in for consistency of feel. The tray handle hovers in
+   its own section below, where it also needs a corner. */
+#clock:hover,
+#custom-salah:hover,
+#custom-tracking:hover,
+#custom-project:hover,
+#custom-kube:hover,
+#custom-ops:hover,
+#custom-ctx:hover,
+#idle_inhibitor:hover,
+#custom-notification:hover,
+#wireplumber:hover {
+  background: alpha(@sel, 0.95);
+}
+
+/* ── tray drawer ───────────────────────────────────────────────────────────
+   One handle on the bar; the items slide out on hover (waybar group/tray, drawer).
+
+   Waybar names the GROUP box and the tray MODULE both `tray`, so the selectors here are
+   deliberately precise: `.modules-right > widget > #tray` can only be the group, since the
+   module sits deeper, inside the drawer's revealer; `#tray #tray` can only be the module.
+   The previous sheet styled `#tray` flat and so hit both, and gave the handle the slab's
+   LEFT corner, which left the end of the bar square.
+
+   The group box is the slab segment. It carries the material and the slab's right corner,
+   and the handle and the item strip inside it are transparent — which is why no radius has
+   to move when the drawer opens, and why the corner is correct in both states. */
+.modules-right > widget > #tray {
+  background: alpha(@sel, 0.55);
+  margin: 4px 0;
+  border-radius: 0 8px 8px 0;
+}
+#custom-tray-toggle,
+#tray #tray {
+  background: transparent;
+  margin: 0;
+}
+#custom-tray-toggle { min-width: 30px; padding: 0; }
+#custom-tray-toggle:hover { background: alpha(@sel, 0.95); border-radius: 0 8px 8px 0; }
+/* A tray item is an app's OWN icon, so the drawer is the one place in the bar that is not
+   monochrome. Nothing here tries to tame that; the items just sit on the group's material,
+   and the menu they open is pulled onto the palette so it is not a stock Breeze popup. */
+#tray #tray { padding: 0 6px; }
+#tray menu { background: @bg; color: @fg; }
+
+/* ── tooltips ──────────────────────────────────────────────────────────────
+   Half the modules exist to be hovered (kube's reachability, ops' failing jobs, salah's
+   log), and every one of them was handing its text to a stock Breeze tooltip that matched
+   nothing else on screen. Panel-scale radius, because a tooltip is a small panel. */
+tooltip {
+  background: alpha(@bg, 0.96);
+  border: 1px solid alpha(@sel, 0.9);
+  border-radius: 12px;
+}
+tooltip label {
+  color: @fg;
+  padding: 2px 4px;
+}
+
+/* ── module icons ──────────────────────────────────────────────────────────
+   Waybar labels hold TEXT, so an icon cannot live in format/format-icons -- that is what
+   the Nerd Font glyphs were working around. GTK CSS can do it properly: -gtk-icontheme()
+   resolves a name against the active icon theme (Phosphor-Dark) and renders the real SVG,
+   crisp at any size. The label keeps only the value, and the icon is a background image
+   with padding to sit in. Each state waybar exposes as a class simply swaps the NAME --
+   never the colour, which is baked (rule 3).
+
+   Geometry: 14px icon inset 10px from the left edge, so padding-left is 10 + 14 + 6. */
+#wireplumber,
+#idle_inhibitor,
+#custom-notification,
+#custom-tray-toggle,
+#custom-tracking,
+#custom-kube,
+#custom-ops,
+#custom-ctx,
+#custom-salah,
+#custom-project {
+  background-repeat: no-repeat;
+  background-position: 10px center;
+  background-size: 14px 14px;
+  padding-left: 30px;
+}
+
+#wireplumber            { background-image: -gtk-icontheme("audio-volume-high"); }
+#wireplumber.medium     { background-image: -gtk-icontheme("audio-volume-medium"); }
+#wireplumber.low        { background-image: -gtk-icontheme("audio-volume-low"); }
+/* `off` is volume 0 with a live sink; `muted` is something holding the sink down. Two
+   different situations, and speaker-x vs speaker-slash is the distinction (mapping.tsv). */
+#wireplumber.off        { background-image: -gtk-icontheme("audio-volume-zero"); }
+#wireplumber.muted      { background-image: -gtk-icontheme("audio-volume-muted"); }
+/* Muted drops the percentage (config.jsonc format-muted), so the chip has nothing but the
+   icon to hold -- centre it rather than leaving the icon hanging off a left edge. */
+#wireplumber.muted {
+  background-position: center;
+  padding: 0;
+  min-width: 30px;
+}
+
+/* Icon-only: no label at all, so the icon IS the module. */
+#idle_inhibitor {
+  background-position: center;
+  padding: 0;
+  min-width: 30px;
+}
+#idle_inhibitor.activated   { background-image: -gtk-icontheme("caffeine-active"); }
+#idle_inhibitor.deactivated { background-image: -gtk-icontheme("caffeine-inactive"); }
+
+#custom-notification                 { background-image: -gtk-icontheme("notification-active"); }
+/* zero notifications is a quiet bell, NOT do-not-disturb -- bell-slash there would
+   claim notifications are suppressed when they are simply absent. */
+#custom-notification.none,
+#custom-notification.inhibited-none { background-image: -gtk-icontheme("notification-inactive"); }
+/* Silenced AND empty vs silenced with something waiting: the outline/fill pair is the only
+   difference, and it is the whole point of asking not to be told -- you still get to see
+   that the panel has something for you, without the amber badge. */
+#custom-notification.dnd-none,
+#custom-notification.dnd-inhibited-none        { background-image: -gtk-icontheme("notification-disabled"); }
+#custom-notification.dnd-notification,
+#custom-notification.dnd-inhibited-notification { background-image: -gtk-icontheme("notification-silenced"); }
+
+/* The notification label carries a LEADING SPACE so the module survives a zero count
+   (waybar hides a module whose text is empty). That space would otherwise read as a gap
+   between the bell and the number, so this module gets less left padding to absorb it. */
+#custom-notification { padding-left: 25px; }
+
+/* The tray handle flips weight with the drawer, same outline/fill reading as every other
+   toggle in the theme: outline while the items are tucked away, solid once they are out. */
+/* padding/min-width are restated here because the shared geometry block above sets a
+   left inset for modules that have a label to sit beside it, and this one has none. */
+#custom-tray-toggle {
+  background-image: -gtk-icontheme("tray-closed");
+  background-position: center;
+  padding: 0;
+  min-width: 30px;
+}
+box.drawer:hover #custom-tray-toggle,
+#custom-tray-toggle:hover { background-image: -gtk-icontheme("tray-expand"); }
+
+/* The rest of the bar, on the same footing. Previously these carried ad-hoc text
+   symbols (◦ ⎈ ✓) while only three modules had real icons, which made the bar read
+   as half-converted. Each script now emits a leading space instead of a symbol and
+   keys its class; the icon comes from the theme like everywhere else. */
+#custom-tracking                { background-image: -gtk-icontheme("tracking-inactive"); }
+#custom-tracking.tracking-on    { background-image: -gtk-icontheme("tracking-active"); }
+
+#custom-kube                    { background-image: -gtk-icontheme("cluster-none"); }
+#custom-kube.kube-up            { background-image: -gtk-icontheme("cluster-up"); }
+#custom-kube.kube-down          { background-image: -gtk-icontheme("cluster-down"); }
+
+#custom-ops                     { background-image: -gtk-icontheme("ops-ok"); }
+#custom-ops.warn                { background-image: -gtk-icontheme("ops-warn"); }
+#custom-ops.fail                { background-image: -gtk-icontheme("ops-error"); }
+
+#custom-ctx                     { background-image: -gtk-icontheme("context-tag"); }
+#custom-salah                   { background-image: -gtk-icontheme("salah-time"); }
+#custom-project                 { background-image: -gtk-icontheme("project-current"); }
+
+/* The clock is the one module with no icon, and that is a decision rather than an
+   omission: "Wed 22 Oct  14:30" identifies itself, and a calendar glyph beside it would
+   be the bar's only purely decorative mark. It earns its place by being the only bold
+   thing on the bar instead. */

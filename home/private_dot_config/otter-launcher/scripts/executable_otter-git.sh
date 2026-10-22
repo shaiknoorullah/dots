@@ -31,7 +31,7 @@ if [[ -z "$options" ]]; then
     exit 0
 fi
 
-chosen="$(echo "$options" | fzf --header='git identity')"
+chosen="$(echo "$options" | fzf --header=$'􁀒  git identity')"
 [[ -z "$chosen" ]] && exit 0
 
 # Re-read the profiles file and reconstruct the display string for each

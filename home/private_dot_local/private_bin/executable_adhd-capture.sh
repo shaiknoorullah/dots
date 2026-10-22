@@ -12,7 +12,7 @@ TASK=task  # taskwarrior (go-task shadows `task` in PATH)
 # Current context (default: personal).
 CTX=$(cat "$HOME/.cache/ctx" 2>/dev/null || echo personal)
 
-text=$(fzf --print-query --prompt='  capture › ' --height=100% --reverse --no-info < /dev/null | head -1) || true
+text=$(fzf --print-query --prompt=$'􀜌  capture ' --header=$'􁙚  today · ## Inbox' --height=100% --reverse --no-info < /dev/null | head -1) || true
 [ -n "$text" ] || exit 0
 
 note="journal/daily/$(date +%d-%m-%Y).md"

@@ -76,6 +76,9 @@ status	audio-volume-high	speaker-high	fill
 status	audio-volume-medium	speaker-low	fill
 status	audio-volume-low	speaker-none	fill
 status	audio-volume-muted	speaker-slash	regular
+# Zero is not mute: wireplumber's `off` state is volume 0 with the sink still live, and
+# reusing the slash there would claim the sink is muted when nothing is holding it down.
+status	audio-volume-zero	speaker-x	regular
 status	battery-full	battery-full	fill
 status	battery-low	battery-low	regular
 status	battery-caution	battery-warning	regular
@@ -271,8 +274,18 @@ status	changes-allow	lock-open	regular
 # ── waybar module icons (consumed by CSS -gtk-icontheme(), not by any font) ─
 status	caffeine-active	coffee	fill
 status	caffeine-inactive	coffee	regular
+# The tray drawer is its own state pair: outline while it is closed, solid once the items
+# are out. Same fill/regular reading as every other toggle, so the handle needs no arrow.
 actions	tray-expand	tray	fill
+actions	tray-closed	tray	regular
 status	notification-inactive	bell	regular
+# Four notification states, not three. bell-slash REGULAR is "silenced and nothing waiting";
+# bell-slash FILL is "silenced but something IS waiting" -- the one case where you want to
+# know the panel has something for you despite having asked not to be told.
+status	notification-silenced	bell-slash	fill
+# swaync's do-not-disturb row. A moon is the state's identity, not its value: the switch
+# next to it carries on/off, so this stays one icon in both positions.
+status	do-not-disturb	moon	fill
 status	tracking-active	timer	fill
 status	tracking-inactive	timer	regular
 status	cluster-up	steering-wheel	fill

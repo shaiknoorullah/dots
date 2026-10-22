@@ -24,7 +24,7 @@ if [ $# -ge 1 ]; then
   line=$(entries | awk -v n="$1" '$1==n {print; exit}')
   [ -n "$line" ] || { echo "unknown context: $1" >&2; exit 1; }
 else
-  line=$(entries | fzf --prompt='ctx> ' --height=40% --reverse) || exit 0
+  line=$(entries | fzf --prompt=$'􀜌  ctx ' --header=$'􁼤  task contexts' --height=40% --reverse) || exit 0
 fi
 
 read -r name dir <<< "$line"
