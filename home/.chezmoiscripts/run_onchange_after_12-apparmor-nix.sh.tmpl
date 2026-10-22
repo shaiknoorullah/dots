@@ -26,9 +26,16 @@ done < <(nix-store -qR "$prof")
 # Never fail or hang `chezmoi apply` for a password: apply runs non-interactively from
 # timers and from the update flow, and a script that exits non-zero stops every LATER
 # script from running at all. Without cached sudo, say what to run and move on.
+# Print a SELF-CONTAINED command, not "sudo -v && chezmoi apply": this is a run_onchange_
+# script, so once this branch has recorded its hash a later apply -- even with cached sudo --
+# skips it entirely and the suggestion would silently do nothing. The line below loads the
+# profiles directly and does not depend on chezmoi's script state at all.
 if ! sudo -n true 2>/dev/null; then
   echo "apparmor: ${#args[@]} Nix app(s) need root to load their userns profiles." >&2
-  echo "  run once when convenient:  sudo -v && chezmoi apply" >&2
+  echo "  run once when convenient:" >&2
+  printf '    sudo bash %s' {{ joinPath .chezmoi.workingTree "system/apparmor/nix-userns.sh" | quote }} >&2
+  printf ' %q' "${args[@]}" >&2
+  printf '\n' >&2
   exit 0
 fi
 echo "apparmor: ${#args[@]} Nix Chromium/Electron app(s) in the profile; loading their userns profiles (sudo)"
