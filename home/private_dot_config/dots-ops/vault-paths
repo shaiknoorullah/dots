@@ -1,4 +1,6 @@
-# Personal data backed up by the `vault-backup` job, to a LOCAL restic repo only.
+# Personal data backed up by the `vault-backup` job, as plain hardlinked snapshots under
+# a local directory. Not encrypted: Timeshift already keeps these same files unencrypted
+# on the same disk, so a second encrypted copy protected nothing and only added a key to lose.
 # This list is deliberately explicit and version-controlled: it is the answer to
 # "what does your backup contain?". Work repositories are NOT here by design --
 # company and system data are covered by Timeshift, separately.

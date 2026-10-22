@@ -1,19 +1,14 @@
-# vault-watch: fail when the newest `vault` snapshot is older than vault.max_age_hours.
-# Personal data has no other safety net on this machine (company IT backups do not cover
-# ~/powerhouse), so a stale vault snapshot is a failure, not a warning.
+# vault-watch: fail when the newest personal snapshot is older than vault.max_age_hours.
+# A failure, not a warning: company IT backups do not cover ~/powerhouse, so a stale
+# snapshot means this data has no copy at all.
 job_main() {
-  ops_restic_env || { ops_state vault-watch ok "n/a: backups not configured"; return 0; }
-  local out err rc=0 max t ts newest=0 age
-  err=$OPS_STATE/vault-watch.err
-  out=$(ops_run restic snapshots --tag vault --latest 1 --json 2>"$err") || rc=$?
-  if [ "$rc" != 0 ]; then ops_state vault-watch warn "cannot read the repository (rc=$rc): $(tail -n 1 "$err")"; return 0; fi
+  local root newest age max
+  root=$(ops_cfg vault.dir "/data/recovery/vault-backup")
+  [ -d "$root" ] || { ops_state vault-watch fail "no vault backup directory at $root"; return 0; }
+  newest=$(find "$root" -mindepth 1 -maxdepth 1 -type d -name '20*' -printf '%T@ %f\n' 2>/dev/null | sort -rn | head -1)
+  [ -n "$newest" ] || { ops_state vault-watch fail "no snapshot in $root"; return 0; }
+  age=$(( ($(ops_now) - ${newest%%.*}) / 3600 ))
   max=$(ops_cfg vault.max_age_hours 36)
-  while read -r t; do
-    ts=$(date -d "$t" +%s 2>/dev/null) || continue
-    [ "$ts" -le "$newest" ] || newest=$ts
-  done < <(printf '%s\n' "$out" | jq -r '.[]?.time // empty' 2>/dev/null)
-  if [ "$newest" = 0 ]; then ops_state vault-watch fail "no vault snapshot in the repository"; return 0; fi
-  age=$(( ($(ops_now) - newest) / 3600 ))
-  if [ "$age" -gt "$max" ]; then ops_state vault-watch fail "last vault backup ${age}h ago (max ${max}h)"
-  else ops_state vault-watch ok "last vault backup ${age}h ago"; fi
+  if [ "$age" -gt "$max" ]; then ops_state vault-watch fail "last vault snapshot ${age}h ago (max ${max}h)"
+  else ops_state vault-watch ok "last vault snapshot ${age}h ago (${newest#* })"; fi
 }
