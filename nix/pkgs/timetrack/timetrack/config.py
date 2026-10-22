@@ -100,6 +100,19 @@ def lead_in_seconds():
     return int(payroll().get("backfill", {}).get("lead_in_minutes", 20)) * 60
 
 
+def workday_gap_seconds():
+    """A gap this long or longer is sleep, so it ends the workday.
+
+    Two levels of clustering, because they answer different questions: the short gap
+    (gap_bridge_minutes) decides what counts as ACTIVE time inside a day, while this one
+    decides where one workday stops and the next begins. Without it a nocturnal schedule
+    collapses into nonsense -- an 01:20 start and a 22:45 finish on the same calendar date
+    look like a 21-hour day when they are really the tail of one shift and the start of
+    the next.
+    """
+    return int(float(payroll().get("backfill", {}).get("workday_gap_hours", 8)) * 3600)
+
+
 def holidays():
     """{date: label} of paid holidays. Hand-maintained because the ERP `Holiday` DocType
     is permission-denied for this account, so the dates cannot be fetched."""

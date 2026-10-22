@@ -84,13 +84,29 @@ def cluster(stamps, gap=None, lead_in=None):
     return out
 
 
+def workdays(clusters, gap=None):
+    """Group activity clusters into workdays, splitting on a sleep-length gap."""
+    gap = config.workday_gap_seconds() if gap is None else gap
+    if not clusters:
+        return []
+    out, cur = [], [clusters[0]]
+    for cl in clusters[1:]:
+        if cl[0] - cur[-1][1] >= gap:
+            out.append(cur)
+            cur = [cl]
+        else:
+            cur.append(cl)
+    out.append(cur)
+    return out
+
+
 def _iso(unix):
     return datetime.fromtimestamp(unix).astimezone().isoformat(timespec="seconds")
 
 
 def write(conn, since, until):
     """Replace this source's reconstruction for [since, until) and report what it wrote."""
-    sessions = cluster(commit_times(since, until))
+    blocks = workdays(cluster(commit_times(since, until)))
     lo, hi = since.isoformat(), until.isoformat()
     old = [r["id"] for r in conn.execute(
         "SELECT id FROM work_session WHERE provenance=? AND attendance_day>=? AND attendance_day<?",
@@ -99,8 +115,9 @@ def write(conn, since, until):
         marks = ",".join("?" * len(old))
         conn.execute(f"DELETE FROM clock_event WHERE session_id IN ({marks})", old)
         conn.execute(f"DELETE FROM work_session WHERE id IN ({marks})", old)
-    written = 0
-    for start, end, ncommits in sessions:
+    written = runs = 0
+    for blocks_in_day in blocks:
+        start, end = blocks_in_day[0][0], blocks_in_day[-1][1]
         day = datetime.fromtimestamp(start).date()
         if not (since <= day < until):
             continue
@@ -110,18 +127,24 @@ def write(conn, since, until):
             (_iso(start), start, _iso(end), end, day.isoformat(), "backfill", "backfill", PROVENANCE),
         )
         sid = cur.lastrowid
-        for kind, unix, reason in (
-            ("session_open", start, None),
-            ("run_start", start, None),
-            ("run_stop", end, f"commits:{ncommits}"),
-            ("session_close", end, None),
-        ):
+
+        def ev(kind, unix, reason=None):
             conn.execute(
                 "INSERT INTO clock_event(ts,ts_unix,attendance_day,session_id,kind,actor,"
                 "reason_code,provenance,ruleset,confidence) VALUES(?,?,?,?,?,?,?,?,?,?)",
                 (_iso(unix), unix, day.isoformat(), sid, kind, "human", reason,
                  PROVENANCE, config.RULESET, CONFIDENCE),
             )
+
+        ev("session_open", start)
+        # One run interval per activity cluster, so the idle gaps inside a workday are
+        # excluded from active time while the session still spans login to logout.
+        for cs, ce, ncommits in blocks_in_day:
+            ev("run_start", cs)
+            ev("run_stop", ce, f"commits:{ncommits}")
+            runs += 1
+        ev("session_close", end)
         written += 1
     conn.commit()
-    return {"sessions_written": written, "sessions_replaced": len(old), "repos": len(repos())}
+    return {"workdays_written": written, "run_intervals": runs,
+            "sessions_replaced": len(old), "repos": len(repos())}
