@@ -183,7 +183,24 @@ end
 -- enforcement panel: a question that has to be answered before the day's record can be
 -- defended. If Esc dismissed it, it would be dismissed -- which is the entire failure mode
 -- the system exists to correct. So the compositor enforces the grab (stay_focused) and
--- the window ignores close requests (no_close).
+-- killactive is refused for the panel's whole lifetime (no_close_for).
+--
+-- no_close_for, NOT no_close. There is no no_close in 0.56.2 -- verified against the
+-- running compositor, which is also how severe the mistake would have been:
+--
+--   hyprctl eval 'hl.window_rule({ ..., no_close = true })'
+--     -> error: hl.window_rule: unknown field 'no_close'
+--   hyprctl eval 'hl.window_rule({ ..., no_close_for = 5000 })'
+--     -> ok
+--
+-- An unknown field is a HARD ERROR in a Lua config, not an ignored line, so the wrong key
+-- would not have quietly failed to block anything -- it would have taken the whole
+-- hyprland.lua down at the next login.
+--
+-- 600000 ms is deliberately the same number as timetrack-panel's RuntimeMaxSec=600: the
+-- window stops being unclosable at exactly the instant PID 1 would have killed it anyway,
+-- so the protection can never outlive the panel it was protecting. tests/lint.sh pins the
+-- two together.
 --
 -- That is a dangerous pair, and NOTHING may create such a window without the dead-man's
 -- switch already running. `timetrack-panel` refuses to launch while
@@ -195,7 +212,7 @@ end
 --
 -- The panel prints all three on itself, because remembering them is not a plan.
 hl.window_rule({ match = { class = "^(dots[.]block)$" }, stay_focused = true })
-hl.window_rule({ match = { class = "^(dots[.]block)$" }, no_close = true })
+hl.window_rule({ match = { class = "^(dots[.]block)$" }, no_close_for = 600000 })
 
 -- (removed the title="^(focus-panel)$" block: float/center/size/dim_around/stay_focused/
 --  opaque for a window nothing has created since the caelestia focus panel was replaced by

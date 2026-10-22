@@ -94,6 +94,20 @@ for d in "$out" "$nixos"; do
   fi
 done
 
+# R-noclose: the unclosable window must stop being unclosable exactly when PID 1 would
+# have killed the panel anyway. `no_close_for` is a DURATION in milliseconds (there is no
+# unconditional no_close in Hyprland 0.56 -- an unknown field is a hard error in a Lua
+# config, so the wrong key takes the whole hyprland.lua down at the next login). If the
+# panel's RuntimeMaxSec is raised and this is not, the window becomes closeable while the
+# prompt is still up; if it is lowered, the grab outlives the panel.
+secs=$(sed -n 's/^MAX_SECONDS=\([0-9]*\).*/\1/p' "$pn" | head -1)
+want=$(( ${secs:-0} * 1000 ))
+for d in "$out" "$nixos"; do
+  got=$(sed -n 's/.*dots\[.\]block.*no_close_for = \([0-9]*\).*/\1/p' "$d/.config/hypr/hyprland.lua" | head -1)
+  [ -n "$got" ] || { echo "LINT: dots.block has no no_close_for rule"; exit 1; }
+  [ "$got" = "$want" ] || { echo "LINT: no_close_for ${got}ms != timetrack-panel ceiling ${want}ms"; exit 1; }
+done
+
 # R28: everything uses ~/.nix-profile, NixOS included (home-manager.useUserPackages = false)
 if grep -rIl '/etc/profiles/per-user' "$out" "$nixos"; then echo "LINT: files above use /etc/profiles/per-user (R28: use ~/.nix-profile)"; exit 1; fi
 echo "lint ok"

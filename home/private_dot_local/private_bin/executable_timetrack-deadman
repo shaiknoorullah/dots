@@ -52,9 +52,10 @@ if [ -z "${HYPRLAND_INSTANCE_SIGNATURE:-}" ] && [ -d "${XDG_RUNTIME_DIR:-}/hypr"
 fi
 
 reap() {    # panel age reason
-  # The unit goes first. A dots.block window carries `no_close`, so it IGNORES a close
-  # request -- hyprctl cannot dismiss it and is only a fallback for a panel that was
-  # started outside systemd-run. Killing the process is what actually removes the window.
+  # The unit goes first. A dots.block window carries `no_close_for 600000`, so for its
+  # whole lifetime it REFUSES killactive -- hyprctl cannot dismiss it, and is only a
+  # fallback for a panel started outside systemd-run. Killing the process is what actually
+  # removes the window, which is why this does not depend on the compositor at all.
   systemctl --user stop "timetrack-panel-$1.service" >/dev/null 2>&1
   hyprctl dispatch closewindow "class:dots.block" >/dev/null 2>&1
   spool "$3" "$1" "$2"
