@@ -2,7 +2,7 @@
 # One-line otter-launcher system-info bar (Dracula truecolor + nerd-font icons).
 set -uo pipefail
 PUR='[38;2;189;147;249m'; PINK='[38;2;255;121;198m'; FG='[38;2;248;248;242m'; DIM='[38;2;98;114;164m'; RST='[0m'
-I_LOAD=''; I_MEM=''; I_UP=''
+I_LOAD='load'; I_MEM='mem'; I_UP='up'
 host="$(hostname -s 2>/dev/null || echo dev)"
 cores="$(nproc 2>/dev/null || echo 1)"
 load="$(awk -v c="$cores" '{printf "%.0f", ($1/c)*100}' /proc/loadavg 2>/dev/null)"

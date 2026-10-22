@@ -49,8 +49,8 @@ peek_queue() {
 
 main() {
     local play_pause=$'⏯  play/pause' next=$'⏭  next' prev=$'⏮  previous' \
-          like=$'\U000f0982  like' dislike=$'\U000f0986  dislike' queue=$'  queue' \
-          search=$'  search → queue' tui=$'  open ytm TUI'
+          like=$'like' dislike=$'dislike' queue=$'queue' \
+          search=$'search → queue' tui=$'open ytm TUI'
     local opts chosen
     opts="$play_pause
 $next

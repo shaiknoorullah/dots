@@ -20,14 +20,14 @@ mkdir -p "$PROJECTS_DIR"
 # from the reference (same codepoints).
 get_project_icon() {
     local dir="$1"
-    if   [[ -f "$dir/go.mod" ]]; then echo $'󰟓'                            # Go
-    elif [[ -f "$dir/Cargo.toml" ]]; then echo $''                      # Rust
-    elif [[ -f "$dir/package.json" ]]; then echo $''                    # Node.js / JavaScript
-    elif [[ -f "$dir/requirements.txt" || -f "$dir/pyproject.toml" || -f "$dir/setup.py" ]]; then echo $''  # Python
-    elif [[ -f "$dir/pom.xml" || -f "$dir/build.gradle" ]]; then echo $''  # Java
-    elif [[ -f "$dir/Gemfile" ]]; then echo $''                         # Ruby
-    elif [[ -d "$dir/.git" ]]; then echo $''                            # Generic git repo
-    else echo $'󰉋'                                                    # Plain directory
+    if   [[ -f "$dir/go.mod" ]]; then echo $'go'                            # Go
+    elif [[ -f "$dir/Cargo.toml" ]]; then echo $'rs'                      # Rust
+    elif [[ -f "$dir/package.json" ]]; then echo $'js'                    # Node.js / JavaScript
+    elif [[ -f "$dir/requirements.txt" || -f "$dir/pyproject.toml" || -f "$dir/setup.py" ]]; then echo $'py'  # Python
+    elif [[ -f "$dir/pom.xml" || -f "$dir/build.gradle" ]]; then echo $'java'  # Java
+    elif [[ -f "$dir/Gemfile" ]]; then echo $'rb'                         # Ruby
+    elif [[ -d "$dir/.git" ]]; then echo $'git'                            # Generic git repo
+    else echo $'dir'                                                    # Plain directory
     fi
 }
 
@@ -50,7 +50,7 @@ if [[ -z "$projects" ]]; then
     exit 0
 fi
 
-chosen="$(echo "$projects" | fzf --header=$'󰉋 projects')"
+chosen="$(echo "$projects" | fzf --header=$'dir projects')"
 [[ -z "$chosen" ]] && exit 0
 
 # Strip the leading icon token (and the spaces after it) to recover the
@@ -69,7 +69,7 @@ mkdir -p "$HOME/.cache/adhd"; printf '%s' "$project_name" > "$HOME/.cache/adhd/a
 # xdg-open); GUI launches are detached with setsid -f per the otter
 # convention so this script (running in an otter-spawned terminal) can exit
 # immediately without lingering.
-actions=$'  Open in VS Code\n  Open Terminal\n󰉋  Open File Manager'
+actions=$'code  Open in VS Code\nOpen Terminal\ndir  Open File Manager'
 action="$(echo "$actions" | fzf --header="$project_name")"
 
 case "$action" in

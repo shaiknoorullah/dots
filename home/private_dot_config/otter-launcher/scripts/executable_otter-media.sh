@@ -17,11 +17,11 @@ get_track_info() {
 }
 
 # Icons match legacy-menu-media.sh exactly (same codepoints as the reference script).
-prev=$'󰒮  previous'
-play_pause=$'󰐎  play/pause'
-next=$'󰒭  next'
-shuffle=$'󰒟  shuffle'
-loop=$'󰑖  loop'
+prev=$'previous'
+play_pause=$'play/pause'
+next=$'next'
+shuffle=$'shuffle'
+loop=$'loop'
 
 options="$prev
 $play_pause
@@ -30,7 +30,7 @@ $shuffle
 $loop"
 
 track_info="$(get_track_info)"
-chosen="$(echo "$options" | fzf --header=$' '"$track_info")"
+chosen="$(echo "$options" | fzf --header=$''"$track_info")"
 
 case "$chosen" in
     "$prev")        playerctl previous ;;

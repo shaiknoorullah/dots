@@ -8,10 +8,10 @@ set -uo pipefail
 source "$HOME/.config/otter-launcher/scripts/_otter-fzf.sh"
 
 # Icons match legacy-menu-power.sh exactly (same codepoints, same glyphs).
-lock=$'  lock'
+lock=$'lock'
 suspend=$'⏾  suspend'
 logout=$'\U000f0343  logout'
-reboot=$'  reboot'
+reboot=$'reboot'
 shutdown=$'⏻  shutdown'
 
 options="$lock

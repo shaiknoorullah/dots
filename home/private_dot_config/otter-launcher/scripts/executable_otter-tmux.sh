@@ -8,8 +8,8 @@
 set -uo pipefail
 source "$HOME/.config/otter-launcher/scripts/_otter-fzf.sh"
 
-new_entry=$'  New Session'
-kill_entry=$'  Kill Session'
+new_entry=$'New Session'
+kill_entry=$'Kill Session'
 
 # get_sessions -- one line per running tmux session, formatted as
 # "<name> (<N> windows) [attached]" (the "[attached]" tag only appears if
@@ -23,7 +23,7 @@ get_sessions() {
     echo "$kill_entry"
 }
 
-chosen="$(get_sessions | fzf --header=$' tmux')"
+chosen="$(get_sessions | fzf --header=$'tmux')"
 
 # Exit silently if the user dismissed the menu without choosing.
 [[ -z "$chosen" ]] && exit 0

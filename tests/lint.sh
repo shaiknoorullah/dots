@@ -37,6 +37,17 @@ for d in "$out" "$nixos"; do
     echo "LINT: files above carry a private IP (this repo is public)"; exit 1
   fi
 done
+# R-glyph: no Nerd Font icon glyphs. They are private-use codepoints, so they render as
+# tofu in any font that is not patched, they cannot be grepped or read aloud, and they look
+# nothing like the icon theme. Replaced by geometric Unicode from normal fonts.
+# The ONLY exception is U+E0B0-U+E0D4, the Powerline separator block: those draw starship's
+# segment shape rather than standing in for an icon.
+for d in "$out" "$nixos"; do
+  if LC_ALL=C.UTF-8 grep -rIlP '[\x{E000}-\x{E0AF}\x{E0D5}-\x{F8FF}\x{F0000}-\x{FFFFD}]' "$d"; then
+    echo "LINT: files above use Nerd Font glyphs (banned; only U+E0B0-E0D4 separators are allowed)"; exit 1
+  fi
+done
+
 # R28: everything uses ~/.nix-profile, NixOS included (home-manager.useUserPackages = false)
 if grep -rIl '/etc/profiles/per-user' "$out" "$nixos"; then echo "LINT: files above use /etc/profiles/per-user (R28: use ~/.nix-profile)"; exit 1; fi
 echo "lint ok"
