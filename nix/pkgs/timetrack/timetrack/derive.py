@@ -1,0 +1,127 @@
+"""Turn the event log into the figures a month is judged on.
+
+Nothing here stores anything: every number is recomputed from clock_event each time, so
+a rule change or a repaired gap is reflected immediately and a figure can always be
+traced back to its rows. The one exception is monthly_submission, which is frozen on
+purpose (see export).
+"""
+import hashlib
+from datetime import date, datetime
+
+from . import config
+
+
+def _rates(working_days):
+    """(daily, hourly) from monthly gross. The employer divides by WORKING days, so the
+    hourly rate rises in a month with more holidays."""
+    gross = config.gross_monthly()
+    if not gross or not working_days:
+        return None, None
+    daily = gross / working_days
+    return daily, daily / config.hours_per_day()
+
+
+def month_summary(conn, month, today=None):
+    """Everything needed for the summary page of a submission.
+
+    `net_minutes` is only ever summed over days that actually have a break recorded.
+    Days without one are counted separately as `days_missing_breaks`, because the
+    employer's rule is net of breaks and presenting a span as net would over-report.
+    """
+    today = today or date.today()
+    rows = list(conn.execute(
+        "SELECT * FROM v_day_worked WHERE attendance_day LIKE ? ORDER BY attendance_day",
+        (month + "-%",)))
+    target = sum(r["target_minutes"] for r in rows)
+    working = [r for r in rows if r["target_minutes"] > 0]
+    working_days = len(working)
+    elapsed = [r for r in working if date.fromisoformat(r["attendance_day"]) < today]
+    remaining = [r for r in working if date.fromisoformat(r["attendance_day"]) >= today]
+
+    span_working = sum(r["span_minutes"] for r in working)
+    span_other = sum(r["span_minutes"] for r in rows if r["target_minutes"] == 0)
+    net_known = sum(r["net_minutes"] for r in working if r["net_minutes"] is not None)
+    with_breaks = [r for r in working if r["deduction_minutes"] is not None]
+    missing_breaks = [r for r in working if r["deduction_minutes"] is None and r["span_minutes"] > 0]
+
+    calib = config.calibration()
+    daily_rate, hourly_rate = _rates(working_days)
+    hourly_rate_f = hourly_rate or 0.0
+    per_day = config.hours_per_day() * 60
+
+    # Three different questions, which must not share one label:
+    #   shortfall_to_date  how far behind the days already gone
+    #   still_needed       what the rest of the month must deliver to clear the target
+    #   projected          where the month lands at a normal day's work from here
+    span_cal = round(span_working * calib)
+    shortfall_to_date = len(elapsed) * per_day - span_cal
+    still_needed = target - span_cal
+    projected = span_cal + len(remaining) * per_day
+    projected_shortfall = target - projected
+
+    provs = sorted({p for r in rows if r["provenance"] for p in r["provenance"].split(",")})
+    return {
+        "month": month,
+        "today": today.isoformat(),
+        "target_minutes": target,
+        "working_days": working_days,
+        "elapsed_working_days": len(elapsed),
+        "remaining_working_days": len(remaining),
+        "remaining_days": [r["attendance_day"] for r in remaining],
+        "span_minutes": span_working,
+        "span_minutes_calibrated": round(span_working * calib),
+        "span_minutes_non_working": span_other,
+        "calibration": calib,
+        "net_minutes_known": net_known,
+        "days_with_breaks": len(with_breaks),
+        "days_missing_breaks": len(missing_breaks),
+        "shortfall_to_date_minutes": shortfall_to_date,
+        "still_needed_minutes": still_needed,
+        "still_needed_per_day_minutes": round(still_needed / len(remaining)) if remaining else None,
+        "projected_minutes": projected,
+        "projected_shortfall_minutes": projected_shortfall,
+        "daily_rate": daily_rate,
+        "hourly_rate": hourly_rate,
+        "currency": config.currency(),
+        # The figure that actually matters: what a normal day's work from here still
+        # leaves on the table. Based on the CALIBRATED span, and on the span basis --
+        # net of breaks will be worse, and cannot be computed until breaks are recorded.
+        "money_projected": (projected_shortfall / 60.0) * hourly_rate_f if hourly_rate else None,
+        "money_to_date": (shortfall_to_date / 60.0) * hourly_rate_f if hourly_rate else None,
+        "provenance": provs,
+        "ruleset": config.RULESET,
+        "measured_days": sum(1 for r in rows if r["provenance"] == "live"),
+        "reconstructed_days": sum(1 for r in rows if r["provenance"] and "backfill" in r["provenance"]),
+    }
+
+
+def day_rows(conn, month):
+    return list(conn.execute(
+        "SELECT * FROM v_day_worked WHERE attendance_day LIKE ? ORDER BY attendance_day",
+        (month + "-%",)))
+
+
+def input_digest(conn, month):
+    """sha256 over the ordered clock_event rows a month's figure rests on.
+
+    Frozen alongside a submission so that if a later bug changes derivation, it is
+    provable that the number handed over was not retro-fitted.
+    """
+    h = hashlib.sha256()
+    for r in conn.execute(
+        "SELECT id, ts_unix, kind, attendance_day, provenance, ruleset, confidence"
+        " FROM clock_event WHERE attendance_day LIKE ? ORDER BY id", (month + "-%",)):
+        h.update(("|".join(str(x) for x in tuple(r)) + "\n").encode())
+    return h.hexdigest()
+
+
+def hhmm(minutes):
+    if minutes is None:
+        return ""
+    sign = "-" if minutes < 0 else ""
+    minutes = abs(int(round(minutes)))
+    return f"{sign}{minutes // 60}h{minutes % 60:02d}m"
+
+
+def clock(unix):
+    return datetime.fromtimestamp(unix).strftime("%H:%M") if unix else ""
