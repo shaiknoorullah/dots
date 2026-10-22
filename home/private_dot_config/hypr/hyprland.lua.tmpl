@@ -29,6 +29,7 @@ if kube_env then
   kube_env:close()
 end
 hl.env("ELECTRON_OZONE_PLATFORM_HINT", "auto")
+hl.env("QT_QPA_PLATFORMTHEME", "gtk3")  -- Qt follows GTK (dark); see environment.d/30-appearance.conf
 {{- if eq .gpu "nvidia" }}
 hl.env("LIBVA_DRIVER_NAME", "nvidia")
 hl.env("__GLX_VENDOR_LIBRARY_NAME", "nvidia")
