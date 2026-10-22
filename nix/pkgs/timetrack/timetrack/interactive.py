@@ -29,6 +29,7 @@ CONFIDENCE = 1.0
 GAP_CHOICES = [
     ("1", "salah", "salah"),
     ("2", "lunch", "lunch"),
+    ("7", "dinner", "dinner"),
     ("3", "washroom", "washroom"),
     ("4", "meeting", None),          # None => not a deduction at all
     ("5", "other", "misc"),

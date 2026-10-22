@@ -27,7 +27,7 @@ def _r(name, status, detail, fix=""):
 
 
 def _schema(results):
-    for which, path, want in (("work", config.WORK_DB, 1), ("private", config.PRIVATE_DB, 1)):
+    for which, path, want in (("work", config.WORK_DB, 2), ("private", config.PRIVATE_DB, 1)):
         if not path.exists():
             results.append(_r(f"db:{which}", FAIL, "database file does not exist",
                               "timetrack migrate"))

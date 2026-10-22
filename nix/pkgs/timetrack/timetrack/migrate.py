@@ -197,7 +197,66 @@ CREATE TABLE carry_forward (
 CREATE TABLE schema_meta (k TEXT PRIMARY KEY, v TEXT NOT NULL);
 """
 
-MIGRATIONS = {"work": [(1, WORK_V1)], "private": [(1, PRIVATE_V1)]}
+
+# --- work v2 ---------------------------------------------------------------
+# 'dinner' added to deduction.category. The original five were written for a day shift;
+# this user's is 13:30-22:30, so the evening meal is the NORMAL one and 'lunch' would be
+# wrong on almost every record. Labelling a 21:34 meal break "lunch" in a payroll export
+# is the kind of small untruth that makes a reviewer doubt the rest of the figure.
+#
+# SQLite cannot alter a CHECK, so the table is rebuilt. Done now, while deduction holds
+# a few dozen rows, rather than after a year of them.
+WORK_V2 = """
+PRAGMA foreign_keys=OFF;
+-- The views must go FIRST. SQLite resolves a view's body lazily, so dropping a table a
+-- view references leaves the schema in a state where the very next statement fails with
+-- "error in view v_day_deduction: no such table: main.deduction". executescript does not
+-- run in a transaction, so that failure left the database half-migrated: deduction gone,
+-- deduction_new holding the rows, user_version still 1. Recreating the views afterwards
+-- is what makes this safe to run on a populated database.
+DROP VIEW IF EXISTS v_day_worked;
+DROP VIEW IF EXISTS v_day_deduction;
+
+CREATE TABLE deduction_new (
+  id             INTEGER PRIMARY KEY,
+  session_id     INTEGER REFERENCES work_session(id),
+  attendance_day TEXT    NOT NULL,
+  start_unix     INTEGER NOT NULL,
+  end_unix       INTEGER,
+  category       TEXT    NOT NULL,
+  minutes        INTEGER,
+  confirmed      INTEGER NOT NULL DEFAULT 0,
+  provenance     TEXT    NOT NULL,
+  CHECK (category IN ('salah','lunch','dinner','washroom','misc','call_personal'))
+);
+INSERT INTO deduction_new SELECT id, session_id, attendance_day, start_unix, end_unix,
+  category, minutes, confirmed, provenance FROM deduction;
+DROP TABLE deduction;
+ALTER TABLE deduction_new RENAME TO deduction;
+CREATE INDEX IF NOT EXISTS ix_ded_day ON deduction(attendance_day);
+
+CREATE VIEW v_day_deduction AS
+SELECT attendance_day,
+       CAST(ROUND(SUM(minutes)) AS INTEGER) AS deduction_minutes,
+       SUM(CASE WHEN confirmed = 0 THEN 1 ELSE 0 END) AS unconfirmed
+FROM deduction
+WHERE end_unix IS NOT NULL
+GROUP BY attendance_day;
+
+CREATE VIEW v_day_worked AS
+SELECT c.day AS attendance_day, c.kind, c.leave_type, c.pay_affecting, c.target_minutes,
+       COALESCE(s.span_minutes, 0) AS span_minutes,
+       s.first_unix, s.last_unix, s.provenance, s.min_confidence,
+       d.deduction_minutes, d.unconfirmed,
+       CASE WHEN d.deduction_minutes IS NULL THEN NULL
+            ELSE COALESCE(s.span_minutes, 0) - d.deduction_minutes END AS net_minutes
+FROM day_class c
+LEFT JOIN v_day_span s      ON s.attendance_day = c.day
+LEFT JOIN v_day_deduction d ON d.attendance_day = c.day;
+PRAGMA foreign_keys=ON;
+"""
+
+MIGRATIONS = {"work": [(1, WORK_V1), (2, WORK_V2)], "private": [(1, PRIVATE_V1)]}
 
 
 def _apply(conn, which):
