@@ -87,7 +87,13 @@ window#waybar {
 #wireplumber,
 #idle_inhibitor,
 #custom-notification,
-#custom-tray-toggle {
+#custom-tray-toggle,
+#custom-tracking,
+#custom-kube,
+#custom-ops,
+#custom-ctx,
+#custom-salah,
+#custom-project {
   background-repeat: no-repeat;
   background-position: 9px center;
   background-size: 12px 12px;
@@ -122,3 +128,22 @@ window#waybar {
    (waybar hides a module whose text is empty). That space would otherwise read as a gap
    between the bell and the number, so this module gets less left padding to absorb it. */
 #custom-notification { padding-left: 18px; }
+
+/* The rest of the bar, on the same footing. Previously these carried ad-hoc text
+   symbols (◦ ⎈ ✓) while only three modules had real icons, which made the bar read
+   as half-converted. Each script now emits a leading space instead of a symbol and
+   keys its class; the icon comes from the theme like everywhere else. */
+#custom-tracking                { background-image: -gtk-icontheme("tracking-inactive"); }
+#custom-tracking.tracking-on    { background-image: -gtk-icontheme("tracking-active"); }
+
+#custom-kube                    { background-image: -gtk-icontheme("cluster-none"); }
+#custom-kube.kube-up            { background-image: -gtk-icontheme("cluster-up"); }
+#custom-kube.kube-down          { background-image: -gtk-icontheme("cluster-down"); }
+
+#custom-ops                     { background-image: -gtk-icontheme("ops-ok"); }
+#custom-ops.warn                { background-image: -gtk-icontheme("ops-warn"); }
+#custom-ops.fail                { background-image: -gtk-icontheme("ops-error"); }
+
+#custom-ctx                     { background-image: -gtk-icontheme("context-tag"); }
+#custom-salah                   { background-image: -gtk-icontheme("salah-time"); }
+#custom-project                 { background-image: -gtk-icontheme("project-current"); }

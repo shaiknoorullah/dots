@@ -20,7 +20,7 @@ if command -v timew >/dev/null 2>&1; then
     tracking=true
     hours=$(printf %s "$duration" | grep -oP '\d+(?=H)' || echo "0")
     minutes=$(printf %s "$duration" | grep -oP '\d+(?=M)' || echo "0")
-    timer="#[fg=#ff9e3b,bold] ⧖ $(printf "%s:%02d" "$hours" "$minutes")#[nobold]"
+    timer="#[fg=#ff9e3b,bold] 􂁖 $(printf "%s:%02d" "$hours" "$minutes")#[nobold]"
   fi
 fi
 
@@ -49,14 +49,14 @@ fi
 
 # ── Build output ──────────────────────────────────────────────────────
 if [ "$tracking" = true ]; then
-  focus="#[fg=#50fa7b,bold]◉"
+  focus="#[fg=#50fa7b,bold]􀩦"
   task_text="#[fg=#f8f8f2,nobold] ${desc}"
 else
   if [ -n "$desc" ]; then
-    focus="#[fg=#ff4d4d,dim]‖#[nodim]"
+    focus="#[fg=#ff4d4d,dim]􁟲#[nodim]"
     task_text="#[fg=#585880] ${desc}"
   else
-    focus="#[fg=#50fa7b,bold]◉"
+    focus="#[fg=#50fa7b,bold]􀩦"
     task_text=""
   fi
 fi

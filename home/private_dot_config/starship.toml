@@ -8,13 +8,13 @@ ${custom.subpath}${custom.fallback_dir}$character"""
 
 # ── Prompt character ──────────────────────────────────────────
 [character]
-success_symbol = "[❯](fg:#9da8cf)"
-error_symbol = "[❯](fg:#e45a5a)"
+success_symbol = "[􀜌](fg:#9da8cf)"
+error_symbol = "[􀜌](fg:#e45a5a)"
 
 # ── Line 1 left: Branch ──────────────────────────────────────
 [git_branch]
 style = "fg:#B4BEFE"
-format = "[git: $branch ]($style)"
+format = "[􁀒  $branch ]($style)"
 truncation_length = 25
 
 # ── Line 1 left: Git state (rebase/merge/cherry-pick) ───────
@@ -45,12 +45,12 @@ up_to_date = ""
 [kubernetes]
 disabled = false
 style = "fg:#F9E2AF"
-format = '[ · ](fg:#585b70)[⎈ $context ]($style)'
+format = '[ · ](fg:#585b70)[􁹌 $context ]($style)'
 
 # ── Line 1 right: Container ─────────────────────────────────
 [container]
 style = "fg:#89B4FA"
-format = '[▣ $name ]($style)'
+format = '[􁰀 $name ]($style)'
 
 # ── Fill ─────────────────────────────────────────────────────
 [fill]
@@ -99,6 +99,6 @@ use_stdin = false
 [custom.pipeline]
 command = '$HOME/.config/starship/scripts/pipeline.sh'
 when = 'git rev-parse --is-inside-work-tree 2>/dev/null >/dev/null && command -v gh >/dev/null 2>&1'
-format = '[ · ](fg:#585b70)[⇉ $output ](fg:#A6E3A1)'
+format = '[ · ](fg:#585b70)[􁀰 $output ](fg:#A6E3A1)'
 shell = ['bash', '--noprofile', '--norc', '-c']
 use_stdin = false

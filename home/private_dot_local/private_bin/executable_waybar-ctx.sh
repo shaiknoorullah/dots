@@ -9,4 +9,4 @@ if [ "${1:-}" = "cycle" ]; then
   pkill -RTMIN+8 waybar 2>/dev/null       # refresh the module
   exit 0
 fi
-printf '{"text":" %s","class":"ctx-%s"}\n' "$cur" "$cur"
+printf '{"text":" %s","class":"ctx ctx-%s"}\n' "$cur" "$cur"

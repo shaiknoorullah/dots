@@ -42,7 +42,7 @@ state="$state_dir/claude-notify-target"
 if [[ $MUX == tmux ]]; then
     location=$(tmux display-message -p -t "$TMUX_PANE" '#S:#I #W' 2>/dev/null)
     toast=${message//\#/##}
-    tmux display-message -t "$TMUX_PANE" -d 4000 "✦ $toast" 2>/dev/null
+    tmux display-message -t "$TMUX_PANE" -d 4000 "􁫠 $toast" 2>/dev/null
     read -r client client_pid < <(
         session=$(tmux display-message -p -t "$TMUX_PANE" '#S' 2>/dev/null)
         tmux list-clients -F '#{client_activity}	#{client_session}	#{client_name}	#{client_pid}' 2>/dev/null |

@@ -273,3 +273,14 @@ status	caffeine-active	coffee	fill
 status	caffeine-inactive	coffee	regular
 actions	tray-expand	tray	fill
 status	notification-inactive	bell	regular
+status	tracking-active	timer	fill
+status	tracking-inactive	timer	regular
+status	cluster-up	steering-wheel	fill
+status	cluster-down	cloud-slash	regular
+status	cluster-none	steering-wheel	regular
+status	ops-ok	check-circle	fill
+status	ops-warn	warning-circle	fill
+status	ops-error	x-circle	fill
+status	context-tag	tag	fill
+status	salah-time	mosque	fill
+status	project-current	folder-simple	fill
