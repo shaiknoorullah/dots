@@ -37,7 +37,24 @@ job_main() {
   stamp=$(date +%Y-%m-%dT%H%M%S)
   prev=$(readlink -f "$root/latest" 2>/dev/null || true)
 
-  local -a args=(-aR --delete --exclude=__pycache__/ --exclude=*.pyc --exclude=.venv/)
+  # SQLite in WAL mode: copying a .db alongside a live -wal can capture a torn file, and
+  # these databases hold the evidence behind a payroll figure. Write a consistent copy via
+  # the backup API first, and exclude the volatile WAL/SHM files from the snapshot.
+  local db
+  for db in "$HOME"/.local/share/timetrack/*.db; do
+    [ -e "$db" ] || continue
+    python3 - "$db" "$db.snapshot" <<'PYEOF' 2>/dev/null || true
+import sqlite3, sys
+src = sqlite3.connect(f"file:{sys.argv[1]}?mode=ro", uri=True)
+dst = sqlite3.connect(sys.argv[2])
+with dst:
+    src.backup(dst)
+dst.close(); src.close()
+PYEOF
+  done
+
+  local -a args=(-aR --delete --exclude=__pycache__/ --exclude=*.pyc --exclude=.venv/
+                 --exclude=*-wal --exclude=*-shm)
   [ -n "$prev" ] && [ -d "$prev" ] && args+=(--link-dest="$prev")
   if [ "${DOTS_OPS_DRY_RUN:-0}" = 1 ]; then
     ops_run rsync -n "${args[@]}" "${src[@]}" "$root/$stamp/" >/dev/null 2>&1 || rc=$?

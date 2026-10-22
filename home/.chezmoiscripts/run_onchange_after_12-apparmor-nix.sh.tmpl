@@ -23,6 +23,14 @@ while IFS= read -r p; do
     fi
   done
 done < <(nix-store -qR "$prof")
+# Never fail or hang `chezmoi apply` for a password: apply runs non-interactively from
+# timers and from the update flow, and a script that exits non-zero stops every LATER
+# script from running at all. Without cached sudo, say what to run and move on.
+if ! sudo -n true 2>/dev/null; then
+  echo "apparmor: ${#args[@]} Nix app(s) need root to load their userns profiles." >&2
+  echo "  run once when convenient:  sudo -v && chezmoi apply" >&2
+  exit 0
+fi
 echo "apparmor: ${#args[@]} Nix Chromium/Electron app(s) in the profile; loading their userns profiles (sudo)"
 sudo bash {{ joinPath .chezmoi.workingTree "system/apparmor/nix-userns.sh" | quote }} "${args[@]}"
 {{- end }}
