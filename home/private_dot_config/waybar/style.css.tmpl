@@ -260,6 +260,31 @@ tooltip label {
   padding-left: 30px;
 }
 
+/* ICON-ONLY states centre the icon instead. The rule above reserves 10px + 14px icon +
+   6px before the text -- but a module whose label is only U+200B has no text to gap from,
+   so that 6px lands as dead space on the RIGHT of the icon: 10px one side, 16px the other.
+   Centring with symmetric padding puts 10px on both. #custom-ops is in here because `ok`
+   is its normal state; warn and fail carry a count and go back to the text geometry. */
+#idle_inhibitor,
+#custom-tray-toggle,
+#custom-ops,
+#wireplumber.muted,
+#custom-notification.none,
+#custom-notification.dnd-none,
+#custom-notification.inhibited-none,
+#custom-notification.dnd-inhibited-none {
+  background-position: center;
+  padding-left: 10px;
+  padding-right: 10px;
+  min-width: 14px;
+}
+
+#custom-ops.warn,
+#custom-ops.fail {
+  background-position: 10px center;
+  padding-left: 30px;
+}
+
 #wireplumber            { background-image: -gtk-icontheme("audio-volume-high"); }
 #wireplumber.medium     { background-image: -gtk-icontheme("audio-volume-medium"); }
 #wireplumber.low        { background-image: -gtk-icontheme("audio-volume-low"); }
