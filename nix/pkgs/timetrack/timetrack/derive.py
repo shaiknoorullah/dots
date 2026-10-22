@@ -139,16 +139,28 @@ def day_rows(conn, month):
 
 
 def input_digest(conn, month):
-    """sha256 over the ordered clock_event rows a month's figure rests on.
+    """sha256 over every row a month's figure rests on.
 
-    Frozen alongside a submission so that if a later bug changes derivation, it is
-    provable that the number handed over was not retro-fitted.
+    Frozen alongside a submission so that if derivation changes later, it is provable
+    whether the number handed over was retro-fitted.
+
+    All THREE tables are covered, not just clock_event. The figure is
+    span - deductions against a target, so a reclassified break or a day moved from
+    working to holiday changes it just as surely as an event does -- and a digest that
+    covered only events would report "inputs unchanged" beside a figure that had moved,
+    which is worse than no digest at all.
     """
     h = hashlib.sha256()
-    for r in conn.execute(
-        "SELECT id, ts_unix, kind, attendance_day, provenance, ruleset, confidence"
-        " FROM clock_event WHERE attendance_day LIKE ? ORDER BY id", (month + "-%",)):
-        h.update(("|".join(str(x) for x in tuple(r)) + "\n").encode())
+    for sql in (
+        "SELECT 'e', id, ts_unix, kind, attendance_day, provenance, ruleset, confidence"
+        " FROM clock_event WHERE attendance_day LIKE ? ORDER BY id",
+        "SELECT 'd', id, attendance_day, start_unix, end_unix, category, minutes,"
+        " confirmed, provenance FROM deduction WHERE attendance_day LIKE ? ORDER BY id",
+        "SELECT 'c', day, kind, leave_type, pay_affecting, target_minutes"
+        " FROM day_class WHERE day LIKE ? ORDER BY day",
+    ):
+        for r in conn.execute(sql, (month + "-%",)):
+            h.update(("|".join(str(x) for x in tuple(r)) + "\n").encode())
     return h.hexdigest()
 
 

@@ -13,7 +13,7 @@ import sys
 from datetime import date
 from pathlib import Path
 
-from . import calendar_, config, dbs, derive, doctor, export_csv, migrate
+from . import calendar_, config, dbs, derive, doctor, export_csv, migrate, submission
 
 
 def _month(arg):
@@ -143,6 +143,80 @@ def cmd_doctor(a):
     return 1 if bad else 0
 
 
+def cmd_submit(a):
+    """Freeze the month. Deliberately interactive unless --yes: this is a claim to an
+    employer, and the one command here that cannot be undone."""
+    month = _month(a.month)
+    with dbs.open_work() as conn:
+        prior = submission.existing(conn, month)
+        if prior and not a.show:
+            print(f"timetrack: {month} already submitted "
+                  f"({derive.hhmm(prior['worked_minutes'])}, basis {prior['basis']}, "
+                  f"digest {prior['input_digest'][:12]})", file=sys.stderr)
+            return 1
+        if a.show:
+            if not prior:
+                print(f"{month}: not submitted")
+                return 0
+            for k, v in prior.items():
+                print(f"  {k:16} {v}")
+            return 0
+        try:
+            results = submission.preflight(month)
+        except submission.Refused as e:
+            print(f"timetrack: refused\n  {e}", file=sys.stderr)
+            return 1
+        warns = [r for r in results if r["status"] == "warn"]
+        s = derive.month_summary(conn, month)
+        print(f"About to freeze {month}:")
+        print(f"  worked   {derive.hhmm(s['worked_minutes'])} on basis {s['basis']}")
+        print(f"  target   {derive.hhmm(s['target_minutes'])}")
+        print(f"  delta    {derive.hhmm(s['worked_minutes'] - s['target_minutes'])}")
+        for w in warns:
+            print(f"  WARN     {w['check']}: {w['detail']}")
+        if not a.yes:
+            # a basis of net? means some deduction on some day is still a guess
+            print("\nThis row is immutable and cannot be rewritten. Re-run with --yes.")
+            return 1
+        try:
+            row, _s, _w = submission.freeze(conn, month)
+        except submission.Refused as e:
+            print(f"timetrack: refused\n  {e}", file=sys.stderr)
+            return 1
+    print(f"frozen {row['month']}: {derive.hhmm(row['worked_minutes'])} "
+          f"basis {row['basis']} ruleset {row['ruleset']}")
+    print(f"  digest {row['input_digest']}")
+    print(f"  export {row['export_path']}")
+    return 0
+
+
+def cmd_verify(a):
+    month = _month(a.month)
+    with dbs.open_work(readonly=True) as conn:
+        try:
+            v = submission.verify(conn, month)
+        except submission.Refused as e:
+            print(f"timetrack: {e}", file=sys.stderr)
+            return 1
+    f, hm = v["frozen"], derive.hhmm
+    print(f"{month} submitted {date.fromtimestamp(f['submitted_unix']).isoformat()}")
+    print(f"  frozen    {hm(f['worked_minutes'])}  basis {f['basis']}  ruleset {f['ruleset']}")
+    print(f"  today     {hm(v['current_worked'])}  basis {v['current_basis']}  "
+          f"ruleset {v['current_ruleset']}")
+    if not (v["inputs_changed"] or v["figure_changed"] or v["ruleset_changed"]):
+        print("  unchanged since submission")
+        return 0
+    # drift is expected the moment a gap is classified; it must be visible, not fatal
+    if v["inputs_changed"]:
+        print(f"  INPUTS CHANGED  {f['input_digest'][:12]} -> {v['current_digest'][:12]}")
+    if v["ruleset_changed"]:
+        print(f"  RULESET CHANGED {f['ruleset']} -> {v['current_ruleset']}")
+    if v["figure_changed"]:
+        print(f"  FIGURE DRIFT    {hm(v['drift_minutes'])} against what was submitted")
+    print("  the frozen row is what was handed over; this is the difference, not an error")
+    return 0
+
+
 def cmd_export(a):
     month = _month(a.month)
     with dbs.open_work(readonly=True) as conn:
@@ -205,6 +279,16 @@ def main(argv=None):
     s = sub.add_parser("doctor", help="check every invariant; exit 1 on failure")
     s.add_argument("--month")
     s.set_defaults(fn=cmd_doctor)
+
+    s = sub.add_parser("submit", help="freeze the month immutably (requires --yes)")
+    s.add_argument("--month")
+    s.add_argument("--yes", action="store_true", help="actually write the row")
+    s.add_argument("--show", action="store_true", help="print the frozen row and exit")
+    s.set_defaults(fn=cmd_submit)
+
+    s = sub.add_parser("verify", help="compare a frozen figure against today's derivation")
+    s.add_argument("--month")
+    s.set_defaults(fn=cmd_verify)
 
     s = sub.add_parser("export", help="write the submission CSVs")
     s.add_argument("--month")
