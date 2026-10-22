@@ -168,9 +168,30 @@
 /* ── Grouping ──────────────────────────────────────────────────────────────
    notification-grouping is on (config.json), so a chatty app collapses into one header
    plus a count. The header is chrome, not content: dim and small. */
+/* The collapsed group is a DECK: swaync stacks the cards with a small offset so you can
+   see there are more behind. That only reads if each card is fully OPAQUE -- with any
+   translucency the titles underneath bleed through the top one and the stack turns into
+   illegible mush, which is exactly what it did. The deck therefore gets a solid base and
+   room to fan into. */
 .notification-group {
   border-radius: 12px;
   margin: 0;
+  padding-bottom: 6px;
+}
+
+.notification-group .notification-row .notification-background .notification {
+  background-color: @bg;
+}
+
+/* Edge definition plus full opacity. swaync fades the cards behind the top one via the
+   WIDGET's opacity, not a CSS colour, so overriding the background alone changes nothing --
+   the titles underneath keep showing through and the deck reads as mush. Forcing opacity
+   back to 1 is what makes the top card actually cover the ones below it. */
+.notification-group .notification-row .notification-background .notification {
+  opacity: 1;
+  border-top: 1px solid alpha(@sel, 0.9);
+  border-right: 1px solid alpha(@sel, 0.9);
+  border-bottom: 1px solid alpha(@sel, 0.9);
 }
 
 .notification-group-headers .notification-group-header {
@@ -296,9 +317,22 @@
 }
 
 .control-center .widget-mpris .widget-mpris-player {
-  background: alpha(@sel, 0.45);
+  background-color: alpha(@sel, 0.45);
   border-radius: 9px;
   padding: 10px;
+}
+
+/* The album art is a separate layer (.mpris-background) under a scrim (.mpris-overlay).
+   Upstream's scrim comes from --mpris-album-art-overlay, a GTK4 custom property this sheet
+   never defined -- so the art rendered at full strength and the title sat unreadable on top
+   of a face. Set the scrim explicitly and keep the art from stretching. */
+/* swaync paints the album art as the PLAYER's own background, not as a separate layer:
+   swaync.5 for 0.12.6 documents only widget-mpris{,-player,-title,-subtitle}, so there is
+   no .mpris-overlay to hang a scrim on. Unblurred cover art behind the title is what made
+   the widget unreadable, so the backdrop is dropped entirely -- the art still appears as
+   the thumbnail (widget-config image-size 60), which is where it belongs. */
+.widget-mpris .widget-mpris-player {
+  background-image: none;
 }
 
 .control-center .widget-mpris .widget-mpris-title {

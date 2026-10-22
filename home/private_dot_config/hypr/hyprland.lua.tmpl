@@ -181,10 +181,15 @@ end
 -- would just be see-through, which is not the same thing and reads as cheap. swaync owns
 -- two namespaces -- the control centre and the toast window -- and both need it, or a toast
 -- and the panel it lands in are visibly different materials.
-hl.layer_rule({ match = { namespace = "waybar" },                      blur = true })
-hl.layer_rule({ match = { namespace = "swaync-control-center" },       blur = true })
-hl.layer_rule({ match = { namespace = "swaync-notification-window" },  blur = true })
-hl.layer_rule({ match = { namespace = "swayosd" },                     blur = true })
+-- ignore_alpha: a layer SURFACE is bigger than the thing drawn on it -- swaync's panel
+-- occupies a full-height column and paints a card near the top -- so blurring the surface
+-- also blurs the transparent remainder, leaving a hard rectangular seam over the wallpaper.
+-- The threshold makes the compositor skip pixels below that alpha, so only the actual
+-- panel gets glass.
+hl.layer_rule({ match = { namespace = "waybar" },                      blur = true, ignore_alpha = 0.3 })
+hl.layer_rule({ match = { namespace = "swaync-control-center" },       blur = true, ignore_alpha = 0.3 })
+hl.layer_rule({ match = { namespace = "swaync-notification-window" },  blur = true, ignore_alpha = 0.3 })
+hl.layer_rule({ match = { namespace = "swayosd" },                     blur = true, ignore_alpha = 0.3 })
 
 -- ── Autostart ──────────────────────────────────────────────────────────
 hl.on("hyprland.start", function()

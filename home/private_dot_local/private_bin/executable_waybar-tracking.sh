@@ -15,5 +15,5 @@ if [ "$("$TIMEW" get dom.active 2>/dev/null)" = "1" ]; then
   jq -cn --arg t " $short" --arg tip "$tag" \
     '{text:$t, tooltip:$tip, class:"tracking-on"}'
 else
-  jq -cn '{text:" idle", tooltip:"not tracking", class:"tracking-off"}'
+  jq -cn '{text:"​idle", tooltip:"not tracking", class:"tracking-off"}'
 fi

@@ -27,13 +27,13 @@
   // carries a single space so the module survives the empty-label hide (see style.css).
   // Scroll adjusts volume: the icon is already under the pointer, so asking for a click and
   // a keyboard key to change it was the odd part.
-  "wireplumber": { "format": "{volume}%", "format-muted": " ", "states": { "high": 66, "medium": 33, "low": 1, "off": 0 },
+  "wireplumber": { "format": "{volume}%", "format-muted": "​", "states": { "high": 66, "medium": 33, "low": 1, "off": 0 },
                    "on-click": "swayosd-client --output-volume mute-toggle",
                    "on-scroll-up": "swayosd-client --output-volume raise",
                    "on-scroll-down": "swayosd-client --output-volume lower",
                    "tooltip-format": "{volume}% on {desc}" },
   // Caffeine: inhibits idle/lock while activated.
-  "idle_inhibitor": { "format": " ",
+  "idle_inhibitor": { "format": "​",
                       "tooltip-format-activated": "caffeine on — idle and lock inhibited",
                       "tooltip-format-deactivated": "caffeine off — normal idle and lock" },
   // swaync: icon + unread badge. Left click opens the panel, right click toggles do-not-disturb.
@@ -41,7 +41,7 @@
   "custom/notification": {
     "return-type": "json", "escape": true, "exec-if": "command -v swaync-client",
     "exec": "swaync-client -swb | jq --unbuffered -c 'if .alt == \"none\" then .text = \"\" else .text = \" \" + .text end'",
-    "format": " {text}",
+    "format": "​{text}",
     "on-click": "swaync-client -t -sw", "on-click-right": "swaync-client -d -sw" },
   // The tray is tucked into a drawer: the bar shows one icon, the items slide out on hover.
   // (swaync cannot host it — it is not a StatusNotifierItem host and has no tray widget,
@@ -51,6 +51,6 @@
     "orientation": "inherit",
     "drawer": { "transition-duration": 250, "children-class": "tray-item", "transition-left-to-right": false },
     "modules": ["custom/tray-toggle", "tray"] },
-  "custom/tray-toggle": { "format": " ", "tooltip-format": "tray — hover to expand" },
+  "custom/tray-toggle": { "format": "​", "tooltip-format": "tray — hover to expand" },
   "tray": { "spacing": 8 }
 }

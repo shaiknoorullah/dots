@@ -300,7 +300,10 @@ tooltip label {
 /* The notification label carries a LEADING SPACE so the module survives a zero count
    (waybar hides a module whose text is empty). That space would otherwise read as a gap
    between the bell and the number, so this module gets less left padding to absorb it. */
-#custom-notification { padding-left: 25px; }
+/* No special case any more: every icon-only or icon+value module pads to the same 30px.
+   The old 25px here absorbed a literal space that kept the module from being hidden at a
+   zero count -- that space is now U+200B, which waybar still counts as a non-empty label
+   but Pango draws at zero width, so there is nothing left to compensate for. */
 
 /* The tray handle flips weight with the drawer, same outline/fill reading as every other
    toggle in the theme: outline while the items are tucked away, solid once they are out. */

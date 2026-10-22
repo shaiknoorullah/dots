@@ -311,7 +311,7 @@ ops_waybar_json() {   # one JSON object for the Waybar custom/ops module
     | ([$s[] | select(.status=="warn")] | length) as $w
     | ($a | length) as $k
     | (if $f > 0 then "fail" elif ($w > 0 or $k > 0) then "warn" else "ok" end) as $cls
-    | ((if $f > 0 then " \($f)" elif $w > 0 then " \($w)" else " " end)
+    | ((if $f > 0 then "​\($f)" elif $w > 0 then "​\($w)" else "​" end)
        + (if $k > 0 then " · \($k) ask" else "" end)) as $text
     | ([$s[] | select(.status != "ok") | "\(.job): \(.summary)"]
        + [$a[] | "ask \(.job): \(.q)"]) as $tip
