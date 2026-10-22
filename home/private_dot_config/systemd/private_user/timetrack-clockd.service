@@ -1,0 +1,29 @@
+[Unit]
+Description=timetrack live clock (herdr socket -> clock_event)
+# herdr owns the socket this reads; without it the daemon can only back off and retry.
+After=herdr.service
+Wants=herdr.service
+
+[Service]
+Type=notify
+ExecStart=%h/.nix-profile/bin/timetrack clockd
+# WatchdogSec is the point of Type=notify here. A daemon whose loop wedges still holds its
+# flock and still looks alive to anything that only counts processes -- the same silent
+# success this whole system exists to catch. If the loop stops pinging, PID 1 restarts it,
+# and the restart closes its own dangling run and writes attest/daemon_restart so the seam
+# is visible rather than inferred.
+WatchdogSec=120
+Restart=always
+RestartSec=5
+# The clock must not lose a transition to a compile hogging the CPU: a missed edge is a
+# wrong interval, not a slow one.
+Nice=-5
+# It reads one socket and writes one SQLite file. Nothing else should be reachable.
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=%h/.local/share/timetrack
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target

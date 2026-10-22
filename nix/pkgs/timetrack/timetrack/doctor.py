@@ -176,8 +176,15 @@ def _month(results, conn, month):
 
 
 def _dangling(results, conn):
+    # Counted from clock_event, NOT from v_run_interval: that view requires the next
+    # event to be a run_stop, so it silently drops an unpaired run_start and this check
+    # could never fire. It reported 0 dangling runs while one was open.
     open_runs = conn.execute(
-        "SELECT COUNT(*) FROM v_run_interval WHERE end_unix IS NULL").fetchone()[0]
+        "SELECT COUNT(*) FROM (" + "SELECT e.id, e.session_id, e.attendance_day, e.ts_unix FROM clock_event e"
+            " WHERE e.kind='run_start' AND NOT EXISTS ("
+            "   SELECT 1 FROM clock_event s WHERE s.session_id = e.session_id"
+            "   AND s.kind='run_stop' AND s.ts_unix >= e.ts_unix)"
+            " ORDER BY e.ts_unix DESC" + ")").fetchone()[0]
     if open_runs > 1:
         results.append(_r("clock", FAIL, f"{open_runs} run intervals never closed",
                           "a crash left the clock running; reconcile before trusting totals"))

@@ -9,7 +9,9 @@ to work.
 writes upstream -- the ERP integration is gated and does not exist yet.
 """
 import argparse
+import json
 import sys
+import time
 from datetime import date
 from pathlib import Path
 
@@ -113,6 +115,30 @@ def cmd_backfill(a):
             return 0
         rep = iv.run(conn, month)
     print(f"\n{rep['gaps_answered']} gap(s) and {rep['days_answered']} day(s) answered")
+    return 0
+
+
+def cmd_clockd(a):
+    from . import clockd
+    return clockd.main(stop_after=a.stop_after)
+
+
+def cmd_clock(a):
+    """Read the daemon's cache. Deliberately read-only: the cache is a view of the
+    machine's state, and the figures still come from clock_event, never from here."""
+    from . import clockd
+    try:
+        d = json.loads(clockd.CACHE.read_text())
+    except (OSError, ValueError):
+        print("clockd has not written a cache (not running?)", file=sys.stderr)
+        return 1
+    age = int(time.time()) - d.get("updated_unix", 0)
+    print(f"{d['state']}  attributed to {d['attribution']}  (cache {age}s old)")
+    p = d.get("presence") or {}
+    print(f"  presence  {p.get('source','?')}"
+          + ("  DEGRADED" if p.get("degraded") else "") + f"  {p.get('detail','')}")
+    for pane, a in (d.get("agents") or {}).items():
+        print(f"  {pane:10} {a['sub']:9} {a['status']:8} {a.get('ticket') or '-'}")
     return 0
 
 
@@ -318,6 +344,13 @@ def main(argv=None):
     s.add_argument("--month")
     s.add_argument("--interactive", action="store_true", help="prompt for each one")
     s.set_defaults(fn=cmd_backfill)
+
+    s = sub.add_parser("clockd", help="run the live clock daemon (foreground)")
+    s.add_argument("--stop-after", type=int, help="exit after N seconds (testing)")
+    s.set_defaults(fn=cmd_clockd)
+
+    s = sub.add_parser("clock", help="show what the daemon currently believes")
+    s.set_defaults(fn=cmd_clock)
 
     s = sub.add_parser("journald", help="check recorded time against boot windows")
     s.add_argument("--month")
