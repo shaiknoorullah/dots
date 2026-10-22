@@ -106,6 +106,9 @@ def cmd_status(a):
           f"against {hm(s['owed_to_date_minutes'])} owed over "
           f"{s['elapsed_working_days']} elapsed day(s)")
     print(f"  span (gross)      {hm(s['span_minutes'])} before breaks")
+    if s["days_unconfirmed_breaks"]:
+        print(f"  !! {s['days_unconfirmed_breaks']} day(s) have UNCONFIRMED breaks "
+              f"({', '.join(s['unconfirmed_break_days'][:4])}); those gaps are guesses")
     if s["days_missing_breaks"]:
         # say it plainly rather than quietly reporting a span as if it were net
         print(f"  !! {s['days_missing_breaks']} day(s) have no break recorded; "

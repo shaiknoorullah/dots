@@ -124,6 +124,48 @@ def _month(results, conn, month):
         results.append(_r("classification", OK, "no activity on non-working days"))
 
     s = derive.month_summary(conn, month)
+    if s["days_unconfirmed_breaks"]:
+        results.append(_r("breaks:unclassified", WARN,
+                          f"{s['days_unconfirmed_breaks']} day(s) carry UNCONFIRMED gaps "
+                          f"({', '.join(s['unconfirmed_break_days'][:4])}); basis reads net?",
+                          "classify them -- a gap that was a meeting is worked time"))
+    else:
+        results.append(_r("breaks:unclassified", OK, "every recorded break is confirmed"))
+
+    # The invariant that makes an AW day defensible: its net must not exceed the presence
+    # ActivityWatch actually measured. Comparing net against span - deductions would be
+    # tautological -- that IS the view's arithmetic -- so this re-derives presence from the
+    # live source and compares against it. If aw-server cannot be reached the check WARNS:
+    # it has not passed, it simply could not be decided, and saying ok would be a lie.
+    aw_days = [r["attendance_day"] for r in conn.execute(
+        "SELECT DISTINCT attendance_day FROM v_day_worked"
+        " WHERE attendance_day LIKE ? AND provenance LIKE '%aw%'", (month + "-%",))]
+    if not aw_days:
+        results.append(_r("aw:lower-bound", OK, "no AW-sourced day this month"))
+    else:
+        try:
+            from .backfill import aw as awmod
+            present = {d["day"]: round(d["present_seconds"] / 60)
+                       for d in awmod.workdays(awmod.not_afk())}
+        except SystemExit as e:
+            results.append(_r("aw:lower-bound", WARN, f"cannot re-derive presence: {e}",
+                              "undecided, not healthy"))
+        else:
+            over = []
+            for day in aw_days:
+                net = conn.execute(
+                    "SELECT net_minutes FROM v_day_worked WHERE attendance_day=?",
+                    (day,)).fetchone()[0]
+                p_min = present.get(day)
+                if net is not None and p_min is not None and net > p_min + 1:
+                    over.append(f"{day} net {net} > measured {p_min}")
+            if over:
+                results.append(_r("aw:lower-bound", FAIL, "; ".join(over),
+                                  "a gap escaped deduction; the figure is inflated"))
+            else:
+                results.append(_r("aw:lower-bound", OK,
+                                  f"{len(aw_days)} AW day(s) within measured presence"))
+
     if s["days_missing_breaks"]:
         results.append(_r("basis", WARN,
                           f"{s['days_missing_breaks']} working day(s) have no break recorded; "

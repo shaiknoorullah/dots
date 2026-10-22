@@ -84,6 +84,8 @@ def summary_rows(conn, month, today=None):
          "first to last activity, BEFORE breaks -- not the submitted figure"),
         ("breaks_deducted", hm(s["span_minutes"] - s["net_minutes_known"]),
          f"over {s['days_with_breaks']} day(s) with a break recorded"),
+        ("days_unconfirmed_breaks", s["days_unconfirmed_breaks"],
+         "gaps deducted but never classified; a meeting among them is worked time"),
         ("days_missing_breaks", s["days_missing_breaks"],
          "their span is counted as-is and overstates net" if s["days_missing_breaks"]
          else "none -- every working day has breaks recorded"),

@@ -42,6 +42,7 @@ def month_summary(conn, month, today=None):
     span_other = sum(r["span_minutes"] for r in rows if r["target_minutes"] == 0)
     net_known = sum(r["net_minutes"] for r in working if r["net_minutes"] is not None)
     with_breaks = [r for r in working if r["deduction_minutes"] is not None]
+    unconfirmed = [r for r in working if (r["unconfirmed"] or 0) > 0]
     missing_breaks = [r for r in working if r["deduction_minutes"] is None and r["span_minutes"] > 0]
 
     calib = config.calibration()
@@ -57,7 +58,11 @@ def month_summary(conn, month, today=None):
         real shortfall into an apparent surplus -- which is exactly what it did.
         """
         if r["net_minutes"] is not None:
-            return r["net_minutes"], "net"
+            # An unconfirmed gap is a GUESS about what the absence was. Deducting it is the
+            # conservative choice -- an offline meeting is worked time, so the true figure
+            # can only be higher -- but the result must not be labelled a settled net
+            # figure. Calling both "net" is how an unclassified day would pass review.
+            return r["net_minutes"], ("net?" if (r["unconfirmed"] or 0) else "net")
         span = r["span_minutes"] or 0
         prov = r["provenance"] or ""
         if "git" in prov:
@@ -103,6 +108,8 @@ def month_summary(conn, month, today=None):
         "calibration": calib,
         "net_minutes_known": net_known,
         "days_with_breaks": len(with_breaks),
+        "days_unconfirmed_breaks": len(unconfirmed),
+        "unconfirmed_break_days": [r["attendance_day"] for r in unconfirmed],
         "days_missing_breaks": len(missing_breaks),
         "shortfall_to_date_minutes": shortfall_to_date,
         "still_needed_minutes": still_needed,

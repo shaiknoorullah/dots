@@ -132,19 +132,27 @@ def write(conn, since=None, until=None):
         # the whole point: the gap is real, but what it WAS is unknown, and an offline
         # meeting is worked time while lunch is not. Reclassifying a gap as a meeting
         # later deletes the deduction and the minutes return to the figure.
-        gaps = 0
+        # EVERY gap is deducted, without exception. span is now elapsed, so a gap left
+        # undeducted stays inside the figure -- net would then exceed the active time
+        # actually measured, which is the one direction a payroll number must never err in.
+        # MIN_GAP decides only whether a HUMAN is asked about it: a two-minute pause is not
+        # a break worth a prompt, so it is deducted and marked confirmed.
+        gaps = asked = 0
         prev = None
         for a, b in d["runs"]:
-            if prev is not None and (a - prev).total_seconds() >= MIN_GAP:
-                mins = round((a - prev).total_seconds() / 60)
-                conn.execute(
-                    "INSERT INTO deduction(session_id,attendance_day,start_unix,end_unix,"
-                    "category,minutes,confirmed,provenance) VALUES(?,?,?,?,?,?,0,?)",
-                    (sid, d["day"], int(prev.timestamp()), int(a.timestamp()),
-                     "misc", mins, PROVENANCE))
-                gaps += 1
+            if prev is not None and b > a:
+                secs = (a - prev).total_seconds()
+                if secs > 0:
+                    confirmed = 0 if secs >= MIN_GAP else 1
+                    conn.execute(
+                        "INSERT INTO deduction(session_id,attendance_day,start_unix,end_unix,"
+                        "category,minutes,confirmed,provenance) VALUES(?,?,?,?,?,?,?,?)",
+                        (sid, d["day"], int(prev.timestamp()), int(a.timestamp()),
+                         "misc", secs / 60.0, confirmed, PROVENANCE))
+                    gaps += 1
+                    asked += 1 - confirmed
             prev = b
-        written.append({"day": d["day"], "gaps": gaps})
+        written.append({"day": d["day"], "gaps": gaps, "to_classify": asked})
     conn.commit()
     return {"written": written, "skipped_existing": skipped}
 
