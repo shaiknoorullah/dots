@@ -2,7 +2,11 @@
   "layer": "top",
   "position": "top",
   "height": 30,
-  "spacing": 6,
+  // spacing 0 on purpose: the right and centre modules are drawn as ONE slab each (shared
+  // background, hairline dividers, rounded only at the ends), and waybar's `spacing` would
+  // punch transparent gaps through the middle of that slab. All gaps now come from CSS
+  // margins, so there is a single place that decides how far apart anything sits.
+  "spacing": 0,
   "modules-left": ["ext/workspaces"],
   "modules-center": ["clock", "custom/salah"],
   "modules-right": ["custom/tracking", "custom/project", "custom/kube", "custom/ops", "custom/ctx", "idle_inhibitor", "custom/notification", "wireplumber", "group/tray"],
@@ -19,7 +23,15 @@
   "custom/ctx":      { "exec": "{{ .chezmoi.homeDir }}/.local/bin/waybar-ctx.sh",      "return-type": "json", "interval": 30, "signal": 8, "on-click": "{{ .chezmoi.homeDir }}/.local/bin/waybar-ctx.sh cycle" },
   // icon comes from CSS -gtk-icontheme(); `states` is what gives the stylesheet a
   // class per volume band, since a label can hold text but not an SVG.
-  "wireplumber": { "format": "{volume}%", "format-muted": " ", "states": { "high": 66, "medium": 33, "low": 1, "off": 0 }, "on-click": "swayosd-client --output-volume mute-toggle" },
+  // Muted drops the percentage entirely — the number is noise once nothing is audible — and
+  // carries a single space so the module survives the empty-label hide (see style.css).
+  // Scroll adjusts volume: the icon is already under the pointer, so asking for a click and
+  // a keyboard key to change it was the odd part.
+  "wireplumber": { "format": "{volume}%", "format-muted": " ", "states": { "high": 66, "medium": 33, "low": 1, "off": 0 },
+                   "on-click": "swayosd-client --output-volume mute-toggle",
+                   "on-scroll-up": "swayosd-client --output-volume raise",
+                   "on-scroll-down": "swayosd-client --output-volume lower",
+                   "tooltip-format": "{volume}% on {desc}" },
   // Caffeine: inhibits idle/lock while activated.
   "idle_inhibitor": { "format": " ",
                       "tooltip-format-activated": "caffeine on — idle and lock inhibited",
