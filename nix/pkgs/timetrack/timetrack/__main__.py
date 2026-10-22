@@ -57,8 +57,9 @@ def cmd_backfill_git(a):
 
 def cmd_ingest_aw(a):
     from .backfill import aw
+    day = None if a.no_refresh else date.today().isoformat()
     with dbs.open_work() as conn:
-        rep = aw.write(conn, since=None, until=None)
+        rep = aw.write(conn, since=None, until=None, refresh_day=day)
     for w in rep["written"]:
         print(f"wrote {w['day']}: {w['gaps']} unconfirmed gap(s) recorded as breaks")
     if not rep["written"]:
@@ -185,6 +186,8 @@ def main(argv=None):
     s.set_defaults(fn=cmd_backfill_git)
 
     s = sub.add_parser("ingest-aw", help="write AW-derived sessions for days with none")
+    s.add_argument("--no-refresh", action="store_true",
+                   help="do not replace today's own AW session (default is to refresh it)")
     s.set_defaults(fn=cmd_ingest_aw)
 
     s = sub.add_parser("compare-aw", help="cross-validate recorded days against AW presence")

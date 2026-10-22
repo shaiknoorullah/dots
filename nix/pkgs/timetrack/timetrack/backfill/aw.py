@@ -97,9 +97,32 @@ def _iso(dt):
     return dt.isoformat(timespec="seconds")
 
 
-def write(conn, since=None, until=None):
-    """Write AW-derived sessions for days that have NO session yet. Returns a report."""
+def _drop_day(conn, day):
+    """Remove an AW-written session for one day. Refuses to touch any other provenance."""
+    ids = [r["id"] for r in conn.execute(
+        "SELECT id FROM work_session WHERE attendance_day=? AND provenance=?",
+        (day, PROVENANCE))]
+    if not ids:
+        return False
+    marks = ",".join("?" * len(ids))
+    for table in ("deduction", "clock_event"):
+        conn.execute(f"DELETE FROM {table} WHERE session_id IN ({marks})", ids)
+    conn.execute(f"DELETE FROM work_session WHERE id IN ({marks})", ids)
+    return True
+
+
+def write(conn, since=None, until=None, refresh_day=None):
+    """Write AW-derived sessions for days that have NO session yet.
+
+    `refresh_day` (an ISO date) additionally REPLACES that day if -- and only if -- the
+    existing session is AW's own. Without it a periodic job is a no-op after the first run
+    of the day: the day already has a session, so every later run skips it and the figure
+    freezes at whenever it first ran. The provenance guard is what keeps that from ever
+    eating the hand-kept sheet, which is confidence 1.0 and is what gets submitted.
+    """
     days = workdays(not_afk(since, until))
+    if refresh_day:
+        _drop_day(conn, refresh_day)
     existing = {r["attendance_day"] for r in conn.execute(
         "SELECT DISTINCT attendance_day FROM work_session")}
 

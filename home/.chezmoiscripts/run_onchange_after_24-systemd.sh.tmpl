@@ -38,9 +38,16 @@ systemctl --user enable --now dots-ops-pins-check.timer
 {{- end }}
 systemctl --user enable --now dots-ops-relay.path dots-ops-relay.service
 systemctl --user enable --now dots-ops-vault-backup.timer dots-ops-vault-watch.timer
+# Capture is NOT behind .timetrack. That flag gates the old timetrack-* units, and it has
+# been false since the package was written -- which is one half of why the predecessor
+# recorded nothing for months. The job degrades safely on a machine without the binary
+# (it reports warn and returns), so gating it buys nothing and costs the whole record.
+systemctl --user enable --now dots-ops-timetrack-capture.timer
 {{- if .timetrack }}
-systemctl --user enable --now timetrack-logind.service timetrack-rollup.timer timetrack-sync.timer
+systemctl --user enable --now timetrack-logind.service
 {{- end }}
+# rollup/sync units are gone with the modules they ran; disable any left from an older apply
+systemctl --user disable --now timetrack-rollup.timer timetrack-sync.timer 2>/dev/null || true
 {{- if eq .multiplexer "tmux" }}
 systemctl --user enable --now tmux.service; systemctl --user disable --now herdr.service 2>/dev/null || true
 {{- else }}
