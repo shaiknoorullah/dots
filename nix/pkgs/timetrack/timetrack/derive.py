@@ -45,6 +45,31 @@ def month_summary(conn, month, today=None):
     missing_breaks = [r for r in working if r["deduction_minutes"] is None and r["span_minutes"] > 0]
 
     calib = config.calibration()
+
+    def basis(r):
+        """The minutes one day contributes, and on what footing.
+
+        Net of breaks whenever breaks were recorded -- that is the employer's rule, and a
+        span is always the larger number. Only a day with no break recorded falls back to
+        its span, and only a GIT-DERIVED span is calibrated: the calibration factor exists
+        to correct commit-derived estimates against measured ones. Applying it to the
+        hand-kept sheet would inflate the user's own authoritative record by 18% and turn a
+        real shortfall into an apparent surplus -- which is exactly what it did.
+        """
+        if r["net_minutes"] is not None:
+            return r["net_minutes"], "net"
+        span = r["span_minutes"] or 0
+        prov = r["provenance"] or ""
+        if "git" in prov:
+            return round(span * calib), "span:calibrated"
+        return span, "span"
+
+    def total(rs):
+        return sum(basis(r)[0] for r in rs)
+
+    bases = sorted({basis(r)[1] for r in working if r["span_minutes"]})
+    worked_to_date = total(elapsed)
+    worked_all = total(working)
     daily_rate, hourly_rate = _rates(working_days)
     hourly_rate_f = hourly_rate or 0.0
     per_day = config.hours_per_day() * 60
@@ -54,9 +79,9 @@ def month_summary(conn, month, today=None):
     #   still_needed       what the rest of the month must deliver to clear the target
     #   projected          where the month lands at a normal day's work from here
     span_cal = round(span_working * calib)
-    shortfall_to_date = len(elapsed) * per_day - span_cal
-    still_needed = target - span_cal
-    projected = span_cal + len(remaining) * per_day
+    shortfall_to_date = len(elapsed) * per_day - worked_to_date
+    still_needed = target - worked_all
+    projected = worked_all + len(remaining) * per_day
     projected_shortfall = target - projected
 
     provs = sorted({p for r in rows if r["provenance"] for p in r["provenance"].split(",")})
@@ -68,6 +93,10 @@ def month_summary(conn, month, today=None):
         "elapsed_working_days": len(elapsed),
         "remaining_working_days": len(remaining),
         "remaining_days": [r["attendance_day"] for r in remaining],
+        "worked_minutes_to_date": worked_to_date,
+        "worked_minutes": worked_all,
+        "basis": "+".join(bases) or "none",
+        "owed_to_date_minutes": len(elapsed) * per_day,
         "span_minutes": span_working,
         "span_minutes_calibrated": round(span_working * calib),
         "span_minutes_non_working": span_other,
@@ -87,6 +116,7 @@ def month_summary(conn, month, today=None):
         # leaves on the table. Based on the CALIBRATED span, and on the span basis --
         # net of breaks will be worse, and cannot be computed until breaks are recorded.
         "money_projected": (projected_shortfall / 60.0) * hourly_rate_f if hourly_rate else None,
+        "money_shortfall_to_date": (shortfall_to_date / 60.0) * hourly_rate_f if hourly_rate else None,
         "money_to_date": (shortfall_to_date / 60.0) * hourly_rate_f if hourly_rate else None,
         "provenance": provs,
         "ruleset": config.RULESET,
