@@ -22,6 +22,9 @@ def check(name, got, want):
 
 migrate.migrate()
 conn = dbs.open_work()
+# these runs stand for what clockd RECORDED and COUNTS, so the live clock is promoted
+# here; shadow mode (live recorded, not counted) is tests/shadow.sh's subject
+conn.execute("UPDATE schema_meta SET v='1' WHERE k='live_counts'"); conn.commit()
 now = int(time.time())
 day = date.fromtimestamp(now).isoformat()
 def iso(t): return datetime.fromtimestamp(t).isoformat(timespec="seconds")
@@ -93,6 +96,16 @@ check("open run reason named", "clockd owns" in r["why"], True)
 check("nothing written", conn.execute(
     "SELECT COUNT(*) FROM clock_event WHERE provenance='hotkey'").fetchone()[0], 0)
 
+# 4b. ...but in SHADOW the same open live run covers nothing: its minutes are not in the
+#     figure, so refusing the hand interval would drop real time.
+conn.execute("DELETE FROM clock_event"); conn.execute("DELETE FROM work_session")
+conn.execute("UPDATE schema_meta SET v='0' WHERE k='live_counts'"); conn.commit()
+sid = session()
+run(sid, now - 3600)
+hotkey.start("", now=now - 1800)
+check("shadow open run does not cover", hotkey.stop(conn, now=now)["action"], "recorded")
+conn.execute("UPDATE schema_meta SET v='1' WHERE k='live_counts'"); conn.commit()
+
 # 5. adjacent, not overlapping: the daemon stopped at T, the hand interval starts at T.
 #    This must RECORD -- an over-eager guard would silently drop real work.
 conn.execute("DELETE FROM clock_event"); conn.execute("DELETE FROM work_session"); conn.commit()
@@ -112,5 +125,5 @@ if fails:
     print("hotkey FAILED:")
     for f in fails: print("  " + f)
     raise SystemExit(1)
-print("hotkey ok (6 scenarios, 19 assertions)")
+print("hotkey ok (7 scenarios, 20 assertions)")
 PY

@@ -76,8 +76,13 @@ def covered(conn, t0, t1):
         (t1, t0)).fetchone()[0]
     if row:
         return "an existing run interval overlaps it"
+    # A live run counts as cover only once the live clock counts (migrate.WORK_V3). In
+    # shadow its minutes are not in the figure, so refusing the hand interval because of
+    # one would drop real time on the floor.
     open_run = conn.execute(
         "SELECT MIN(e.ts_unix) FROM clock_event e WHERE e.kind='run_start'"
+        " AND (e.provenance != 'live' OR (SELECT v FROM schema_meta"
+        "      WHERE k = 'live_counts') = '1')"
         " AND e.ts_unix < ? AND NOT EXISTS ("
         "   SELECT 1 FROM clock_event s WHERE s.session_id = e.session_id"
         "   AND s.kind='run_stop' AND s.ts_unix >= e.ts_unix)", (t1,)).fetchone()[0]

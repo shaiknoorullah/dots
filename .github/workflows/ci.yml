@@ -42,6 +42,7 @@ jobs:
       - run: bash tests/session.sh
       - run: bash tests/deadman.sh
       - run: bash tests/refresh.sh
+      - run: bash tests/shadow.sh
       - name: in-home.sh (sentinel mode)
         run: |
           d="$(mktemp -d)"

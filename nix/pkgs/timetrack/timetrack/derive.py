@@ -158,6 +158,9 @@ def input_digest(conn, month):
         " confirmed, provenance FROM deduction WHERE attendance_day LIKE ? ORDER BY id",
         "SELECT 'c', day, kind, leave_type, pay_affecting, target_minutes"
         " FROM day_class WHERE day LIKE ? ORDER BY day",
+        # promoting the live clock changes every figure without touching a single row above,
+        # so the flag itself is part of what a submission is pinned to (migrate.WORK_V3)
+        "SELECT 'm', k, v FROM schema_meta WHERE k = 'live_counts' AND ? IS NOT NULL",
     ):
         for r in conn.execute(sql, (month + "-%",)):
             h.update(("|".join(str(x) for x in tuple(r)) + "\n").encode())
