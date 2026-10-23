@@ -33,6 +33,23 @@ autoload -U +X bashcompinit && bashcompinit
 eval "$(zoxide init zsh)"
 eval "$(starship init zsh)"
 
+# Recover the graphical session when this shell inherited none. herdr.service starts at
+# LOGIN (default.target), before Hyprland exists, and every herdr pane inherits the server's
+# environment -- so after a reboot each pane, and each Claude Code session started in one,
+# had no WAYLAND_DISPLAY / DISPLAY / HYPRLAND_INSTANCE_SIGNATURE: wl-paste could not reach the
+# compositor (Ctrl+V image paste in Claude failed) and hyprctl could not either. Hyprland
+# pushes the live values into the systemd user manager at startup (hyprland.lua), so read
+# them from there. Also runs when the inherited value is STALE (a Hyprland restart changes
+# the socket and the signature), which is why the test is the socket, not the variable.
+if [ ! -S "${XDG_RUNTIME_DIR:-/run/user/$UID}/${WAYLAND_DISPLAY:-wayland-0}" ] && command -v systemctl >/dev/null; then
+  for _kv in ${(f)"$(systemctl --user show-environment 2>/dev/null)"}; do
+    case $_kv in
+      WAYLAND_DISPLAY=*|DISPLAY=*|HYPRLAND_INSTANCE_SIGNATURE=*|XDG_CURRENT_DESKTOP=*) export "$_kv" ;;
+    esac
+  done
+  unset _kv
+fi
+
 # X11 display + xauth (GDM puts xauth under $XDG_RUNTIME_DIR/gdm)
 # Needed for xclip/clipboard-image paste in Claude Code, Electron apps, etc.
 if [ -z "$WAYLAND_DISPLAY" ]; then
