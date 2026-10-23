@@ -108,6 +108,15 @@ for d in "$out" "$nixos"; do
   [ "$got" = "$want" ] || { echo "LINT: no_close_for ${got}ms != timetrack-panel ceiling ${want}ms"; exit 1; }
 done
 
+# R-swaync-exec: SwayNC runs a script's `exec` WITHOUT a shell, so "$HOME/..." or "~/..." is
+# a literal path that does not exist. It failed silently ("Run_Script Error ... No such file
+# or directory" in the journal) and broke notification click-to-focus for every Claude agent.
+for d in "$out" "$nixos"; do
+  if jq -r '.scripts[]?.exec' "$d/.config/swaync/config.json" 2>/dev/null | grep -nE '^[^/[:alnum:]]|\$|~'; then
+    echo "LINT: swaync exec above uses \$ or ~ (no shell expands it; use an absolute path)"; exit 1
+  fi
+done
+
 # R28: everything uses ~/.nix-profile, NixOS included (home-manager.useUserPackages = false)
 if grep -rIl '/etc/profiles/per-user' "$out" "$nixos"; then echo "LINT: files above use /etc/profiles/per-user (R28: use ~/.nix-profile)"; exit 1; fi
 echo "lint ok"
