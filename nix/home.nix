@@ -85,7 +85,8 @@ in {
     # git
     delta lazygit lefthook
     # kubernetes / cloud / IaC
-    actionlint ansible ansible-lint awscli2 azure-cli cntb cilium-cli crane crossplane-cli dbmate devpod distrobox
+    # ansible comes from dotsAdhanPython (pkgs/overlay.nix), not from here -- see the note there
+    actionlint ansible-lint awscli2 azure-cli cntb cilium-cli crane crossplane-cli dbmate devpod distrobox
     docker-client docker-compose kubernetes-helm kapp kbld kcl kind kubeconform kubectx kustomize
     lens minio-client molecule packer postgresql powershell qemu redis sqlite stern talhelper talosctl terraform
     # languages & toolchains
