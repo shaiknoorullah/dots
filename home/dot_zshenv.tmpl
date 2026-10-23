@@ -9,3 +9,8 @@ export EDITOR=nvim VISUAL=nvim
 
 # Ubuntu/Debian /etc/zsh/zshrc runs compinit before ~/.zshrc; zimfw/completion does it (with its own dumpfile), so skip the global one
 skip_global_compinit=1
+
+# npm -g and `go install` both drop binaries outside the Nix profile, so agent CLIs
+# installed that way are invisible to a login shell without this. Added live on
+# 2026-10-22 and adopted here so `chezmoi apply` stops deleting it on every run.
+export PATH="$HOME/.npm-global/bin:$HOME/go/bin:$PATH"

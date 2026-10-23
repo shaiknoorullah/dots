@@ -224,7 +224,7 @@ case "${1:-}" in
     reload="reload($self _lines)"
     # field 5 = the ask's token (R54), hidden; an approve of an ask that changed meanwhile is ignored and re-shown
     ops_status_lines | fzf --delimiter ' ⟂ ' --with-nth=1..4 --no-sort --reverse \
-      --header 'enter: log · ctrl-a: approve · ctrl-s: snooze · ctrl-k: skip · ctrl-r: run now' \
+      --header $'􂍄  dots-ops   ·   enter log · ctrl-a approve · ctrl-s snooze · ctrl-k skip · ctrl-r run now' \
       --bind "enter:execute($self _log {1} | ${PAGER:-less -R})" \
       --bind "ctrl-a:execute-silent($self answer {1} approve {5})+$reload" \
       --bind "ctrl-s:execute-silent($self answer {1} snooze {5})+$reload" \

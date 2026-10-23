@@ -37,7 +37,7 @@ if [[ -z "$services" ]]; then
     exit 0
 fi
 
-chosen="$(echo "$services" | fzf --ansi --header='systemd services')"
+chosen="$(echo "$services" | fzf --ansi --header=$'􀿖  systemd services')"
 [[ -z "$chosen" ]] && exit 0
 
 # Strip ANSI escapes, then take the token after the dot -- that's the

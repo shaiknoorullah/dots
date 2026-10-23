@@ -1,0 +1,14 @@
+[Unit]
+Description=dots-ops timetrack capture (hourly, refreshes today)
+
+[Timer]
+# Hourly, not daily: AW accumulates presence through the day and the job refreshes today's
+# figure on every run, so an hourly cadence keeps the number current while the shift is
+# still running. Persistent catches up after a suspend or a late boot.
+OnCalendar=hourly
+OnStartupSec=180
+Persistent=true
+Unit=dots-ops@timetrack-capture.service
+
+[Install]
+WantedBy=timers.target

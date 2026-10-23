@@ -1,0 +1,84 @@
+#!/bin/sh
+# Layer 2 of the dead-man's switch: reap a blocking panel that stopped answering for itself.
+#
+# THIS SCRIPT IMPORTS NOTHING. No python, no timetrack package, no dots-ops lib -- only
+# sh, date, stat, systemctl and hyprctl. That is the entire point of it. The thing it
+# protects against is a panel that grabs the keyboard (stay_focused) and then wedges, and
+# the most likely cause of a wedge is a bug in the Python that drew it. A reaper that
+# imported that Python would die of the same bug, at which point the user has an
+# inescapable modal on a machine whose keyboard belongs to it. Layer 1 (RuntimeMaxSec) and
+# this are the two mechanisms that keep working when timetrack does not.
+#
+# It is driven by a 30-second timer and acts on two conditions:
+#
+#   1. a panel's heartbeat file is older than 90 seconds  -> the panel is not updating it
+#   2. ~/.config/timetrack/PANIC exists                   -> reap everything, immediately
+#
+# (2) is layer 3 with teeth. PANIC being checked by every enforcement path only helps for
+# panels not yet launched; this is what takes down one already on screen, within one timer
+# cycle, without needing hyprctl or a working compositor keybind.
+#
+# A reap is RECORDED, never hidden: a JSON line goes into the attest spool and the next
+# `timetrack` run turns it into an append-only attest row. What is never written is an
+# answer -- a timed-out prompt has no answer, and inventing one would put a fabricated
+# attestation into a payroll record.
+set -u
+
+STALE=90
+STATE="${XDG_DATA_HOME:-$HOME/.local/share}/timetrack"
+PANELS="$STATE/panels"
+SPOOL="$STATE/attest-spool"
+PANIC="${XDG_CONFIG_HOME:-$HOME/.config}/timetrack/PANIC"
+
+now=$(date +%s)
+panic=0
+[ -e "$PANIC" ] && panic=1
+
+spool() {   # reason panel age
+  mkdir -p "$SPOOL" 2>/dev/null || return 0
+  f="$SPOOL/$now-$1-$$-$2.json"
+  printf '{"reason":"%s","ts_unix":%s,"panel":"%s","stale_seconds":%s,"confidence":1.0}\n' \
+    "$1" "$now" "$2" "$3" > "$f.tmp" 2>/dev/null || return 0
+  mv -f "$f.tmp" "$f" 2>/dev/null || rm -f "$f.tmp"
+}
+
+# hyprctl needs the instance signature. hyprland.lua pushes it into the systemd user
+# environment at startup, but this script must work in the degraded case too -- the same
+# fallback waybar-project.sh uses, because a reaper that quietly cannot reach the
+# compositor is a reaper that is not there.
+if [ -z "${HYPRLAND_INSTANCE_SIGNATURE:-}" ] && [ -d "${XDG_RUNTIME_DIR:-}/hypr" ]; then
+  HYPRLAND_INSTANCE_SIGNATURE=$(ls -t "$XDG_RUNTIME_DIR/hypr" 2>/dev/null | head -1)
+  export HYPRLAND_INSTANCE_SIGNATURE
+fi
+
+reap() {    # panel age reason
+  # The unit goes first. A dots.block window carries `no_close_for 600000`, so for its
+  # whole lifetime it REFUSES killactive -- hyprctl cannot dismiss it, and is only a
+  # fallback for a panel started outside systemd-run. Killing the process is what actually
+  # removes the window, which is why this does not depend on the compositor at all.
+  systemctl --user stop "timetrack-panel-$1.service" >/dev/null 2>&1
+  hyprctl dispatch closewindow "class:dots.block" >/dev/null 2>&1
+  spool "$3" "$1" "$2"
+  rm -f "$PANELS/$1.hb"
+  echo "timetrack-deadman: reaped panel $1 ($3, heartbeat ${2}s old)" >&2
+}
+
+reaped=0
+for hb in "$PANELS"/*.hb; do
+  [ -e "$hb" ] || continue
+  id=$(basename "$hb" .hb)
+  mtime=$(stat -c %Y "$hb" 2>/dev/null) || continue
+  age=$((now - mtime))
+  if [ "$panic" = 1 ]; then
+    reap "$id" "$age" panic_engaged
+    reaped=$((reaped + 1))
+  elif [ "$age" -ge "$STALE" ]; then
+    reap "$id" "$age" deadman_reap
+    reaped=$((reaped + 1))
+  fi
+done
+
+# Nothing to say when nothing was wrong: this runs every 30 seconds for the life of the
+# session, and a line per run would bury the one line that matters in the journal.
+[ "$reaped" = 0 ] && exit 0
+exit 0

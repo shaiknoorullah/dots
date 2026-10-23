@@ -55,7 +55,7 @@ in {
   ] ++ lib.optional (gpu != "nvidia") (gl hyprland) ++ [
     hypridle hyprpolkitagent xdg-desktop-portal-hyprland hyprpicker
     waybar swaynotificationcenter swayosd awww (gl ghostty) chafa otter-launcher clipse yazi ffmpegthumbnailer unar file fd
-    grim slurp wl-clipboard playerctl brightnessctl networkmanagerapplet bluetuith libnotify papirus-icon-theme
+    grim slurp wl-clipboard playerctl brightnessctl networkmanagerapplet bluetuith libnotify papirus-icon-theme phosphor-icon-theme dots-icon-font
     (lib.hiPrio taskwarrior3) timewarrior taskwarrior-tui aw-server-rust awatcher dotsAdhanPython timetrack
     zsh antidote starship zoxide fzf eza bat ripgrep jq gh neovim git chezmoi
     tmux dotsTmuxPluginFarm inputs.herdr.packages.${pkgs.system}.default

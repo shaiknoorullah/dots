@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# Dark mode, the part chezmoi cannot express as a file.
+#
+# GTK apps read ~/.config/gtk-{3,4}.0/settings.ini, which this repo tracks. But
+# xdg-desktop-portal-gtk answers org.freedesktop.appearance color-scheme from GSETTINGS,
+# NOT from settings.ini -- and that portal value is what Firefox, Chromium/Brave, Electron,
+# VS Code and every libadwaita app actually honour. hyprland-portals.conf sets default=gtk,
+# so the gtk backend is the one serving Settings here. dconf is a binary database, so the
+# only way to version these three keys is to assert them from a script.
+#
+# The desired AND live values are both in the onchange hash below: that way the script is
+# silent while the session already matches, and re-asserts itself if something (a GNOME
+# session on the same machine, gnome-control-center, an app "helpfully" saving a
+# preference) flips a key back to light.
+set -uo pipefail
+{{- $want := dict
+      "color-scheme" "prefer-dark"
+      "gtk-theme"    "Breeze-Dark"
+      "icon-theme"   "Phosphor-Dark" }}
+# desired: {{ range $k, $v := $want }}{{ $k }}={{ $v }} {{ end }}
+# live:    {{ output "sh" "-c" "command -v gsettings >/dev/null && gsettings list-keys org.gnome.desktop.interface >/dev/null 2>&1 && for k in color-scheme gtk-theme icon-theme; do printf '%s=%s ' \"$k\" \"$(gsettings get org.gnome.desktop.interface $k 2>/dev/null | tr -d \\\"\\')\"; done || echo no-gsettings" | trim }}
+if ! command -v gsettings >/dev/null; then
+  echo "appearance: no gsettings; GTK settings.ini still applies, portal color-scheme unset" >&2
+  exit 0
+fi
+if ! gsettings list-keys org.gnome.desktop.interface >/dev/null 2>&1; then
+  echo "appearance: org.gnome.desktop.interface schema missing (gsettings-desktop-schemas)" >&2
+  exit 0
+fi
+changed=0
+{{- range $k, $v := $want }}
+if [ "$(gsettings get org.gnome.desktop.interface {{ $k }} 2>/dev/null | tr -d "\"'")" != {{ $v | quote }} ]; then
+  gsettings set org.gnome.desktop.interface {{ $k }} {{ $v | quote }} && changed=1
+fi
+{{- end }}
+[ "$changed" = 1 ] && echo "appearance: dark mode asserted via gsettings (portal color-scheme = prefer-dark)"
+exit 0

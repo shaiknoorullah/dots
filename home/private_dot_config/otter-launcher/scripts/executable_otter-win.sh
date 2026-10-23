@@ -42,7 +42,7 @@ if [[ -z "$windows" ]]; then
     exit 1
 fi
 
-selection="$(echo "$windows" | fzf --delimiter=$'\t' --with-nth=2 --header=$' windows')"
+selection="$(echo "$windows" | fzf --delimiter=$'\t' --with-nth=2 --header=$'􀃐  windows')"
 [[ -z "$selection" ]] && exit 0
 
 addr="$(cut -f1 <<<"$selection")"

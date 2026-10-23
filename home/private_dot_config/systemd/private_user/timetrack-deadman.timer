@@ -1,0 +1,17 @@
+[Unit]
+Description=timetrack dead-man's switch, every 30s
+
+[Timer]
+# 30 seconds against a 90-second staleness threshold: three chances to notice before the
+# window the plan allows. Tighter buys nothing (the panel's own RuntimeMaxSec is the hard
+# ceiling); looser means a frozen keyboard grab outlives its budget.
+OnActiveSec=30
+OnUnitActiveSec=30
+AccuracySec=5s
+# No Persistent=true: there is nothing to catch up on. A panel that existed before a
+# suspend is gone with the process that drew it, and reaping a heartbeat file left behind
+# by a dead session is handled by the next ordinary run.
+Unit=timetrack-deadman.service
+
+[Install]
+WantedBy=timers.target

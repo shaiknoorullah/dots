@@ -37,6 +37,77 @@ for d in "$out" "$nixos"; do
     echo "LINT: files above carry a private IP (this repo is public)"; exit 1
   fi
 done
+# R-glyph: no Nerd Font icon glyphs. They are private-use codepoints, so they render as
+# tofu in any font that is not patched, they cannot be grepped or read aloud, and they look
+# nothing like the icon theme. Replaced by geometric Unicode from normal fonts.
+# Two exceptions. U+E0B0-U+E0D4 is the Powerline separator block, which draws starship's
+# segment shape rather than standing in for an icon. Plane 16 (U+100000+) is OUR font,
+# dots-icon-font, whose glyphs are Phosphor outlines -- Nerd Font never uses plane 16, so
+# allowing it cannot re-admit a single glyph this rule exists to keep out.
+for d in "$out" "$nixos"; do
+  if LC_ALL=C.UTF-8 grep -rIlP '[\x{E000}-\x{E0AF}\x{E0D5}-\x{F8FF}\x{F0000}-\x{FFFFD}]' "$d"; then
+    echo "LINT: files above use Nerd Font glyphs (banned; only U+E0B0-E0D4 separators are allowed)"; exit 1
+  fi
+  # ...and the same glyphs written as shell ESCAPES. $'\xef\x80\x84' and $'\U000f0343' are
+  # U+F004 and U+F0343, but the file is pure ASCII, so the codepoint grep above sees nothing
+  # while the terminal happily paints a private-use glyph. Both forms were live in
+  # otter-launcher and survived the purge undetected.
+  if grep -rIlP '\\U000[eEfF][0-9a-fA-F]{4}' "$d"; then
+    echo "LINT: files above encode a Nerd Font glyph as a \\U escape"; exit 1
+  fi
+  if grep -rIlP '\\x[eE][eEfF]\\x[89aAbB][0-9a-fA-F]\\x[89aAbB][0-9a-fA-F]' "$d"; then
+    echo "LINT: files above encode a private-use glyph as UTF-8 \\x escapes"; exit 1
+  fi
+done
+
+# R-deadman: layer 2 of the dead-man's switch must stay IMPORT-FREE.
+# timetrack-deadman exists for the case where a blocking panel with a compositor-enforced
+# keyboard grab has wedged, and the likeliest cause of a wedge is a bug in the Python that
+# drew it. A reaper that called into that Python would die of the same bug and leave the
+# machine unusable. The independence is the feature, so it is checked mechanically rather
+# than left as a comment someone later "tidies up".
+dm="$out/.local/bin/timetrack-deadman"
+[ -f "$dm" ] || { echo "LINT: timetrack-deadman is not rendered"; exit 1; }
+# comments are stripped first: the script's own header SAYS "no python", which is the
+# documentation of the rule, not a violation of it
+if grep -v '^[[:space:]]*#' "$dm" | grep -nE '(^|[^-[:alnum:]_/])python'; then
+  echo "LINT: timetrack-deadman invokes python (layer 2 must import nothing)"; exit 1
+fi
+if grep -v '^[[:space:]]*#' "$dm" | grep -nE '(^|[^-[:alnum:]_/.])timetrack +[a-z]'; then
+  echo "LINT: timetrack-deadman calls the timetrack CLI (layer 2 must import nothing)"; exit 1
+fi
+# R-escape: layer 4 is the escape route printed ON the panel. A modal that grabs the
+# keyboard and does not say how to get out of it is the failure mode, not a detail.
+pn="$out/.local/bin/timetrack-panel"
+[ -f "$pn" ] || { echo "LINT: timetrack-panel is not rendered"; exit 1; }
+for esc in 'timetrack/PANIC' 'hyprctl reload' 'systemctl --user stop timetrack-panel'; do
+  grep -qF "$esc" "$pn" || { echo "LINT: timetrack-panel does not print the escape '$esc'"; exit 1; }
+done
+grep -qF 'timetrack-deadman.timer' "$pn" || {
+  echo "LINT: timetrack-panel does not require the reaper before drawing"; exit 1; }
+# R-grab: dots.block is the ONLY window allowed to hold the keyboard. stay_focused on any
+# other popup also blocks grim/slurp, so a screenshot of it becomes impossible -- that is
+# why it was removed from the whole dots.* family, and the rule has drifted back before.
+for d in "$out" "$nixos"; do
+  if grep -n 'stay_focused' "$d/.config/hypr/hyprland.lua" | grep -v 'dots\[.\]block' | grep -v '^\s*[0-9]*:\s*--'; then
+    echo "LINT: stay_focused on a window other than dots.block (it blocks screenshots)"; exit 1
+  fi
+done
+
+# R-noclose: the unclosable window must stop being unclosable exactly when PID 1 would
+# have killed the panel anyway. `no_close_for` is a DURATION in milliseconds (there is no
+# unconditional no_close in Hyprland 0.56 -- an unknown field is a hard error in a Lua
+# config, so the wrong key takes the whole hyprland.lua down at the next login). If the
+# panel's RuntimeMaxSec is raised and this is not, the window becomes closeable while the
+# prompt is still up; if it is lowered, the grab outlives the panel.
+secs=$(sed -n 's/^MAX_SECONDS=\([0-9]*\).*/\1/p' "$pn" | head -1)
+want=$(( ${secs:-0} * 1000 ))
+for d in "$out" "$nixos"; do
+  got=$(sed -n 's/.*dots\[.\]block.*no_close_for = \([0-9]*\).*/\1/p' "$d/.config/hypr/hyprland.lua" | head -1)
+  [ -n "$got" ] || { echo "LINT: dots.block has no no_close_for rule"; exit 1; }
+  [ "$got" = "$want" ] || { echo "LINT: no_close_for ${got}ms != timetrack-panel ceiling ${want}ms"; exit 1; }
+done
+
 # R28: everything uses ~/.nix-profile, NixOS included (home-manager.useUserPackages = false)
 if grep -rIl '/etc/profiles/per-user' "$out" "$nixos"; then echo "LINT: files above use /etc/profiles/per-user (R28: use ~/.nix-profile)"; exit 1; fi
 echo "lint ok"

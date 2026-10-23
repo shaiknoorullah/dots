@@ -1,0 +1,18 @@
+[Unit]
+Description=timetrack dead-man's switch (reap a wedged blocking panel)
+# No After= on anything timetrack. This unit's value is that it works when the rest does
+# not: the script it runs imports nothing, so a syntax error anywhere in the package
+# cannot stop a stuck modal from being killed.
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/timetrack-deadman
+# It writes one JSON line into the attest spool and calls systemctl/hyprctl. Nothing else
+# should be reachable -- but note ProtectHome is NOT strict here: it must read its own
+# heartbeat directory under $HOME.
+ProtectSystem=strict
+ReadWritePaths=%h/.local/share/timetrack
+NoNewPrivileges=true
+# Deliberately NOT Nice=-5 like clockd. This runs every 30 seconds for the whole session
+# and does almost nothing; the one time it matters, a panel is already frozen and 30
+# seconds of scheduling latency is irrelevant next to the 90-second staleness threshold.

@@ -1,6 +1,20 @@
-/* ~/.config/swaync/style.css — Dracula, ported from the previous notification daemon
-   (border-radius 14, 2px accent border, JetBrainsMono Nerd Font 11, urgency accents).
-   Palette comes from .chezmoidata/palette.yaml. */
+/* ~/.config/swaync/style.css — the notification surface, in the bar's visual language.
+   Palette comes from .chezmoidata/palette.yaml; the five rules it follows are written out
+   at the top of waybar/style.css.tmpl. Three of them decide everything below:
+
+   · 12px corners, because that is hyprland decoration.rounding — a swaync panel and a
+     ghostty popup are the same KIND of object and should not disagree about their corners.
+     (Was 14, inherited from the notification daemon this replaced.)
+   · Colour is a claim on attention, so a card is NOT bordered in the accent by default.
+     Every card used to carry a 2px purple ring, which meant a critical one in red had
+     nothing left to escalate with. Urgency now rides a 3px bar down the card's left edge
+     and nothing else: low gets none, normal gets a quiet one, critical gets red.
+   · Icons come from the icon theme via -gtk-icontheme(), never from a character.
+
+   The prose font is the UI font, not the terminal's. A notification body is a sentence
+   someone wrote, and JetBrainsMono at 11pt in a 440px column broke it across more lines
+   than it needed while looking like a log line. Noto Sans is what gtk-3.0/settings.ini
+   already names for every other GTK surface. */
 
 @define-color bg        {{ .palette.bg }};
 @define-color fg        {{ .palette.fg }};
@@ -9,14 +23,21 @@
 @define-color accent    {{ .palette.purple }};
 @define-color red       {{ .palette.red }};
 @define-color green     {{ .palette.green }};
+@define-color orange    {{ .palette.orange }};
 
 * {
-  font-family: "JetBrainsMono Nerd Font";
+  font-family: "Noto Sans", sans-serif;
   font-size: 11pt;
   color: @fg;
+  box-shadow: none;
+  text-shadow: none;
+  border: none;
 }
 
-/* ── Notification cards ── */
+/* ══ Cards ═════════════════════════════════════════════════════════════════
+   Shared by the toasts (.floating-notifications) and the panel's list; the two differ
+   only in material, further down. */
+
 .notification-row {
   outline: none;
   margin: 0;
@@ -24,49 +45,58 @@
 }
 
 .notification-row .notification-background {
-  padding: 7px 7px;
+  padding: 5px 7px;
 }
 
 .notification-row .notification-background .notification {
   background: @bg;
-  border: 2px solid @accent;
-  border-radius: 14px;
+  border-radius: 12px;
   padding: 0;
   margin: 0;
 }
 
-.notification-row .notification-background .notification.low {
-  border-color: @comment;
-}
-
-.notification-row .notification-background .notification.normal {
-  border-color: @accent;
-}
-
-.notification-row .notification-background .notification.critical {
-  border-color: @red;
+/* A critical notification is the one case where the card itself may take a tint: it has to
+   survive being the fourth card in a stack you are scrolling past. */
+.notification-row .notification-background .notification.critical,
+.notification-row .notification-background.critical .notification {
+  background-color: alpha(@red, 0.12);
 }
 
 .notification-row .notification-background .notification .notification-default-action {
-  padding: 16px;
-  border-radius: 12px;
+  padding: 14px 16px;
+  border-radius: 9px;
   background: transparent;
 }
 
 .notification-row .notification-background .notification .notification-default-action:hover {
-  background: @sel;
+  background: alpha(@sel, 0.75);
 }
 
-/* app icon on the left, 48px */
+/* The app icon on the left. -gtk-icon-size IS valid here: swaync 0.12.6 links gtk4 and
+   gtk4-layer-shell, and GTK4 accepts the property (GTK3 is the one that rejects it with
+   "not a valid property name" -- so a GTK3 CssProvider is the wrong thing to validate this
+   sheet with). config.json's notification-icon-size still sets the surface the icon is
+   rendered into; this pins how large it is drawn. */
 .notification-row .notification-background .notification .notification-default-action .notification-content .image {
   -gtk-icon-size: 48px;
-  margin-right: 12px;
+  margin-right: 14px;
 }
 
-/* title (bold) / body / time hierarchy */
+/* ── summary / body / time hierarchy ───────────────────────────────────────
+   Three weights, one size step: bold summary, plain body, small dim timestamp. The body
+   used to be a hand-mixed #c8c8d0 with a second shade for .low; both are now the palette's
+   own foreground at a reduced alpha, so there is nothing here to keep in sync by hand. */
 .notification-row .notification-background .notification .notification-default-action .notification-content .text-box .summary {
   font-weight: bold;
   color: @fg;
+}
+
+.notification-row .notification-background .notification .notification-default-action .notification-content .text-box .body {
+  color: alpha(@fg, 0.80);
+}
+
+.notification-row .notification-background .notification.low .notification-default-action .notification-content .text-box .body {
+  color: alpha(@fg, 0.68);
 }
 
 .notification-row .notification-background .notification .notification-default-action .notification-content .text-box .time {
@@ -74,99 +104,183 @@
   color: @comment;
 }
 
-.notification-row .notification-background .notification .notification-default-action .notification-content .text-box .body {
-  color: #c8c8d0;
-}
-
-.notification-row .notification-background .notification.low .notification-default-action .notification-content .text-box .body {
-  color: #bdbdc7;
-}
-
+/* A progress notification (volume, copy, download) is data, so it gets the accent fill
+   rather than a hue of its own. */
 .notification-row .notification-background .notification .notification-default-action .notification-content progressbar trough {
-  background: @sel;
+  background: alpha(@sel, 0.8);
   border-radius: 6px;
+  min-height: 6px;
 }
 
 .notification-row .notification-background .notification .notification-default-action .notification-content progressbar progress {
   background: @accent;
   border-radius: 6px;
+  min-height: 6px;
 }
 
+/* Inline action buttons. Neutral at rest, accent on hover — the same "hover lifts, it does
+   not recolour the meaning" rule the bar uses. */
 .notification-row .notification-background .notification .notification-action > button {
-  background: @sel;
-  border: none;
-  border-radius: 10px;
+  background: alpha(@sel, 0.8);
+  color: @fg;
+  border-radius: 9px;
   margin: 4px;
+  padding: 5px 12px;
 }
 
 .notification-row .notification-background .notification .notification-action > button:hover {
   background: @accent;
+  color: @bg;
 }
 
+/* The close affordance is destructive, so it stays invisible until you mean it: dim circle
+   at rest, red only under the pointer. An always-red X on every card is four red dots in a
+   stack of four notifications, which trains you to ignore red. */
 .close-button {
-  background: @sel;
-  color: @fg;
+  background: alpha(@sel, 0.7);
+  color: @comment;
   border-radius: 100%;
-  min-width: 24px;
-  min-height: 24px;
-  margin: 6px;
+  min-width: 22px;
+  min-height: 22px;
+  margin: 8px;
   padding: 0;
 }
 
 .close-button:hover {
   background: @red;
+  color: @bg;
 }
 
-/* ── Grouping ── */
+/* ── Grouping ──────────────────────────────────────────────────────────────
+   notification-grouping is on (config.json), so a chatty app collapses into one header
+   plus a count. The header is chrome, not content: dim and small. */
+/* The collapsed group is a DECK: swaync stacks the cards with a small offset so you can
+   see there are more behind. That only reads if each card is fully OPAQUE -- with any
+   translucency the titles underneath bleed through the top one and the stack turns into
+   illegible mush, which is exactly what it did. The deck therefore gets a solid base and
+   room to fan into. */
+.notification-group {
+  border-radius: 12px;
+  margin: 0;
+  padding-bottom: 6px;
+}
+
+.notification-group .notification-row .notification-background .notification {
+  background-color: @bg;
+}
+
+/* Edge definition plus full opacity. swaync fades the cards behind the top one via the
+   WIDGET's opacity, not a CSS colour, so overriding the background alone changes nothing --
+   the titles underneath keep showing through and the deck reads as mush. Forcing opacity
+   back to 1 is what makes the top card actually cover the ones below it. */
+.notification-group .notification-row .notification-background .notification {
+  opacity: 1;
+  border-top: 1px solid alpha(@sel, 0.9);
+  border-right: 1px solid alpha(@sel, 0.9);
+  border-bottom: 1px solid alpha(@sel, 0.9);
+}
+
 .notification-group-headers .notification-group-header {
   color: @comment;
   font-size: 9pt;
+  font-weight: bold;
+  padding: 2px 6px;
 }
 
-.notification-group-icon {
+.notification-group-icon,
+.notification-group-collapse-button {
   color: @comment;
+  background: transparent;
 }
 
-/* ── Control center ── */
+.notification-group-collapse-button:hover {
+  background: alpha(@sel, 0.75);
+  border-radius: 8px;
+}
+
+/* ══ Toasts ════════════════════════════════════════════════════════════════
+   What you see when a notification arrives and the panel is closed. These float over the
+   wallpaper with nothing behind them, so they are the one surface that keeps a visible
+   outline — without it a dark card on a dark wallpaper has no edge at all. */
+.floating-notifications.background .notification-row .notification-background .notification {
+  background: alpha(@bg, 0.94);
+  border-top: 1px solid alpha(@sel, 0.9);
+  border-right: 1px solid alpha(@sel, 0.9);
+  border-bottom: 1px solid alpha(@sel, 0.9);
+}
+
+/* ══ Control centre ════════════════════════════════════════════════════════
+   The panel itself: one translucent slab on blur (hyprland.lua layer_rule), so it reads as
+   the same material as the bar instead of as an opaque window that happens to float. */
 .control-center {
-  background: @bg;
-  border: 2px solid @accent;
-  border-radius: 14px;
-  padding: 8px;
+  background: alpha(@bg, 0.86);
+  border: 1px solid alpha(@sel, 0.9);
+  border-radius: 12px;
+  padding: 10px;
 }
 
+/* In the panel the cards sit ON the slab, so they drop the outline the toasts need and
+   take a lighter fill to separate from it. */
+.control-center .notification-row .notification-background .notification {
+  background: alpha(@sel, 0.45);
+}
+
+.control-center .notification-row .notification-background .notification.critical {
+  background: alpha(@red, 0.16);
+}
+
+/* ── Title row ─────────────────────────────────────────────────────────────
+   "Notifications" plus Clear All. The button is destructive-ish and permanent, so it gets
+   a broom from the icon theme rather than relying on its label alone. */
 .control-center .widget-title {
-  margin: 8px;
+  margin: 6px 8px 10px 8px;
 }
 
 .control-center .widget-title > label {
   font-weight: bold;
+  font-size: 12pt;
   color: @fg;
 }
 
 .control-center .widget-title > button {
-  background: @sel;
-  border: none;
-  border-radius: 10px;
-  padding: 4px 12px;
+  background: alpha(@sel, 0.8);
+  color: @fg;
+  border-radius: 9px;
+  padding: 4px 12px 4px 30px;
+  background-image: -gtk-icontheme("edit-clear-all");
+  background-repeat: no-repeat;
+  background-position: 10px center;
+  background-size: 14px 14px;
 }
 
 .control-center .widget-title > button:hover {
-  background: @accent;
+  background-color: @accent;
+  color: @bg;
 }
 
+/* ── Do not disturb ────────────────────────────────────────────────────────
+   A row, not a mode: the moon is the row's identity and the switch carries on/off. Checked
+   takes the accent, the same purple the bar's notification chip washes with while DND is
+   on, so the two surfaces agree about what "silenced" looks like. */
 .control-center .widget-dnd {
-  margin: 8px;
+  margin: 4px 8px 10px 8px;
+  padding: 6px 10px;
+  background: alpha(@sel, 0.35);
+  border-radius: 9px;
 }
 
 .control-center .widget-dnd > label {
   color: @fg;
+  padding-left: 24px;
+  background-image: -gtk-icontheme("do-not-disturb");
+  background-repeat: no-repeat;
+  background-position: left center;
+  background-size: 14px 14px;
 }
 
 .control-center .widget-dnd > switch {
-  background: @sel;
+  background: alpha(@sel, 0.9);
   border-radius: 12px;
-  border: none;
 }
 
 .control-center .widget-dnd > switch:checked {
@@ -178,10 +292,108 @@
   border-radius: 12px;
 }
 
-.control-center .notification-row .notification-background .notification {
-  background: @sel;
+/* ── mpris ─────────────────────────────────────────────────────────────────
+   Whatever is playing, with its own album art as the backdrop. This is in the panel rather
+   than on the bar on purpose: a track title is too long to live in a 30px status bar, and
+   the bar's media control is a launcher entry (otter `md`). The widget renders nothing at
+   all when no player is running, so it costs nothing when it is not wanted. */
+.control-center .widget-mpris {
+  margin: 4px 8px 10px 8px;
+  border-radius: 9px;
 }
 
+.control-center .widget-mpris .widget-mpris-player {
+  background-color: alpha(@sel, 0.45);
+  border-radius: 9px;
+  padding: 10px;
+}
+
+/* The album art is a separate layer (.mpris-background) under a scrim (.mpris-overlay).
+   Upstream's scrim comes from --mpris-album-art-overlay, a GTK4 custom property this sheet
+   never defined -- so the art rendered at full strength and the title sat unreadable on top
+   of a face. Set the scrim explicitly and keep the art from stretching. */
+/* swaync paints the album art as the PLAYER's own background, not as a separate layer:
+   swaync.5 for 0.12.6 documents only widget-mpris{,-player,-title,-subtitle}, so there is
+   no .mpris-overlay to hang a scrim on. Unblurred cover art behind the title is what made
+   the widget unreadable, so the backdrop is dropped entirely -- the art still appears as
+   the thumbnail (widget-config image-size 60), which is where it belongs. */
+.widget-mpris .widget-mpris-player {
+  background-image: none;
+}
+
+.control-center .widget-mpris .widget-mpris-title {
+  font-weight: bold;
+  font-size: 11pt;
+}
+
+.control-center .widget-mpris .widget-mpris-subtitle {
+  font-size: 9pt;
+  color: @comment;
+}
+
+.control-center .widget-mpris button {
+  background: transparent;
+  color: @fg;
+  border-radius: 100%;
+  padding: 4px;
+}
+
+.control-center .widget-mpris button:hover {
+  background: alpha(@sel, 0.9);
+}
+
+/* ── Session buttons ───────────────────────────────────────────────────────
+   Lock and suspend only, and that is the design: a panel button is one unguarded click, so
+   it may only offer things you can come back from. Reboot and power off stay behind otter
+   `pw`, which asks Yes/No first (otter-power.sh) — putting them here would have been one
+   stray click from losing the session, with a nicer-looking button as the only consolation.
+   TEXT labels, not icons: swaync's buttons-grid gives its buttons no per-button class, so
+   there is no selector to hang a -gtk-icontheme() call on per action, and a character would
+   be the banned kind of icon. */
+.control-center .widget-buttons-grid {
+  margin: 4px 8px 6px 8px;
+  padding: 0;
+  background: transparent;
+}
+
+.control-center .widget-buttons-grid > flowbox > flowboxchild > button {
+  background: alpha(@sel, 0.45);
+  color: @fg;
+  border-radius: 9px;
+  margin: 3px;
+  padding: 8px 10px;
+  font-size: 10pt;
+}
+
+.control-center .widget-buttons-grid > flowbox > flowboxchild > button:hover {
+  background: @accent;
+  color: @bg;
+}
+
+/* ── Empty state ───────────────────────────────────────────────────────────
+   An empty panel should look settled rather than broken, so the "no notifications" line is
+   centred dim prose with room around it. */
+.control-center .notification-row .notification-background .notification .notification-content .summary,
+.control-center > box > label {
+  color: @comment;
+}
+
+/* ── Tooltips ──────────────────────────────────────────────────────────────
+   Same treatment as the bar's, so a truncated notification body and a truncated kube
+   context pop up inside the same object. */
+tooltip {
+  background: alpha(@bg, 0.96);
+  border: 1px solid alpha(@sel, 0.9);
+  border-radius: 12px;
+}
+
+tooltip label {
+  color: @fg;
+  padding: 2px 4px;
+}
+
+/* swaync's full-screen input catcher. It must stay fully transparent: anything with a
+   colour here paints over the whole desktop. */
 .blank-window {
   background: transparent;
 }

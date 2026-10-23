@@ -28,7 +28,7 @@
   "timeout-low": 4,
   "timeout-critical": 0,
   "transition-time": 200,
-  "fit-to-screen": true,
+  "fit-to-screen": false,
   "keyboard-shortcuts": true,
   "hide-on-clear": false,
   "hide-on-action": true,
@@ -44,20 +44,32 @@
       "run-on": "receive"
     }
   },
-  "text-empty": "No Notifications",
+  "text-empty": "Nothing waiting",
   "widgets": [
     "title",
     "dnd",
+    "mpris",
+    "buttons-grid",
     "notifications"
   ],
   "widget-config": {
     "title": {
       "text": "Notifications",
       "clear-all-button": true,
-      "button-text": "Clear All"
+      "button-text": "Clear all"
     },
     "dnd": {
-      "text": "Do Not Disturb"
+      "text": "Do not disturb"
+    },
+    "mpris": {
+      "image-size": 60,
+      "image-radius": 9
+    },
+    "buttons-grid": {
+      "actions": [
+        { "label": "Lock",    "command": "hyprlock" },
+        { "label": "Suspend", "command": "systemctl suspend" }
+      ]
     },
     "notifications": {
       "vexpand": true

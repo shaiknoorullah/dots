@@ -30,6 +30,18 @@ jobs:
       - run: bash tests/orgmanaged.sh
       - run: bash tests/lint.sh
       - run: bash tests/extra-tools-dryrun.sh
+      # The timetrack suites. They were written and then never run by anything but a
+      # human remembering to -- which is the exact failure the package exists to correct.
+      # All pure stdlib python3 plus stubbed systemctl/hyprctl/ghostty, so no closure and
+      # no display is needed.
+      - run: bash tests/clock-state.sh
+      - run: bash tests/presence.sh
+      - run: bash tests/binding.sh
+      - run: bash tests/attest.sh
+      - run: bash tests/hotkey.sh
+      - run: bash tests/session.sh
+      - run: bash tests/deadman.sh
+      - run: bash tests/refresh.sh
       - name: in-home.sh (sentinel mode)
         run: |
           d="$(mktemp -d)"

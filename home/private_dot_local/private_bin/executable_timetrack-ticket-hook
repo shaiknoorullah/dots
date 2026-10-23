@@ -1,0 +1,101 @@
+#!/bin/sh
+# Tier 1 of the ticket binding: report the ticket the user ACTUALLY NAMED onto this pane,
+# so clockd can attribute the interval to it at confidence 1.0.
+#
+# Installed as a Claude Code hook (see .chezmoiscripts/run_onchange_after_30-claude-hooks)
+# on two events:
+#
+#   prompt   UserPromptSubmit -- a ticket id in what the user just typed, or $TIMETRACK_TICKET
+#   session  SessionStart     -- CLEAR the token, so a new session in a recycled pane does
+#                               not inherit the previous one's ticket until its ttl lapses
+#
+# WHAT THIS DELIBERATELY DOES NOT DO: read the git branch. The branch is tier 2 at
+# confidence 0.8 and it must stay there. Promoting a branch name to a reported token would
+# make every interval claim "he said he was working on ABC-1" when all that happened is
+# that somebody once named a branch -- the figure would still total the same and its
+# defence would be a lie. binding.py resolves the branch itself; it does not need help.
+#
+# Never fails the hook: a timetracking convenience must not be able to stop the user from
+# working. Every path exits 0, and nothing is written to stdout -- UserPromptSubmit stdout
+# is injected into the model's context, so a stray line here would end up in the prompt.
+set -eu
+
+action="${1:-}"
+case "$action" in
+  prompt|session) ;;
+  *) exit 0 ;;
+esac
+
+inp="$(mktemp "${TMPDIR:-/tmp}/timetrack-ticket-hook.XXXXXX")" || exit 0
+trap 'rm -f "$inp"' EXIT HUP INT TERM
+cat >"$inp" 2>/dev/null || true
+
+# herdr owns the pane identity; outside herdr there is no pane to label.
+[ "${HERDR_ENV:-}" = "1" ] || exit 0
+[ -n "${HERDR_PANE_ID:-}" ] || exit 0
+command -v herdr >/dev/null 2>&1 || exit 0
+command -v python3 >/dev/null 2>&1 || exit 0
+
+TT_ACTION="$action" TT_INPUT="$inp" python3 - >/dev/null 2>&1 <<'PY' || exit 0
+import json
+import os
+import re
+import subprocess
+
+# A pane keeps its claim for 90 minutes without a new prompt. Long enough that one long
+# turn does not lose its binding mid-run; short enough that a pane abandoned at the end of
+# the day stops claiming a ticket while nobody is there. Expiry is not a loss: binding.py
+# falls back to the branch, which is what the evidence actually supports by then.
+TTL_MS = 90 * 60 * 1000
+# Three segments, greedily: the ERP ids are TASK-2026-00512. A two-segment pattern
+# matched TASK-2026 and stopped -- \b succeeds before the second hyphen -- so every
+# ticket of the year would have reported as the same one.
+TICKET_RE = re.compile(r"\b([A-Z][A-Z0-9]{1,9}-\d{1,6}(?:-\d{1,6})?)\b")
+SOURCE = "timetrack"
+
+pane = os.environ["HERDR_PANE_ID"]
+action = os.environ["TT_ACTION"]
+
+try:
+    with open(os.environ["TT_INPUT"], encoding="utf-8") as fh:
+        hook = json.loads(fh.read() or "{}")
+except (OSError, ValueError):
+    hook = {}
+
+# A subagent shares its parent's pane. Letting it report would overwrite the parent's
+# binding with whatever the subagent was told to look at.
+if hook.get("agent_id"):
+    raise SystemExit(0)
+
+
+def herdr(*args):
+    # pane id FIRST: `report-metadata --source timetrack <pane>` is rejected by the CLI
+    # with `unknown option: timetrack`.
+    subprocess.run(["herdr", "pane", "report-metadata", pane, "--source", SOURCE, *args],
+                   check=False, timeout=5,
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+if action == "session":
+    herdr("--clear-token", "ticket")
+    raise SystemExit(0)
+
+# Only an EXPLICIT statement earns tier 1. The env var is the deliberate form (set it for a
+# whole shell when a session is dedicated to one ticket); the prompt text is the everyday
+# one -- naming the ticket in the sentence that starts the work is already the user saying
+# what they are working on.
+ticket = None
+env = (os.environ.get("TIMETRACK_TICKET") or "").strip()
+if env:
+    m = TICKET_RE.search(env)
+    ticket = m.group(1) if m else None
+if not ticket:
+    m = TICKET_RE.search(str(hook.get("prompt") or ""))
+    ticket = m.group(1) if m else None
+
+# No id in this prompt is NOT a reason to clear one: a conversation names its ticket once
+# and then says "continue". Silence means unchanged, and the ttl is what ends it.
+if ticket:
+    herdr("--token", f"ticket={ticket}", "--ttl-ms", str(TTL_MS))
+PY
+exit 0

@@ -10,10 +10,15 @@
 # bit lives on the target, so the symlink grants nothing new.
 #
 # Never makes `chezmoi apply` interactive: without passwordless sudo it prints the one command
-# to run and exits 0. Deliberately `run_` (every apply) and not `run_onchange_`: an onchange
-# script that exits 0 without doing the work gets its hash recorded and never retries, which
-# would leave GUI auth broken with nothing ever asking again. This is idempotent -- when the
-# bridge is already in place it early-exits after two stat calls.
+# to run and exits 0. That is exactly why the onchange hash below embeds the LIVE state of the
+# bridge and not just this script's text: a plain `run_onchange_` would record its hash on the
+# run that only printed the instruction and never retry, leaving GUI auth broken with nothing
+# ever asking again. Including the state means the hash changes the moment the bridge goes
+# away, so the reminder comes back; while it is healthy the script is silent and does not
+# leave a permanent ` R` entry in `chezmoi status`.
+#
+# live bridge state (part of the onchange hash -- do not fold into the line above):
+# {{ output "sh" "-c" "cat /etc/tmpfiles.d/nix-polkit-wrapper.conf 2>/dev/null | tr '\n' '|'; [ -e /run/wrappers/bin/polkit-agent-helper-1 ] && echo BRIDGED || echo ABSENT" | trim }}
 set -uo pipefail
 {{- if ne .chezmoi.osRelease.id "nixos" }}
 helper=""

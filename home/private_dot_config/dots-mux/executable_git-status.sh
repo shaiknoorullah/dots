@@ -27,16 +27,16 @@ if [ -n "$counts" ]; then
 fi
 
 if [ "$ahead" -gt 0 ] && [ "$behind" -gt 0 ]; then
-  icon="#[fg=#bd93f9,bold]󰕚 "
+  icon="#[fg=#bd93f9,bold]􀋔 "
   suffix=" #[fg=#f5d547]+${ahead}#[fg=#ff4d4d]-${behind}"
 elif [ "$ahead" -gt 0 ]; then
-  icon="#[fg=#f5d547,bold]󰜷 "
+  icon="#[fg=#f5d547,bold]􀊶 "
   suffix=" #[fg=#f5d547]+${ahead}"
 elif [ "$behind" -gt 0 ]; then
-  icon="#[fg=#ff4d4d,bold]󰜮 "
+  icon="#[fg=#ff4d4d,bold]􀅸 "
   suffix=" #[fg=#ff4d4d]-${behind}"
 else
-  icon="#[fg=#50fa7b,bold]󱍸 "
+  icon="#[fg=#50fa7b,bold]􀡐 "
   suffix=""
 fi
 

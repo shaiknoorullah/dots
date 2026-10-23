@@ -1,0 +1,47 @@
+#!/bin/sh
+# D4, the one-keypress half: start or stop an interval for work no sensor can see.
+#
+# Bound to SUPER+SHIFT+U in hyprland.lua. Deliberately one keypress with no prompt: the
+# work this captures is a whiteboard, a phone call, a spec on paper -- moments where the
+# user is already half out of the chair. A dialog asking "what are you working on?" would
+# be answered by not pressing the key, and the interval would be lost, which is the
+# failure this feature exists to fix. A note can be attached from the CLI afterwards.
+#
+# The toast is the only feedback, so it says the thing that matters: whether the clock is
+# now counting, and when it stopped, whether those minutes were actually RECORDED or were
+# already covered by the daemon. "Covered" is not a failure -- it means the time was
+# already counted once, and saying so is how the user learns the hotkey is not needed
+# while an agent is advancing.
+set -u
+APP="timetrack-hotkey"
+
+note() {   # urgency summary body
+  command -v notify-send >/dev/null || { echo "$2: $3"; return 0; }
+  notify-send -a "$APP" -u "$1" "$2" "$3"
+}
+
+if ! command -v timetrack >/dev/null; then
+  note critical "timetrack missing" "the hotkey cannot record anything (package not installed)"
+  exit 1
+fi
+
+# An optional note is passed as "$1". Built as real argv rather than interpolated into
+# the command line, so a note with a space in it stays one argument.
+if [ "$#" -gt 0 ] && [ -n "$1" ]; then
+  set -- toggle --note "$1"
+else
+  set -- toggle
+fi
+out=$(timetrack hotkey "$@" 2>&1) || {
+  note critical "hotkey failed" "$(printf '%s' "$out" | tail -2)"
+  exit 1
+}
+
+case $out in
+  *started*)   note normal "Clock: manual interval open" "$out" ;;
+  *recorded*)  note normal "Clock: interval recorded"    "$out" ;;
+  *covered*)   note low    "Clock: already counted"      "$out" ;;
+  *too_short*) note low    "Clock: ignored"              "$out" ;;
+  *)           note normal "Clock"                       "$out" ;;
+esac
+exit 0

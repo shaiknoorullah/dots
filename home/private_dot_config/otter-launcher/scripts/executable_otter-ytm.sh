@@ -27,30 +27,33 @@ toggle() {
 
 do_search() {
     local q results pick vid
-    q="$(: | fzf --print-query --prompt '  search ytm: ' | head -1)"
+    q="$(: | fzf --print-query --prompt $'􀜌  search ' --header=$'􁑴  search youtube music' | head -1)"
     [ -z "${q:-}" ] && return
     # songs only → each line: "<videoId>\t<title> — <artist>"
     results="$("$YTM" search "$q" -f songs --json -l 25 2>/dev/null \
         | jq -r '.[] | select(.videoId) | "\(.videoId)\t\(.title) — \(.artists[0].name // "?")"' 2>/dev/null)"
     [ -z "$results" ] && { notify-send "🎵 ytm" "no songs for “$q”" 2>/dev/null; return; }
-    pick="$(printf '%s\n' "$results" | cut -f2- | fzf --prompt '  add to queue: ')" || return
+    pick="$(printf '%s\n' "$results" | cut -f2- | fzf --prompt $'􀜌  ' --header=$'􁩄  add to queue')" || return
     [ -z "${pick:-}" ] && return
     vid="$(printf '%s\n' "$results" | awk -F'\t' -v p="$pick" '$2==p{print $1; exit}')"
     [ -n "$vid" ] && "$YTM" queue add "$vid" >/dev/null 2>&1 \
-        && notify-send "🎵 queued" "$pick" 2>/dev/null
+        && notify-send "queued" "$pick" 2>/dev/null
 }
 
 peek_queue() {
     local q
     q="$("$YTM" queue 2>/dev/null | jq -r '.tracks[]? | "  \(.title) — \(.artist // .artists[0].name // "?")"' 2>/dev/null)"
     [ -z "$q" ] && q="  (queue empty)"
-    printf '%s\n' "$q" | fzf --prompt '  up next (read-only, esc): ' --header 'queue' >/dev/null || true
+    printf '%s\n' "$q" | fzf --prompt $'􀜌  ' --header=$'􁩄  up next · read-only, esc to close' >/dev/null || true
 }
 
 main() {
-    local play_pause=$'⏯  play/pause' next=$'⏭  next' prev=$'⏮  previous' \
-          like=$'\U000f0982  like' dislike=$'\U000f0986  dislike' queue=$'  queue' \
-          search=$'  search → queue' tui=$'  open ytm TUI'
+    # Destination list: icons on every item (see _otter-fzf.sh). like/dislike had lost
+    # theirs entirely and the three transport entries were Unicode media symbols, which
+    # are a different drawing style from every other icon on this desktop.
+    local play_pause=$'􁥸  play/pause' next=$'􁲖  next' prev=$'􁲊  previous' \
+          like=$'􂀸  like' dislike=$'􂀲  dislike' queue=$'􁩄  queue' \
+          search=$'􁑴  search → queue' tui=$'􁽎  open ytm TUI'
     local opts chosen
     opts="$play_pause
 $next
