@@ -25,7 +25,10 @@ HOOK="$HOME/.local/bin/timetrack-ticket-hook"
 # Deliberately NOT the file's own hash -- settings.json is edited by hand often, and
 # hashing all of it would leave this script permanently pending in `chezmoi status` for
 # reasons that have nothing to do with the hook.
-# live: {{ output "sh" "-c" "f=\"$HOME/.claude/settings.json\"; [ -f \"$f\" ] && grep -c timetrack-ticket-hook \"$f\" || echo absent" | trim }}
+# ONE line, always: this output is pasted into a comment, and a second line would land in
+# the script as a bare command. `grep -c` prints 0 AND exits 1 on no match, so the old
+# `grep -c ... || echo absent` printed both and ran `absent` as a command.
+# live: {{ output "sh" "-c" "c=$(grep -c timetrack-ticket-hook \"$HOME/.claude/settings.json\" 2>/dev/null); printf '%s' \"${c:-absent}\"" | trim }}
 
 [ -f "$S" ] || { echo "claude-hooks: $S does not exist; skipping (re-run after first launch)" >&2; exit 0; }
 [ -x "$HOOK" ] || { echo "claude-hooks: $HOOK is not executable; skipping" >&2; exit 0; }
