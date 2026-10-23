@@ -143,7 +143,7 @@ def _answers(conn, day):
         " FROM deduction d JOIN work_session s ON s.id = d.session_id"
         " WHERE s.attendance_day = ? AND s.provenance = ? AND d.provenance != ?"
         # hotkey:overlap is arithmetic, re-derived on every write; carrying it would add it twice
-        " AND d.provenance != 'hotkey:overlap'",
+        " AND d.provenance NOT IN ('hotkey:overlap', 'hotkey:covered')",
         (day, PROVENANCE, PROVENANCE))]
 
 
@@ -243,11 +243,22 @@ def write(conn, since=None, until=None, refresh_day=None):
                     continue
                 if secs > 0:
                     confirmed = 0 if secs >= MIN_GAP else 1
+                    prov = PROVENANCE
+                    # A gap the user already covered with a hand interval has been answered:
+                    # they said they were working through it. It is still DEDUCTED -- the hand
+                    # interval carries those minutes, and keeping both would count them twice
+                    # -- but it is not asked about again. 90% rather than 100% because the two
+                    # clocks never agree to the second: the hotkey lands a few seconds after
+                    # AW notices the desk went idle.
+                    g0, g1 = int(prev.timestamp()), int(a.timestamp())
+                    cov = sum(max(0, min(h1, g1) - max(h0, g0)) for h0, h1 in hand)
+                    if cov >= 0.9 * (g1 - g0):
+                        confirmed, prov = 1, "hotkey:covered"
                     conn.execute(
                         "INSERT INTO deduction(session_id,attendance_day,start_unix,end_unix,"
                         "category,minutes,confirmed,provenance) VALUES(?,?,?,?,?,?,?,?)",
                         (sid, d["day"], int(prev.timestamp()), int(a.timestamp()),
-                         "misc", secs / 60.0, confirmed, PROVENANCE))
+                         "misc", secs / 60.0, confirmed, prov))
                     gaps += 1
                     asked += 1 - confirmed
             prev = b
