@@ -256,7 +256,80 @@ LEFT JOIN v_day_deduction d ON d.attendance_day = c.day;
 PRAGMA foreign_keys=ON;
 """
 
-MIGRATIONS = {"work": [(1, WORK_V1), (2, WORK_V2)], "private": [(1, PRIVATE_V1)]}
+# --- work v3 ---------------------------------------------------------------
+# The live clock goes in as a SHADOW. Its runs are recorded in clock_event like any other,
+# but they are not summed into the day until schema_meta.live_counts is '1'.
+#
+# Why it cannot simply count from the day it is switched on, found before switching it on:
+#
+#   1. v_day_span sums every run regardless of actor, and clockd keeps a run open while an
+#      agent advances with the human away. The submitted headline would then carry
+#      agent-only time, which D3 says is dashboard-only.
+#   2. ActivityWatch already measures the same minutes, so the day would be counted twice,
+#      and the hourly AW refresh would then drop its own session and skip the day because a
+#      live one exists, losing everything AW measured before the switch.
+#
+# Until both are settled the headline stays AW plus what the user recorded by hand, exactly
+# as before, and the live rows accumulate as evidence: v_live_interval shows them so they
+# can be compared against AW day by day before anyone decides they are the better source.
+# Promotion is one row, `UPDATE schema_meta SET v='1' WHERE k='live_counts'`, and that row
+# is part of input_digest, so a promotion after a submission shows up as drift, not as a
+# quietly different number.
+#
+# Views only, so no table rebuild; wrapped in a transaction because executescript commits as
+# it goes and v2 taught what a half-applied migration costs.
+_RUN_CTE = """
+WITH ev AS (
+  SELECT id, session_id, attendance_day, ts_unix, kind, provenance, confidence, ticket, actor,
+         LEAD(ts_unix) OVER w AS next_unix,
+         LEAD(kind)    OVER w AS next_kind
+  FROM clock_event
+  WHERE kind IN ('run_start','run_stop') AND {where}
+  WINDOW w AS (PARTITION BY session_id ORDER BY ts_unix, id)
+)
+SELECT session_id, attendance_day, ticket, provenance, confidence, actor,
+       ts_unix AS start_unix, next_unix AS end_unix, (next_unix - ts_unix) AS seconds
+FROM ev
+WHERE kind = 'run_start' AND next_kind = 'run_stop' AND next_unix > ts_unix"""
+
+WORK_V3 = """
+BEGIN;
+INSERT OR IGNORE INTO schema_meta(k, v) VALUES ('live_counts', '0');
+DROP VIEW IF EXISTS v_day_worked;
+DROP VIEW IF EXISTS v_day_span;
+DROP VIEW IF EXISTS v_run_interval;
+CREATE VIEW v_run_interval AS""" + _RUN_CTE.format(
+    where="(provenance != 'live' OR (SELECT v FROM schema_meta WHERE k = 'live_counts') = '1')") + """;
+CREATE VIEW v_live_interval AS""" + _RUN_CTE.format(where="provenance = 'live'") + """;
+CREATE VIEW v_day_span AS
+SELECT attendance_day,
+       CAST(ROUND(SUM(seconds) / 60.0) AS INTEGER) AS span_minutes,
+       MIN(start_unix) AS first_unix,
+       MAX(end_unix)   AS last_unix,
+       GROUP_CONCAT(DISTINCT provenance) AS provenance,
+       MIN(confidence) AS min_confidence
+FROM v_run_interval
+GROUP BY attendance_day;
+CREATE VIEW v_day_worked AS
+SELECT c.day AS attendance_day, c.kind, c.leave_type, c.pay_affecting, c.target_minutes,
+       COALESCE(s.span_minutes, 0) AS span_minutes,
+       s.first_unix, s.last_unix, s.provenance, s.min_confidence,
+       d.deduction_minutes, d.unconfirmed,
+       CASE WHEN d.deduction_minutes IS NULL THEN NULL
+            ELSE COALESCE(s.span_minutes, 0) - d.deduction_minutes END AS net_minutes
+FROM day_class c
+LEFT JOIN v_day_span s      ON s.attendance_day = c.day
+LEFT JOIN v_day_deduction d ON d.attendance_day = c.day;
+COMMIT;
+"""
+
+MIGRATIONS = {"work": [(1, WORK_V1), (2, WORK_V2), (3, WORK_V3)], "private": [(1, PRIVATE_V1)]}
+
+
+def live_counts(conn):
+    """True once the live clock has been promoted into the headline (see WORK_V3)."""
+    row = conn.execute("SELECT v FROM schema_meta WHERE k = 'live_counts'").fetchone()
+    return bool(row) and row[0] == "1"
 
 
 def _apply(conn, which):

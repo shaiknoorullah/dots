@@ -24,6 +24,9 @@ def check(name, got, want):
 
 migrate.migrate()
 conn = dbs.open_work()
+# these runs stand for what clockd RECORDED and COUNTS, so the live clock is promoted
+# here; shadow mode (live recorded, not counted) is tests/shadow.sh's subject
+conn.execute("UPDATE schema_meta SET v='1' WHERE k='live_counts'"); conn.commit()
 now = int(time.time())
 day = date.fromtimestamp(now).isoformat()
 

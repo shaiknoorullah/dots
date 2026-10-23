@@ -171,8 +171,12 @@ class Clockd:
         loses is whichever the next event happens to pick.
         """
         row = self.conn.execute(
+            # its OWN sessions only: a hotkey session never closes and an AW session is
+            # dropped and rewritten every hour, so adopting either would hang live rows on
+            # a session something else owns
             "SELECT id, attendance_day, opened_unix FROM work_session"
-            " WHERE closed_unix IS NULL ORDER BY opened_unix DESC LIMIT 1").fetchone()
+            " WHERE closed_unix IS NULL AND provenance = 'live'"
+            " ORDER BY opened_unix DESC LIMIT 1").fetchone()
         if not row:
             return None
         last = self.conn.execute(

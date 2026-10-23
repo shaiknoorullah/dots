@@ -18,7 +18,7 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timedelta
 
-from .. import config, intervals
+from .. import config, migrate, intervals
 
 BASE = "http://localhost:5600/api/0"
 PROVENANCE = "backfill:aw"
@@ -164,9 +164,13 @@ def write(conn, since=None, until=None, refresh_day=None):
     # A hand-recorded interval does not claim the day. Counting it here made AW skip the
     # whole day the moment the user pressed the hotkey once -- the refresh dropped its own
     # session, saw the hotkey's, and wrote nothing, so every later minute went unrecorded.
+    # Nor does a live session while the live clock is a shadow: AW is still the headline
+    # source then, and skipping the day because clockd opened a session would lose
+    # everything AW measured (migrate.WORK_V3).
+    not_owning = [HAND] if migrate.live_counts(conn) else [HAND, "live"]
     existing = {r["attendance_day"] for r in conn.execute(
-        "SELECT DISTINCT attendance_day FROM work_session WHERE provenance NOT IN (?)",
-        (HAND,))}
+        "SELECT DISTINCT attendance_day FROM work_session WHERE provenance NOT IN (%s)"
+        % ",".join("?" * len(not_owning)), not_owning)}
 
     written, skipped = [], []
     for d in days:
