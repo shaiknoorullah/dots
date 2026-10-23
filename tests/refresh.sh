@@ -88,8 +88,33 @@ check("overlap counted ONCE", net(), 450 + 30)
 aw.write(conn, refresh_day=day)                            # and again: stable, no drift
 check("second refresh is stable", net(), 450 + 30)
 
+# A hand interval that COVERS an AFK gap -- the real 2026-10-23 shape. The gap stays
+# deducted (the hand interval carries the minutes) but is not asked about again, and the
+# doctor's lower bound compares AW's share only, since AW cannot see hand time.
+d2 = "2026-10-21"
+conn.execute("INSERT INTO day_class(day,kind,pay_affecting,target_minutes) VALUES(?,?,?,?)",
+             (d2, "working", 1, 480))
+conn.commit()
+U = lambda h, m, s=0: datetime(2026, 10, 21, h, m, s)
+hotkey.start("", now=int(U(10, 0, 4).timestamp()))                # 4s after AW saw idle
+hotkey.stop(conn, now=int(U(10, 14).timestamp()))
+runs2 = [(U(9, 0), U(10, 0)), (U(10, 14), U(11, 0))]
+aw.workdays = lambda _ev: [{"day": d2, "open": runs2[0][0], "close": runs2[-1][1],
+    "present_seconds": sum((b - a).total_seconds() for a, b in runs2), "runs": runs2}]
+aw.write(conn, refresh_day=d2)
+g = conn.execute("SELECT confirmed, provenance FROM deduction WHERE attendance_day=?"
+                 " AND provenance != 'hotkey:overlap'", (d2,)).fetchone()
+check("covered gap is not re-asked", (g["confirmed"], g["provenance"]), (1, "hotkey:covered"))
+n2 = conn.execute("SELECT net_minutes FROM v_day_worked WHERE attendance_day=?", (d2,)).fetchone()[0]
+check("covered gap counted once: 106 AW + 14 hand", round(n2), 120)
+from timetrack import doctor
+real_present = 106
+hand = conn.execute("SELECT SUM(seconds)/60.0 FROM v_run_interval WHERE attendance_day=?"
+                    " AND provenance='hotkey'", (d2,)).fetchone()[0]
+check("AW share within measured presence", round(n2 - hand) <= real_present + 1, True)
+
 # the guard still holds: a refresh never touches a day it did not write itself
-conn.execute("UPDATE work_session SET provenance='backfill:sheet'")
+conn.execute("UPDATE work_session SET provenance='backfill:sheet' WHERE attendance_day=?", (day,))
 conn.commit()
 aw.workdays = lambda _ev: presence(21, 0)
 aw.write(conn, refresh_day=day)
@@ -99,5 +124,5 @@ if fails:
     print("refresh FAILED:")
     for f in fails: print("  " + f)
     raise SystemExit(1)
-print("refresh ok (5 scenarios, 14 assertions)")
+print("refresh ok (6 scenarios, 17 assertions)")
 PY

@@ -159,9 +159,22 @@ def _month(results, conn, month):
                 net = conn.execute(
                     "SELECT net_minutes FROM v_day_worked WHERE attendance_day=?",
                     (day,)).fetchone()[0]
+                # Compare AW's SHARE only. Time the user recorded by hand is by definition
+                # time AW could not see -- a meeting before the PC booted, a call away from
+                # the desk -- so leaving it in made this check fail on exactly the days the
+                # hotkey was used correctly. Hand minutes come out; the overlap deductions
+                # (hand time AW ALSO saw, already subtracted once) go back in.
+                hand = conn.execute(
+                    "SELECT COALESCE(SUM(seconds), 0) / 60.0 FROM v_run_interval"
+                    " WHERE attendance_day=? AND provenance='hotkey'", (day,)).fetchone()[0]
+                overlap = conn.execute(
+                    "SELECT COALESCE(SUM(minutes), 0) FROM deduction"
+                    " WHERE attendance_day=? AND provenance='hotkey:overlap'", (day,)).fetchone()[0]
                 p_min = present.get(day)
+                if net is not None:
+                    net = round(net - hand + overlap)
                 if net is not None and p_min is not None and net > p_min + 1:
-                    over.append(f"{day} net {net} > measured {p_min}")
+                    over.append(f"{day} AW-sourced net {net} > measured {p_min}")
             if over:
                 results.append(_r("aw:lower-bound", FAIL, "; ".join(over),
                                   "a gap escaped deduction; the figure is inflated"))
