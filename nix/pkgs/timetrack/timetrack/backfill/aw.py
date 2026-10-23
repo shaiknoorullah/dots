@@ -25,6 +25,7 @@ PROVENANCE = "backfill:aw"
 MIN_PRESENT = 300  # seconds; below this a cluster is noise, not a workday
 MIN_GAP = 180      # seconds; a shorter gap is a pause, not a break worth asking about
 CONFIDENCE = 0.8
+HAND = "hotkey"   # provenance of intervals the user recorded by hand (hotkey.py)
 
 
 def _get(path, timeout=15):
@@ -140,7 +141,9 @@ def _answers(conn, day):
     return [dict(r) for r in conn.execute(
         "SELECT d.start_unix, d.end_unix, d.category, d.minutes, d.confirmed, d.provenance"
         " FROM deduction d JOIN work_session s ON s.id = d.session_id"
-        " WHERE s.attendance_day = ? AND s.provenance = ? AND d.provenance != ?",
+        " WHERE s.attendance_day = ? AND s.provenance = ? AND d.provenance != ?"
+        # hotkey:overlap is arithmetic, re-derived on every write; carrying it would add it twice
+        " AND d.provenance != 'hotkey:overlap'",
         (day, PROVENANCE, PROVENANCE))]
 
 
@@ -158,8 +161,12 @@ def write(conn, since=None, until=None, refresh_day=None):
     if refresh_day:
         kept[refresh_day] = _answers(conn, refresh_day)
         _drop_day(conn, refresh_day)
+    # A hand-recorded interval does not claim the day. Counting it here made AW skip the
+    # whole day the moment the user pressed the hotkey once -- the refresh dropped its own
+    # session, saw the hotkey's, and wrote nothing, so every later minute went unrecorded.
     existing = {r["attendance_day"] for r in conn.execute(
-        "SELECT DISTINCT attendance_day FROM work_session")}
+        "SELECT DISTINCT attendance_day FROM work_session WHERE provenance NOT IN (?)",
+        (HAND,))}
 
     written, skipped = [], []
     for d in days:
@@ -208,6 +215,23 @@ def write(conn, since=None, until=None, refresh_day=None):
 
         def answered(t0, t1):
             return any(k["start_unix"] < t1 and k["end_unix"] > t0 for k in answers)
+
+        # The double count. v_day_span SUMS intervals, so where a hand-recorded interval and
+        # AW's measured presence cover the same minutes, both would be added. Deduct exactly
+        # that intersection -- presence AW saw inside a span the user also recorded -- so
+        # each minute is counted once, by whichever source holds it. Confirmed, because it
+        # is arithmetic, not a question for the user.
+        hand = conn.execute(
+            "SELECT start_unix, end_unix FROM v_run_interval WHERE attendance_day = ?"
+            " AND provenance = ?", (d["day"], HAND)).fetchall()
+        for h0, h1 in hand:
+            for a, b in d["runs"]:
+                lo, hi = max(h0, int(a.timestamp())), min(h1, int(b.timestamp()))
+                if hi > lo:
+                    conn.execute(
+                        "INSERT INTO deduction(session_id,attendance_day,start_unix,end_unix,"
+                        "category,minutes,confirmed,provenance) VALUES(?,?,?,?,?,?,?,?)",
+                        (sid, d["day"], lo, hi, "misc", (hi - lo) / 60.0, 1, "hotkey:overlap"))
 
         gaps = asked = 0
         prev = None

@@ -66,16 +66,38 @@ check("meeting survived at zero cost", (cats[1]["minutes"], cats[1]["provenance"
 check("nothing re-asked", conn.execute(
     "SELECT COUNT(*) FROM deduction WHERE confirmed=0").fetchone()[0], 0)
 
+# A HAND interval on an AW day. Three ways it went wrong before: hung on AW's session it
+# was erased by the next refresh; its session made AW skip the day entirely; and where it
+# overlapped measured presence both were summed.
+from timetrack import hotkey
+before = net()
+hotkey.start("", now=int(T(20, 30).timestamp()))
+r = hotkey.stop(conn, now=int(T(21, 30).timestamp()))      # 20:30-21:30, half beyond AW
+check("hand interval recorded", r["action"], "recorded")
+check("hand interval in its own session", conn.execute(
+    "SELECT provenance FROM work_session WHERE id=?", (r["session_id"],)).fetchone()[0], "hotkey")
+aw.workdays = lambda _ev: presence(21, 0)                 # AW presence grows to 21:00
+aw.write(conn, refresh_day=day)
+check("refresh kept the hand interval", conn.execute(
+    "SELECT COUNT(*) FROM clock_event WHERE provenance='hotkey' AND kind IN ('run_start','run_stop')").fetchone()[0], 2)
+check("refresh did not skip the AW day", conn.execute(
+    "SELECT COUNT(*) FROM work_session WHERE provenance='backfill:aw'").fetchone()[0], 1)
+# AW now covers 13:00-21:00 (480m span, 30m dinner, meeting free) = 450; the hand interval
+# adds only what AW did NOT see, 21:00-21:30 -- the 20:30-21:00 overlap counts once
+check("overlap counted ONCE", net(), 450 + 30)
+aw.write(conn, refresh_day=day)                            # and again: stable, no drift
+check("second refresh is stable", net(), 450 + 30)
+
 # the guard still holds: a refresh never touches a day it did not write itself
 conn.execute("UPDATE work_session SET provenance='backfill:sheet'")
 conn.commit()
 aw.workdays = lambda _ev: presence(21, 0)
 aw.write(conn, refresh_day=day)
-check("sheet day untouched", net(), 420 - 30)
+check("sheet day untouched", net(), 450 + 30)
 
 if fails:
     print("refresh FAILED:")
     for f in fails: print("  " + f)
     raise SystemExit(1)
-print("refresh ok (4 scenarios, 8 assertions)")
+print("refresh ok (5 scenarios, 14 assertions)")
 PY

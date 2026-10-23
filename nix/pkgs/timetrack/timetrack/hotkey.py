@@ -94,8 +94,11 @@ def _session(conn, t0, day):
     because no daemon happened to be running would lose exactly the work this feature
     exists to capture.
     """
+    # Never an AW session. The hourly capture job drops and rewrites AW's session for
+    # today, deleting its events by session_id -- a hand interval hung on it would vanish
+    # within the hour. Hand intervals live in their own session, which nothing rewrites.
     row = conn.execute(
-        "SELECT id FROM work_session WHERE attendance_day = ?"
+        "SELECT id FROM work_session WHERE attendance_day = ? AND provenance = 'hotkey'"
         " AND (closed_unix IS NULL OR closed_unix >= ?) ORDER BY opened_unix DESC LIMIT 1",
         (day, t0)).fetchone()
     if row:
