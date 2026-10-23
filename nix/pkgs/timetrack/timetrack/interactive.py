@@ -24,8 +24,18 @@ from . import config, derive
 PROVENANCE = "manual"
 CONFIDENCE = 1.0
 
-# A gap that was a meeting is WORKED time, so answering `meeting` deletes the deduction
-# rather than recategorising it. That distinction is the whole reason gaps are asked about.
+# A gap that was a meeting is WORKED time, so answering `meeting` must deduct nothing.
+# That distinction is the whole reason gaps are asked about.
+#
+# It used to DELETE the deduction, which left no record that the question had ever been
+# answered. The hourly AW refresh then re-derived the same gap from the same presence data
+# and wrote it back as an unconfirmed deduction -- so a meeting the user had explicitly
+# declared was deducted again an hour later, and asked about again. Now the row is KEPT
+# at zero minutes with provenance manual:meeting: it deducts nothing, it is the durable
+# record of the answer, and the refresh recognises it and leaves the interval alone.
+# (deduction.category still has no `meeting` member, by design -- a meeting is not a kind
+# of deduction. The provenance says what it was; the zero says what it costs.)
+MEETING = "manual:meeting"
 GAP_CHOICES = [
     ("1", "salah", "salah"),
     ("2", "lunch", "lunch"),
@@ -101,8 +111,10 @@ def resolve_gaps(conn, month):
         if choice == "SKIP":
             continue
         if choice is None:
-            # worked time: the deduction disappears and the minutes come back
-            conn.execute("DELETE FROM deduction WHERE id = ?", (g["id"],))
+            # worked time: the deduction stops costing anything, and stays as the record
+            conn.execute(
+                "UPDATE deduction SET minutes = 0, confirmed = 1, provenance = ?"
+                " WHERE id = ?", (MEETING, g["id"]))
             print(f"    -> meeting: {derive.hhmm(round(g['minutes']))} returned to worked time")
         else:
             conn.execute(

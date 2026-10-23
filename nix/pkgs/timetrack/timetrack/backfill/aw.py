@@ -128,6 +128,22 @@ def _drop_day(conn, day):
     return True
 
 
+def _answers(conn, day):
+    """Deductions on an AW day that a HUMAN has answered, to carry across a refresh.
+
+    The refresh drops the day and re-derives it, which is right for everything AW itself
+    wrote -- presence grows through the day -- and wrong for everything the user said
+    about it. Before this, `_drop_day` deleted by session_id, so a gap classified as
+    dinner at 22:30 was back to "unconfirmed misc" by 23:00, and a gap declared a meeting
+    was deducted again. Anything whose provenance is not AW's own is an answer.
+    """
+    return [dict(r) for r in conn.execute(
+        "SELECT d.start_unix, d.end_unix, d.category, d.minutes, d.confirmed, d.provenance"
+        " FROM deduction d JOIN work_session s ON s.id = d.session_id"
+        " WHERE s.attendance_day = ? AND s.provenance = ? AND d.provenance != ?",
+        (day, PROVENANCE, PROVENANCE))]
+
+
 def write(conn, since=None, until=None, refresh_day=None):
     """Write AW-derived sessions for days that have NO session yet.
 
@@ -138,7 +154,9 @@ def write(conn, since=None, until=None, refresh_day=None):
     eating the hand-kept sheet, which is confidence 1.0 and is what gets submitted.
     """
     days = workdays(not_afk(since, until))
+    kept = {}
     if refresh_day:
+        kept[refresh_day] = _answers(conn, refresh_day)
         _drop_day(conn, refresh_day)
     existing = {r["attendance_day"] for r in conn.execute(
         "SELECT DISTINCT attendance_day FROM work_session")}
@@ -177,11 +195,28 @@ def write(conn, since=None, until=None, refresh_day=None):
         # actually measured, which is the one direction a payroll number must never err in.
         # MIN_GAP decides only whether a HUMAN is asked about it: a two-minute pause is not
         # a break worth a prompt, so it is deducted and marked confirmed.
+        # The user's answers go back first, re-pointed at the new session, and any gap
+        # they overlap is NOT re-derived: the answer is the better evidence for that
+        # interval, and writing both would deduct it twice (or deduct a declared meeting).
+        answers = kept.get(d["day"], [])
+        for k in answers:
+            conn.execute(
+                "INSERT INTO deduction(session_id,attendance_day,start_unix,end_unix,"
+                "category,minutes,confirmed,provenance) VALUES(?,?,?,?,?,?,?,?)",
+                (sid, d["day"], k["start_unix"], k["end_unix"], k["category"],
+                 k["minutes"], k["confirmed"], k["provenance"]))
+
+        def answered(t0, t1):
+            return any(k["start_unix"] < t1 and k["end_unix"] > t0 for k in answers)
+
         gaps = asked = 0
         prev = None
         for a, b in d["runs"]:
             if prev is not None and b > a:
                 secs = (a - prev).total_seconds()
+                if secs > 0 and answered(int(prev.timestamp()), int(a.timestamp())):
+                    prev = b
+                    continue
                 if secs > 0:
                     confirmed = 0 if secs >= MIN_GAP else 1
                     conn.execute(
