@@ -87,7 +87,8 @@ printf '#!/bin/sh\necho "$*" > "%s/spawned"\n' "$tmp" > "$tmp/logbin/dots-overvi
 (
   cd "$root/nix/pkgs/timetrack" || exit 1
   PATH="$tmp/logbin:/usr/bin:/bin" TIMETRACK_STATE_DIR="$tmp/tt2" python3 -c '
-from timetrack import away
+from timetrack import away, migrate
+migrate.migrate()
 away.declare("logout")
 away.declare("walk")
 ' 2>&1
@@ -96,10 +97,12 @@ for _ in 1 2 3 4 5 6 7 8 9 10; do [ -f "$tmp/spawned" ] && break; sleep 0.2; don
 [ "$(cat "$tmp/spawned" 2>/dev/null)" = "report --reason logout" ] && ok "spawned: dots-overview report --reason logout" || bad "not spawned: $(cat "$tmp/spawned" 2>/dev/null)"
 rm -f "$tmp/spawned"
 (cd "$root/nix/pkgs/timetrack" && PATH="/usr/bin:/bin" TIMETRACK_STATE_DIR="$tmp/tt3" python3 -c '
-from timetrack import away
+from timetrack import away, migrate
+migrate.migrate()
 away.declare("logout")') && ok "without dots-overview installed the declaration still works" || bad "declare broke without dots-overview"
 (cd "$root/nix/pkgs/timetrack" && PATH="$tmp/logbin:/usr/bin:/bin" TIMETRACK_STATE_DIR="$tmp/tt4" python3 -c '
-from timetrack import away
+from timetrack import away, migrate
+migrate.migrate()
 away.declare("meal")'); sleep 0.5
 [ ! -f "$tmp/spawned" ] && ok "only logout spawns the brief" || bad "another reason spawned it"
 
