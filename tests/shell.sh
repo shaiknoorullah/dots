@@ -124,8 +124,10 @@ if command -v qmllint >/dev/null 2>&1 && qmllint --version >/dev/null 2>&1 && co
   # Quickshell does not export its C++ types in a way qmllint can resolve for these two
   # categories (a Process exit signal's QProcess::ExitStatus, PanelWindow itself); everything
   # else is a real warning. Each remaining false positive carries its own inline directive.
-  lintout="$(find "$dots" -name '*.qml' | sort | xargs qmllint --uncreatable-type disable --signal-handler-parameters disable "${inc[@]}" 2>&1)"
-  if [ -z "$lintout" ]; then ok "qmllint: zero warnings over $(find "$dots" -name '*.qml' | wc -l) files"
+  # modules/overview imports through the qs. module path, which qmllint cannot resolve from the
+  # rendered tree; tests/overview-ui.sh lints it (and its stub Theme's agreement with the real one).
+  lintout="$(find "$dots" -name '*.qml' -not -path '*/modules/overview/*' | sort | xargs qmllint --uncreatable-type disable --signal-handler-parameters disable "${inc[@]}" 2>&1)"
+  if [ -z "$lintout" ]; then ok "qmllint: zero warnings over $(find "$dots" -name '*.qml' -not -path '*/modules/overview/*' | wc -l) files"
   else fail "qmllint warnings"; echo "$lintout" | head -30; fi
 else skip "qmllint (qmllint 6 or quickshell not installed)"; fi
 

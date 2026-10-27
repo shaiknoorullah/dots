@@ -27,14 +27,14 @@ Singleton {
     }
 
     // ---- parsed documents ------------------------------------------------
-    readonly property var pNow: { tick; texts; return Model.parseDoc(texts.now === undefined ? null : texts.now, nowTs) }
+    readonly property var parsedNow: { tick; texts; return Model.parseDoc(texts.now === undefined ? null : texts.now, nowTs) }
     readonly property var pAct: { tick; texts; return Model.parseDoc(texts.activity === undefined ? null : texts.activity, nowTs) }
     readonly property var pAtt: { tick; texts; return Model.parseDoc(texts.attention === undefined ? null : texts.attention, nowTs) }
     readonly property var pHeat: { tick; texts; return Model.parseDoc(texts.heatmap === undefined ? null : texts.heatmap, nowTs) }
     // mirror.json and meta.json are hourly or diagnostic: they never drive staleness.
     readonly property var pMirror: { tick; texts; return Model.parseDoc(texts.mirror === undefined ? null : texts.mirror, nowTs) }
 
-    readonly property var nowDoc: pNow.doc
+    readonly property var nowDoc: parsedNow.doc
     readonly property var actDoc: pAct.doc
     readonly property var attDoc: pAtt.doc
     readonly property var heatDoc: pHeat.doc
@@ -42,7 +42,7 @@ Singleton {
 
     // Any of the four fast-cycle files stale, wrong version or unreadable: hollow ?
     // and every number dims to fgFaint. Missing files are "no data", not degraded.
-    readonly property bool degraded: Model.isDegraded(pNow.status) || Model.isDegraded(pAct.status)
+    readonly property bool degraded: Model.isDegraded(parsedNow.status) || Model.isDegraded(pAct.status)
         || Model.isDegraded(pAtt.status) || Model.isDegraded(pHeat.status)
     readonly property bool dim: degraded
 
