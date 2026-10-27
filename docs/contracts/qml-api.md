@@ -31,7 +31,19 @@ The shell repaints live: `Theme` watches `tokens.json`. Every member is a
 property, so bindings update without a restart.
 
 Shared building blocks the overview may use from `modules/common/`:
-`Anim`, `Icon`, `Text` (as `DText`), `Surface`, `FocusGrab`, `Stale`.
+`Anim`, `Icon`, `DText` (not `Text`: that would shadow QtQuick's), `Surface`, `FocusGrab`,
+`Stale`, `Popout`.
+
+Import them by relative path. A directory holding singletons has a `qmldir`:
+
+```qml
+import "../theme"          // Theme
+import "../common"         // Anim, Icon, DText, Surface, Stale ...
+import "../../services"    // Attention, Lamp, Ui, Overview ...
+```
+
+Useful services: `Lamp.on` (true during the lamp test, so a surface can force itself
+visible), `Attention` (the three numbers the pill gets), `Overview.host`.
 
 ---
 
@@ -79,7 +91,7 @@ bound values and read its own `State.qml`; the properties stay for the contract.
 | `bar` | shell | `reload`, `lamp` |
 | `quick` | shell | `toggle` |
 | `notif` | shell | `toggle`, `dnd` |
-| `osd` | shell | (none public) |
+| `osd` | shell | `display <volume\|brightness>` (not `show`: the CLI treats `ipc call t show x` as its own subcommand) |
 | `overview` | overview | `toggle`, `panel <page>`, `focus <start\|stop\|break>` |
 
 `bar.lamp` forces every conditional chip visible for 1.2 s (amber and red
