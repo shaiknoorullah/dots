@@ -164,17 +164,27 @@ def run_matugen(path):
     if not exe:
         raise SystemExit("dots-theme: matugen is not installed (nix/home.nix adds it)")
     r = subprocess.run([exe, "image", str(path), "--json", "hex", "--dry-run",
-                        "--mode", "dark", "--type", "scheme-tonal-spot"],
+                        "--mode", "dark", "--type", "scheme-tonal-spot",
+                        "--prefer", "saturation", "--quiet"],
                        capture_output=True, text=True, timeout=60)
     if r.returncode != 0:
         raise SystemExit(f"dots-theme: matugen failed: {r.stderr.strip()[:200]}")
     try:
-        doc = json.loads(r.stdout)
-        cols = doc["colors"]
-        roles = cols.get("dark", cols)
-        return {k: (v["color"] if isinstance(v, dict) else v) for k, v in roles.items()}
+        cols = json.loads(r.stdout)["colors"]
+        if isinstance(cols.get("dark"), dict):          # matugen < 4: colors.dark.<role>
+            cols = cols["dark"]
+        return {role: pick(v) for role, v in cols.items()}
     except (ValueError, KeyError, AttributeError, TypeError) as e:
         raise SystemExit(f"dots-theme: unreadable matugen output ({e})")
+
+
+def pick(v):
+    """matugen 4: {role: {dark: {color: '#..'}, default: ..}}; older: {role: '#..'}."""
+    if isinstance(v, dict):
+        v = v.get("dark") or v.get("default")
+        if isinstance(v, dict):
+            v = v["color"]
+    return v
 
 
 def recolour(path):

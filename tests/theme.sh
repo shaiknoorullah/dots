@@ -9,20 +9,30 @@ bash "$root/tests/render.sh" "$root/tests/data-nvidia-tmux.toml" "$out" || { ech
 bin="$out/.local/bin/dots-theme"
 [ -x "$bin" ] || { echo "FAIL: dots-theme not rendered executable"; exit 1; }
 
-# a stub matugen that prints the JSON shape `matugen image --json hex` produces
+# a stub matugen printing the shape matugen 4.x gives for `image --json hex`
+# (checked against the real binary: colors.<role>.dark.color)
 stub="$out/stub"; mkdir -p "$stub"
 cat > "$stub/matugen" <<'EOF'
 #!/bin/sh
 cat <<'JSON'
-{"colors":{"dark":{"background":"#10141a","surface":"#10141a","surface_dim":"#10141a",
-"surface_container":"#1c2026","surface_container_high":"#262a31","outline":"#8a919e",
-"outline_variant":"#414751","on_surface":"#dfe2eb","on_surface_variant":"#c0c7d4",
-"primary":"#a2c9ff","on_primary":"#00315b"}}}
+{"colors":{
+"background":{"dark":{"color":"#10141a"},"default":{"color":"#10141a"},"light":{"color":"#f9f9ff"}},
+"surface":{"dark":{"color":"#10141a"}},
+"surface_dim":{"dark":{"color":"#10141a"}},
+"surface_container":{"dark":{"color":"#1c2026"}},
+"surface_container_high":{"dark":{"color":"#262a31"}},
+"outline":{"dark":{"color":"#8a919e"}},
+"outline_variant":{"dark":{"color":"#414751"}},
+"on_surface":{"dark":{"color":"#dfe2eb"}},
+"on_surface_variant":{"dark":{"color":"#c0c7d4"}},
+"primary":{"dark":{"color":"#a2c9ff"}},
+"on_primary":{"dark":{"color":"#00315b"}}}}
 JSON
 EOF
 chmod +x "$stub/matugen"
 : > "$out/wall.png"
 
+real_matugen="$(command -v matugen || true)"
 export HOME="$out" XDG_STATE_HOME="$out/state" XDG_CONFIG_HOME="$out/cfgout"
 export PATH="$stub:$PATH"
 mkdir -p "$XDG_CONFIG_HOME"
@@ -104,3 +114,14 @@ if fails:
     print("\n".join("FAIL: " + f for f in fails)); sys.exit(1)
 print("theme ok")
 PY
+rc=$?
+[ "$rc" = 0 ] || exit "$rc"
+
+# when a real matugen is installed, prove the role mapping against its actual output too
+if [ -n "$real_matugen" ] && command -v magick >/dev/null; then
+  magick -size 64x64 'gradient:#336699-#aa4466' "$out/real.png"
+  PATH="$(dirname "$real_matugen"):$PATH" "$bin" wallpaper "$out/real.png" || { echo "FAIL: real matugen run"; exit 1; }
+  jq -e '.source == "wallpaper" and (.color.accent | test("^#[0-9a-f]{6}$"))' "$XDG_STATE_HOME/dots-theme/tokens.json" >/dev/null \
+    || { echo "FAIL: real matugen tokens"; exit 1; }
+  echo "theme ok (real matugen)"
+fi
