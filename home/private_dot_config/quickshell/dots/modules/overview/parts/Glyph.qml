@@ -6,7 +6,7 @@ import qs.modules.overview
 // ugly but readable and never tofu.
 Text {
     property string name: ""
-    property int size: 16
+    property int size: Look.iconSize
     property bool dim: false
 
     text: name

@@ -19,6 +19,7 @@ QtObject {
         sans: "Lato", mono: "JetBrainsMono Nerd Font", icon: "Material Symbols Rounded",
         size: { caption: 11, bodyS: 12, body: 13, title: 16, headline: 20, display: 28 }
     })
-    readonly property var motion: ({ fast: 120, base: 180, slow: 240 })
+    readonly property var motion: ({ fast: 120, base: 180, slow: 240,
+                                 easeIn: Easing.OutExpo, easeOut: Easing.OutCubic })
     readonly property var bar: ({ height: 30, gutter: 8, chipGapPx: 6 })
 }

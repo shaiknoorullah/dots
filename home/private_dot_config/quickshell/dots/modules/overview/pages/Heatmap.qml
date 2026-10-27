@@ -44,7 +44,7 @@ FocusScope {
                 model: Look.heatRamp
                 delegate: Rectangle {
                     required property real modelData
-                    width: Look.cell; height: Look.cell; radius: 2
+                    width: Look.cell; height: Look.cell; radius: Look.rCell
                     color: Look.withAlpha(pg.dim ? Look.fgFaint : Look.accent, modelData)
                     border.width: modelData === 0 ? 1 : 0
                     border.color: Look.withAlpha(Look.outline, Look.aDivider)

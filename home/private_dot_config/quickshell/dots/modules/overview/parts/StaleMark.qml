@@ -5,7 +5,7 @@ import qs.modules.overview
 // at fgFaint, so it claims no attention. Never animated.
 Item {
     id: m
-    property int size: 16
+    property int size: Look.iconSize
     implicitWidth: size
     implicitHeight: size
     objectName: "staleMark"

@@ -32,7 +32,7 @@ Item {
         enabled: panel.animate
         NumberAnimation {
             duration: panel.shown ? Look.mSlow : Look.mFast
-            easing.type: panel.shown ? Easing.OutExpo : Easing.OutCubic
+            easing.type: panel.shown ? Look.easeIn : Look.easeOut
         }
     }
     opacity: prog
@@ -78,7 +78,7 @@ Item {
                     }
                     Glyph { x: Look.sL; anchors.verticalCenter: parent.verticalCenter; name: navItem.modelData.icon; dim: Feed.dim }
                     Txt {
-                        x: Look.sL * 2 + 16
+                        x: Look.sL * 2 + Look.sXxl
                         anchors.verticalCenter: parent.verticalCenter
                         text: navItem.modelData.label
                         role: "body"

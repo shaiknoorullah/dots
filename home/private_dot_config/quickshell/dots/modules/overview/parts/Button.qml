@@ -36,7 +36,7 @@ Item {
         Glyph {
             visible: b.icon !== ""
             name: b.icon
-            size: 16
+            size: Look.iconSize
             anchors.verticalCenter: parent.verticalCenter
             color: b.primary ? Look.accentFg : Look.fgDim
         }

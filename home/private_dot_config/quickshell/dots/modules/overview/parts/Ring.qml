@@ -25,7 +25,7 @@ Item {
         preferredRendererType: Shape.CurveRenderer
         // Track
         ShapePath {
-            strokeColor: Look.withAlpha(Look.fg, 0.14)
+            strokeColor: Look.withAlpha(Look.fg, Look.aTrack)
             strokeWidth: r.stroke
             fillColor: "transparent"
             PathAngleArc {

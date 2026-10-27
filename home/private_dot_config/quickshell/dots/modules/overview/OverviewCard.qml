@@ -35,7 +35,7 @@ Item {
         enabled: card.animate
         NumberAnimation {
             duration: card.shown ? Look.mBase : Look.mFast
-            easing.type: card.shown ? Easing.OutExpo : Easing.OutCubic
+            easing.type: card.shown ? Look.easeIn : Look.easeOut
         }
     }
     opacity: prog

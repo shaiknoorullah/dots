@@ -33,7 +33,7 @@ Item {
             y: cell.modelData.row * (Look.cell + Look.cellGap)
             width: Look.cell
             height: Look.cell
-            radius: 2
+            radius: Look.rCell
             color: Look.withAlpha(h.dim ? Look.fgFaint : Look.accent, Look.heatRamp[cell.modelData.score])
             border.width: h.hovered === cell.modelData.i ? 1 : 0
             border.color: Look.fgDim

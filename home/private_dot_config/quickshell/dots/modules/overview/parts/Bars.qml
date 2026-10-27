@@ -50,12 +50,12 @@ Column {
                 anchors.right: parent.right
                 anchors.bottom: parent.bottom
                 height: 4
-                radius: 2
-                color: Look.withAlpha(Look.fg, 0.08)
+                radius: Look.rCell
+                color: Look.withAlpha(Look.fg, Look.aTrack)
                 Rectangle {
                     width: b.peak > 0 ? Math.max(2, parent.width * row.modelData.sec / b.peak) : 0
                     height: parent.height
-                    radius: 2
+                    radius: Look.rCell
                     color: b.dim ? Look.fgFaint : Look.accent
                 }
             }

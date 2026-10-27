@@ -27,7 +27,7 @@ Item {
     property bool ready: false
 
     implicitWidth: row.implicitWidth
-    implicitHeight: row.implicitWidth > 0 ? 20 : 0
+    implicitHeight: row.implicitWidth > 0 ? Look.chipHeight : 0
     visible: implicitWidth > 0      // a positioner must not reserve a chip gap for nothing
     objectName: "overviewPill"
 
@@ -61,7 +61,7 @@ Item {
         readonly property real full: body.implicitWidth + ((ring || mark) ? 0 : Look.sL * 2)
 
         width: full * reveal
-        height: 20
+        height: Look.chipHeight
         visible: reveal > 0
         clip: true
 
@@ -79,7 +79,7 @@ Item {
             from: 0
             to: 1
             duration: Look.mBase
-            easing.type: Easing.OutExpo
+            easing.type: Look.easeIn
         }
 
         // chip wash: the tone at alpha.wash behind its own text. Dropped when stale.
@@ -104,7 +104,7 @@ Item {
             }
             StaleMark {
                 visible: c.mark
-                size: 16
+                size: Look.iconSize
                 anchors.verticalCenter: parent.verticalCenter
             }
             Txt {

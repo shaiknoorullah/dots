@@ -6,6 +6,8 @@ import qs.modules.theme
 // so a change in how T2 exposes tokens is a one-file fix. Values come from
 // tokens.json via Theme; the overview never reads palette.yaml or calls matugen.
 QtObject {
+    id: look
+
     // colour roles
     readonly property color surface: Theme.color.surface
     readonly property color surfaceHigh: Theme.color.surfaceContainerHigh
@@ -23,6 +25,9 @@ QtObject {
     readonly property real aWash: Theme.alpha.wash
     readonly property real aHover: Theme.alpha.hover
     readonly property real aDivider: Theme.alpha.divider
+    // the unlit track behind an accent fill (progress bar, focus ring): one value,
+    // not one per part. Not a tokens.json key; it lives here with the other fixed ones.
+    readonly property real aTrack: 0.12
 
     // radius and spacing
     readonly property int rChip: Theme.radius.chip
@@ -48,13 +53,17 @@ QtObject {
     readonly property int fHeadline: Theme.font.size.headline
     readonly property int fDisplay: Theme.font.size.display
 
-    // motion
+    // motion. The curves are tokens too: never Easing.* at a call site.
     readonly property int mFast: Theme.motion.fast
     readonly property int mBase: Theme.motion.base
     readonly property int mSlow: Theme.motion.slow
+    readonly property int easeIn: Theme.motion.easeIn
+    readonly property int easeOut: Theme.motion.easeOut
 
-    // bar
+    // bar. chipHeight matches the wash plate T2's bar/Chip.qml draws (slab height
+    // inset by space.s top and bottom), so a pill badge and an Ops chip line up.
     readonly property int barHeight: Theme.bar.height
+    readonly property int chipHeight: look.barHeight - look.sS * 2
 
     // fixed by the spec's pixel table, not by tokens
     readonly property int cardWidth: 380
@@ -65,6 +74,8 @@ QtObject {
     readonly property int panelHeight: 640
     readonly property int cell: 11
     readonly property int cellGap: 3
+    readonly property int rCell: 2          // heatmap cell and progress-bar track
+    readonly property int iconSize: look.fTitle  // every Material Symbol in the overview
     readonly property int heatCols: 17
     readonly property int heatRows: 7
     readonly property int ringDiameter: 20
@@ -72,5 +83,5 @@ QtObject {
     readonly property var heatRamp: [0, 0.12, 0.30, 0.52, 0.80]
 
     function withAlpha(c, a) { return Qt.rgba(c.r, c.g, c.b, a) }
-    function wash(c) { return withAlpha(c, aWash) }
+    function wash(c) { return look.withAlpha(c, look.aWash) }
 }

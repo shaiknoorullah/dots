@@ -42,7 +42,6 @@ FocusScope {
             Button {
                 objectName: "itemBreakdown"
                 visible: !!pg.it && !!pg.it.canBreakdown
-                primary: true
                 text: "Break down & start"
                 icon: "play_arrow"
                 dim: pg.dim
