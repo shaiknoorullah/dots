@@ -53,6 +53,6 @@ Item {
     anchors.verticalCenter: parent.verticalCenter
     mono: true
     text: Math.round(root.value * 100) + "%"
-    font.pixelSize: Theme.font.size.bodyS
+    role: "bodyS"
   }
 }

@@ -20,7 +20,7 @@ Rectangle { color: Theme.color.surface; radius: Theme.radius.panel }
 | group | members |
 |---|---|
 | `Theme.color` | `bg surface surfaceDim surfaceContainer surfaceContainerHigh outline outlineVariant fg fgDim fgFaint accent accentFg amber red green purple pink cyan yellow` |
-| `Theme.alpha` | `slab panel wash hover divider` |
+| `Theme.alpha` | `slab panel wash hover divider rest on pressed` |
 | `Theme.radius` | `chip panel card pill` |
 | `Theme.space` | `xs s m l xl xxl xxxl` |
 | `Theme.font` | `sans mono icon` and `size.{caption bodyS body title headline display}` |

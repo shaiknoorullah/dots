@@ -36,7 +36,7 @@ Chip {
           anchors.centerIn: parent
           text: ws.modelData.name
           mono: true
-          font.pixelSize: Theme.font.size.bodyS
+          role: "bodyS"
           color: ws.current ? Theme.color.fg : Theme.color.fgDim
         }
         MouseArea {

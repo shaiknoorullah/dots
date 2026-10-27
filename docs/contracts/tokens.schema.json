@@ -45,13 +45,16 @@
     "alpha": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["slab", "panel", "wash", "hover", "divider"],
+      "required": ["slab", "panel", "wash", "hover", "divider", "rest", "on", "pressed"],
       "properties": {
         "slab": { "$ref": "#/$defs/unit" },
         "panel": { "$ref": "#/$defs/unit" },
         "wash": { "$ref": "#/$defs/unit" },
         "hover": { "$ref": "#/$defs/unit" },
-        "divider": { "$ref": "#/$defs/unit" }
+        "divider": { "$ref": "#/$defs/unit" },
+        "rest": { "$ref": "#/$defs/unit" },
+        "on": { "$ref": "#/$defs/unit" },
+        "pressed": { "$ref": "#/$defs/unit" }
       }
     },
     "radius": {

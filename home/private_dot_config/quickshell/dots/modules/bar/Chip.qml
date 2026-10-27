@@ -61,6 +61,15 @@ Item {
     visible: chip.hoverable && chip.hovered
   }
 
+  Rectangle {
+    anchors.fill: parent
+    anchors.topMargin: Theme.space.s
+    anchors.bottomMargin: Theme.space.s
+    radius: Theme.radius.chip
+    color: Qt.alpha(Theme.color.fg, Theme.alpha.pressed)
+    visible: chip.hoverable && mouse.pressed
+  }
+
   Divider {
     visible: chip.divider
     y: (parent.height - height) / 2

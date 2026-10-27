@@ -4,8 +4,12 @@ Third-party notices for the Quickshell desktop (qs-dots)
 1. tally-screentime
    Licence:   MIT (third_party/licenses/MIT-tally-screentime.txt)
    Copyright: (c) 2026 luna (@lunanoir21)
-   Use:       the overview UI's JavaScript (modules/overview/js/) is copied or
-              adapted from it. Every such file carries
+   Use:       inspiration only. The overview UI's JavaScript
+              (modules/overview/js/) is a fresh implementation written for
+              this repository; no source file or fragment was copied from
+              tally-screentime. The MIT text is kept as a courtesy
+              attribution. If a file is ever copied or adapted from it, that
+              file must carry
                 SPDX-License-Identifier: MIT
               and the copyright line above.
 

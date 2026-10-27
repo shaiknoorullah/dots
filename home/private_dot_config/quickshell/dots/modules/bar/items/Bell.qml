@@ -34,9 +34,12 @@ Chip {
     DText {
       anchors.verticalCenter: parent.verticalCenter
       mono: true
-      visible: chip.held || chip.count > 0
-      text: chip.held ? "?" : String(chip.count)
-      color: chip.held ? Theme.color.fgFaint : Theme.color.fg
+      visible: !chip.held && chip.count > 0
+      text: String(chip.count)
+    }
+    Stale {
+      anchors.verticalCenter: parent.verticalCenter
+      on: chip.held
     }
   }
 

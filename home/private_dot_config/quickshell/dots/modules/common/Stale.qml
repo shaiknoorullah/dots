@@ -1,21 +1,31 @@
 import QtQuick
 import "../theme"
 
-// A source that is stale or unavailable renders a hollow question mark at fgFaint.
-// Never a spinner: waiting is not news.
+// A source that is stale or unavailable renders a hollow circled "?" at fgFaint.
+// Same shape as the overview's StaleMark (outline circle, 1 px, "?" at 62 % of the size).
+// Outline only so it claims no attention. Never a spinner: waiting is not news.
 Item {
+  id: root
   property bool on: false
+  property int size: Theme.font.size.title
 
-  implicitWidth: on ? mark.implicitWidth : 0
-  implicitHeight: Theme.bar.height
+  implicitWidth: on ? size : 0
+  implicitHeight: size
   visible: on
 
+  Rectangle {
+    anchors.fill: parent
+    radius: width / 2
+    color: "transparent"
+    border.width: 1
+    border.color: Theme.color.fgFaint
+  }
   Text {
-    id: mark
     anchors.centerIn: parent
     text: "?"
     color: Theme.color.fgFaint
     font.family: Theme.font.mono
-    font.pixelSize: Theme.font.size.body
+    font.pixelSize: Math.round(root.size * 0.62)
+    renderType: Text.NativeRendering
   }
 }

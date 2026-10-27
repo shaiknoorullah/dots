@@ -25,9 +25,12 @@ Chip {
     DText {
       anchors.verticalCenter: parent.verticalCenter
       mono: true
-      visible: !Audio.ready || !Audio.muted
-      text: Audio.ready ? chip.pct + "%" : "?"
-      color: Audio.ready ? Theme.color.fg : Theme.color.fgFaint
+      visible: Audio.ready && !Audio.muted
+      text: chip.pct + "%"
+    }
+    Stale {
+      anchors.verticalCenter: parent.verticalCenter
+      on: !Audio.ready
     }
   }
 

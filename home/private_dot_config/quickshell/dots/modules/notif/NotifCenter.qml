@@ -22,8 +22,7 @@ Popout {
       DText {
         id: title
         text: "Notifications"
-        font.pixelSize: Theme.font.size.title
-        font.weight: Font.DemiBold
+        role: "title"
         width: parent.width - clear.width - dndBtn.width - 2 * Theme.space.l
       }
       MouseArea {
@@ -40,7 +39,7 @@ Popout {
           id: dndLabel
           anchors.centerIn: parent
           text: "Do not disturb"
-          font.pixelSize: Theme.font.size.bodyS
+          role: "bodyS"
         }
       }
       MouseArea {
@@ -57,7 +56,7 @@ Popout {
           id: clearLabel
           anchors.centerIn: parent
           text: "Clear"
-          font.pixelSize: Theme.font.size.bodyS
+          role: "bodyS"
         }
       }
     }
@@ -84,14 +83,14 @@ Popout {
           DText {
             width: parent.width
             text: row.modelData.summary
-            font.weight: Font.DemiBold
             elide: Text.ElideRight
+            font.weight: Font.DemiBold
           }
           DText {
             width: parent.width
             text: row.modelData.body
             dim: true
-            font.pixelSize: Theme.font.size.bodyS
+            role: "bodyS"
             wrapMode: Text.WordWrap
             maximumLineCount: 3
             elide: Text.ElideRight

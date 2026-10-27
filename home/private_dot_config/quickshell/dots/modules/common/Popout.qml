@@ -16,8 +16,8 @@ PanelWindow {
   readonly property int notchH: 4
   default property alias content: body.data
   readonly property bool wanted: Ui.open === name
-  readonly property real notchX: Math.max(Theme.radius.panel + notchW / 2,
-    Math.min(width - Theme.radius.panel - notchW / 2, Ui.anchorX - marginLeft))
+  readonly property real notchX: Math.max(Theme.radius.card + notchW / 2,
+    Math.min(width - Theme.radius.card - notchW / 2, Ui.anchorX - marginLeft))
   property real marginLeft: 0
 
   screen: {
@@ -72,6 +72,7 @@ PanelWindow {
 
   Surface {
     id: card
+    corner: Theme.radius.card
     y: notch.height
     width: parent.width
     height: body.implicitHeight + 2 * Theme.space.xxl

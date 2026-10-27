@@ -31,8 +31,7 @@ Popout {
       DText {
         width: parent.width
         text: win.player ? win.player.trackTitle : ""
-        font.pixelSize: Theme.font.size.title
-        font.weight: Font.DemiBold
+        role: "title"
         elide: Text.ElideRight
       }
       DText {

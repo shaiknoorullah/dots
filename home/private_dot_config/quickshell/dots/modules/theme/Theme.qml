@@ -106,6 +106,9 @@ Singleton {
     property real wash
     property real hover
     property real divider
+    property real rest
+    property real on
+    property real pressed
   }
   component Radii: QtObject {
     property int chip
@@ -176,6 +179,9 @@ Singleton {
     wash: root.tok.alpha.wash
     hover: root.tok.alpha.hover
     divider: root.tok.alpha.divider
+    rest: root.tok.alpha.rest
+    on: root.tok.alpha.on
+    pressed: root.tok.alpha.pressed
   }
   readonly property Radii radius: Radii {
     chip: root.tok.radius.chip

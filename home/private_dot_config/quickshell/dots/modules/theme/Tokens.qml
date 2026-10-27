@@ -42,8 +42,8 @@ Singleton {
         amber: Palette.orange, red: Palette.red, green: Palette.green,
         purple: Palette.purple, pink: Palette.pink, cyan: Palette.cyan, yellow: Palette.yellow
       },
-      alpha: { slab: 0.78, panel: 0.86, wash: 0.20, hover: 0.10, divider: 0.24 },
-      radius: { chip: 8, panel: 12, card: 16, pill: 999 },
+      alpha: { slab: 0.78, panel: 0.86, wash: 0.20, hover: 0.10, divider: 0.24, rest: 0.04, on: 0.16, pressed: 0.18 },
+      radius: { chip: 8, panel: 16, card: 16, pill: 999 },
       space: { xs: 2, s: 4, m: 6, l: 8, xl: 12, xxl: 16, xxxl: 24 },
       font: { sans: "Lato", mono: "JetBrainsMono Nerd Font", icon: "Material Symbols Rounded",
               size: { caption: 11, bodyS: 12, body: 13, title: 16, headline: 20, display: 28 } },

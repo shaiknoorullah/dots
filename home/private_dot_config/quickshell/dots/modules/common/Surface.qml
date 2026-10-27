@@ -5,9 +5,10 @@ import "../theme"
 // why it is translucent rather than merely dark.
 Rectangle {
   property real fill: Theme.alpha.panel
+  property real corner: Theme.radius.panel   // popouts and toasts pass Theme.radius.card
 
   color: Qt.alpha(Theme.color.surface, fill)
-  radius: Theme.radius.panel
+  radius: corner
   border.width: 1
   border.color: Qt.alpha(Theme.color.outline, Theme.alpha.divider)
 }

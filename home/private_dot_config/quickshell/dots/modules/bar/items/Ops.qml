@@ -31,8 +31,13 @@ Chip {
     DText {
       anchors.verticalCenter: parent.verticalCenter
       mono: true
-      text: OpsState.stale ? "?" : (OpsState.text !== "" ? OpsState.text : "ops")
-      color: OpsState.stale ? Theme.color.fgFaint : chip.tint
+      visible: !OpsState.stale
+      text: OpsState.text !== "" ? OpsState.text : "ops"
+      color: chip.tint
+    }
+    Stale {
+      anchors.verticalCenter: parent.verticalCenter
+      on: OpsState.stale
     }
   }
 

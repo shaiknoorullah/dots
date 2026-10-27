@@ -30,6 +30,40 @@ cat <<'JSON'
 JSON
 EOF
 chmod +x "$stub/matugen"
+# no live wallpaper daemon may answer during the test
+for x in swww hyprctl; do printf '#!/bin/sh\nexit 1\n' > "$stub/$x"; chmod +x "$stub/$x"; done
+# gsettings records what it is asked to set
+cat > "$stub/gsettings" <<'EOF'
+#!/bin/sh
+echo "$@" >> "$GSETTINGS_LOG"
+EOF
+chmod +x "$stub/gsettings"
+# a gowall stand-in only when the real one is not on PATH (it just copies)
+if ! command -v gowall >/dev/null; then
+  cat > "$stub/gowall" <<'EOF'
+#!/bin/sh
+files=""; outd=""
+while [ $# -gt 0 ]; do case "$1" in --batch) files="$2"; shift;; --output) outd="$2"; shift;; esac; shift; done
+mkdir -p "$outd"; echo "$files" | tr ',' '\n' | while read -r f; do cp "$f" "$outd/"; done
+EOF
+  chmod +x "$stub/gowall"
+fi
+export GSETTINGS_LOG="$out/gsettings.log"
+
+# a tiny icon theme: one coloured svg, one symlink, one png
+src="$out/icons-src/Fixture"; mkdir -p "$src/scalable/apps" "$src/16x16/apps"
+printf '[Icon Theme]\nName=Fixture\nDirectories=scalable/apps,16x16/apps\n' > "$src/index.theme"
+printf '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><defs><linearGradient id="a12"/></defs><rect fill="url(#a12)" width="16" height="16"/><circle fill="#e44444" stroke="#fff" r="4"/></svg>\n' > "$src/scalable/apps/red.svg"
+ln -s red.svg "$src/scalable/apps/alias.svg"
+python3 - "$src" <<'PY2'
+import zlib, struct, sys
+def ch(t, d):
+    x = struct.pack('>I', len(d)) + t + d
+    return x + struct.pack('>I', zlib.crc32(t + d) & 0xffffffff)
+raw = b''.join(b'\x00' + bytes((228, 68, 68)) * 16 for _ in range(16))
+open(sys.argv[1] + '/16x16/apps/p.png', 'wb').write(b'\x89PNG\r\n\x1a\n' + ch(b'IHDR', struct.pack('>IIBBBBB', 16, 16, 8, 2, 0, 0, 0)) + ch(b'IDAT', zlib.compress(raw)) + ch(b'IEND', b''))
+PY2
+export DOTS_ICON_SRC="$src" DOTS_ICONS_DIR="$out/icons-out/dots-themed"
 : > "$out/wall.png"
 
 real_matugen="$(command -v matugen || true)"
@@ -99,6 +133,57 @@ before = open(tok).read()
 r = subprocess.run([bin_, "wallpaper", f"{out}/missing.png"], capture_output=True, text=True)
 check("missing wallpaper exits non-zero", r.returncode != 0)
 check("failed run leaves tokens.json intact", open(tok).read() == before)
+
+# new interaction tokens exist in both producers; panel radius is unified with card
+for t_ in (preset, wall):
+    check("alpha.pressed/rest/on present", all(k in t_["alpha"] for k in ("pressed", "rest", "on")))
+    check("radius.panel == radius.card == 16", t_["radius"]["panel"] == 16 == t_["radius"]["card"])
+
+# default (no args) is wallpaper mode when a wallpaper is known, preset otherwise
+os.makedirs(f"{out}/.cache", exist_ok=True)
+open(f"{out}/.cache/current-wallpaper", "w").write(f"{out}/wall.png")
+run()
+auto = json.load(open(tok)); jsonschema.validate(auto, schema)
+check("default is wallpaper mode", auto["source"] == "wallpaper" and auto["color"]["accent"] == "#a2c9ff")
+check("default keeps the key set", sorted(keys(auto)) == sorted(keys(preset)))
+os.remove(f"{out}/.cache/current-wallpaper")
+r = run()
+auto = json.load(open(tok))
+check("no wallpaper -> preset fallback", auto["source"] == "preset" and auto["color"]["accent"] == pal["purple"])
+check("fallback says so", "using the preset" in r.stderr, r.stderr)
+open(f"{out}/.cache/current-wallpaper", "w").write(f"{out}/wall.png")
+env_nomatugen = dict(os.environ, PATH=os.path.dirname(subprocess.check_output(["which", "python3"], text=True).strip()) + ":/usr/bin:/bin")
+env_nomatugen["PATH"] = ":".join(d for d in env_nomatugen["PATH"].split(":") if not os.path.exists(d + "/matugen"))
+r = subprocess.run([bin_], capture_output=True, text=True, env=env_nomatugen)
+check("matugen missing -> exit 0 + preset", r.returncode == 0 and json.load(open(tok))["source"] == "preset", r.stderr)
+
+# icons: built from the current palette, cached by hash, GTK setting only with --apply
+idir = f"{out}/icons-out/dots-themed"
+import shutil; shutil.rmtree(f"{out}/icons-out", ignore_errors=True)
+run("wallpaper", f"{out}/wall.png", "--no-icons")
+check("--no-icons builds nothing", not os.path.isdir(idir))
+r = run("icons")
+svg = open(f"{idir}/scalable/apps/red.svg").read()
+check("icons: original red is gone", "#e44444" not in svg, svg)
+check("icons: url(#id) and id untouched", "url(#a12)" in svg and 'id="a12"' in svg, svg)
+check("icons: symlink preserved", os.path.islink(f"{idir}/scalable/apps/alias.svg"))
+check("icons: png carried", os.path.isfile(f"{idir}/16x16/apps/p.png"))
+idx = open(f"{idir}/index.theme").read()
+check("icons: index.theme renamed + inherits", "Name=dots-themed" in idx and "Inherits=Fixture,hicolor" in idx, idx)
+check("icons: no gsettings call without --apply", not os.path.exists(f"{out}/gsettings.log"))
+m1 = os.stat(f"{idir}/scalable/apps/red.svg").st_mtime_ns
+r = run("icons")
+check("icons: second run is a no-op", "up to date" in r.stdout and os.stat(f"{idir}/scalable/apps/red.svg").st_mtime_ns == m1, r.stdout)
+r = run("icons", "--apply")
+check("icons: --apply sets the GTK icon theme",
+      "set org.gnome.desktop.interface icon-theme dots-themed" in open(f"{out}/gsettings.log").read())
+run("preset")
+r = run("icons")
+check("icons: palette change regenerates", "wrote" in r.stdout, r.stdout)
+svg2 = open(f"{idir}/scalable/apps/red.svg").read()
+check("icons: output follows the palette", svg2 != svg)
+run("wallpaper", f"{out}/wall.png")
+check("wallpaper regenerates icons by default", open(f"{idir}/scalable/apps/red.svg").read() != svg2)
 
 # emit regenerates the consumers from tokens.json
 for p in ("hypr/colors.conf", "ghostty/dots-theme.conf", "swaync/dots-theme.css", "hypr/hyprlock-colors.conf"):

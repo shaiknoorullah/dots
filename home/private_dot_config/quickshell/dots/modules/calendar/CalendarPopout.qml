@@ -49,8 +49,7 @@ Popout {
         height: 28
         horizontalAlignment: Text.AlignHCenter
         text: Qt.formatDate(win.shownMonth, "MMMM yyyy")
-        font.pixelSize: Theme.font.size.title
-        font.weight: Font.DemiBold
+        role: "title"
       }
       MouseArea {
         width: 28; height: 28
@@ -72,7 +71,7 @@ Popout {
           horizontalAlignment: Text.AlignHCenter
           text: modelData
           dim: true
-          font.pixelSize: Theme.font.size.caption
+          role: "caption"
         }
       }
       Repeater {
@@ -95,7 +94,7 @@ Popout {
             mono: true
             text: cell.modelData.day
             color: cell.modelData.inMonth ? Theme.color.fg : Theme.color.fgFaint
-            font.pixelSize: Theme.font.size.bodyS
+            role: "bodyS"
           }
         }
       }

@@ -3,7 +3,7 @@ import QtQuick
 import "../theme"
 import "../common"
 
-// One toast: 380 wide, padding 14, radius 12. It hides itself when its time is up (the
+// One toast: 380 wide, padding 14, radius 16. It hides itself when its time is up (the
 // notification stays in the centre) and re-appears when the app REPLACES it in place:
 // the server updates the same Notification object, so summary/body changing is the cue.
 Item {
@@ -43,6 +43,7 @@ Item {
 
   Surface {
     id: box
+    corner: Theme.radius.card
     width: parent.width
     height: col.implicitHeight + 2 * 14
 
@@ -57,15 +58,14 @@ Item {
         width: parent.width
         text: toast.modelData.appName
         dim: true
-        font.pixelSize: Theme.font.size.caption
+        role: "caption"
         elide: Text.ElideRight
         visible: text !== ""
       }
       DText {
         width: parent.width
         text: toast.modelData.summary
-        font.pixelSize: Theme.font.size.title
-        font.weight: Font.DemiBold
+        role: "title"
         wrapMode: Text.WordWrap
         maximumLineCount: 2
         elide: Text.ElideRight
@@ -74,7 +74,7 @@ Item {
         width: parent.width
         text: toast.modelData.body
         dim: true
-        font.pixelSize: Theme.font.size.bodyS
+        role: "bodyS"
         wrapMode: Text.WordWrap
         maximumLineCount: 4
         elide: Text.ElideRight

@@ -22,7 +22,13 @@ MouseArea {
     anchors.fill: parent
     radius: Theme.radius.chip
     color: root.on && root.held ? Qt.alpha(Theme.color.amber, Theme.alpha.wash)
-         : Qt.alpha(Theme.color.fg, root.on ? Theme.alpha.hover * 1.6 : (root.containsMouse ? Theme.alpha.hover : 0.04))
+         : Qt.alpha(Theme.color.fg, root.on ? Theme.alpha.on : (root.containsMouse ? Theme.alpha.hover : Theme.alpha.rest))
+  }
+  Rectangle {
+    anchors.fill: parent
+    radius: Theme.radius.chip
+    color: Qt.alpha(Theme.color.fg, Theme.alpha.pressed)
+    visible: root.pressed
   }
   Row {
     anchors.verticalCenter: parent.verticalCenter
@@ -37,7 +43,7 @@ MouseArea {
     DText {
       anchors.verticalCenter: parent.verticalCenter
       text: root.label
-      font.pixelSize: Theme.font.size.bodyS
+      role: "bodyS"
     }
   }
 }
