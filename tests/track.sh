@@ -38,6 +38,17 @@ done
 grep -q '^uda\.parent\.' "$rc" && bad "uda.parent is a reserved core attribute; taskwarrior rejects it" || ok "no reserved uda.parent"
 grep -q '^uda.srcsync.type=date' "$rc" && ok "srcsync is a date" || bad "srcsync is not a date"
 
+echo "1b. the documented live 'task config' block works on a bare taskrc"
+(
+  export TASKRC="$tmp/live-rc" TASKDATA="$tmp/live-data"; mkdir -p "$TASKDATA"; printf 'data.location=%s\n' "$TASKDATA" > "$TASKRC"
+  sed -n '/^```sh$/,/^```$/p' "$root/docs/overview-tracking.md" | sed '1d;$d' > "$tmp/live-config.sh"
+  bash "$tmp/live-config.sh" >/dev/null 2>&1 \
+    && task rc.confirmation=off rc.verbose=nothing add ref:gh:a/b#1 src:gh srcstate:issue:open srcsync:2026-10-28T10:00:00 url:https://x agent:Vega sess:s pane:w1:p1 wspace:w1 parentref:HD-1 -- "uda check" >/dev/null 2>&1
+) && ok "every UDA is accepted after the documented commands" || bad "docs/overview-tracking.md task config block failed"
+for u in ref src srcstate srcsync url agent sess pane wspace parentref; do
+  grep -q "^uda\.$u\.label=" "$rc" || bad "uda.$u has no label in the taskrc"
+done
+
 echo "2. scratch Taskwarrior: ref lookup, done with hooks on"
 export TASKRC="$tmp/taskrc" TASKDATA="$tmp/task" TIMEW_LOG="$tmp/timew.log" TIMEWARRIORDB="$tmp/timewdb"
 mkdir -p "$TASKDATA/hooks"; : > "$TIMEW_LOG"
@@ -65,11 +76,11 @@ n=$(task rc.json.array=on 'ref.is:nope' export 2>/dev/null | python3 -c 'import 
 [ "$n" = 0 ] && ok "ref.is: returns none for an unknown ref" || bad "unknown ref returned $n"
 uuid=$(task rc.json.array=on 'ref.is:HD-2' export 2>/dev/null | python3 -c 'import json,sys;print(json.load(sys.stdin)[0]["uuid"])')
 tw "$uuid" modify srcstate:hd:resolved srcsync:2026-10-28T10:00:00 >/dev/null 2>&1 && ok "modify srcstate/srcsync with hooks on" || bad "modify with hooks on"
-tw "$uuid" done >/dev/null 2>&1 && ok "task done with the timewarrior hook on" || bad "task done failed with hooks on"
+tw "$uuid" "done" >/dev/null 2>&1 && ok "task done with the timewarrior hook on" || bad "task done failed with hooks on"
 [ "$(task rc.json.array=on "$uuid" export 2>/dev/null | python3 -c 'import json,sys;print(json.load(sys.stdin)[0]["status"])')" = completed ] && ok "task is completed" || bad "task not completed"
 [ ! -s "$TIMEW_LOG" ] && ok "done on a task that never started leaves timewarrior alone" || bad "timew was called: $(cat "$TIMEW_LOG")"
 u1=$(task rc.json.array=on 'ref.is:gh:acme/r#1' export 2>/dev/null | python3 -c 'import json,sys;print(json.load(sys.stdin)[0]["uuid"])')
-tw "$u1" start >/dev/null 2>&1; tw "$u1" done >/dev/null 2>&1 && ok "start then done with hooks on" || bad "start/done failed"
+tw "$u1" start >/dev/null 2>&1; tw "$u1" "done" >/dev/null 2>&1 && ok "start then done with hooks on" || bad "start/done failed"
 grep -q '^start' "$TIMEW_LOG" && ok "the hook still sees start" || bad "hook did not run on start"
 rm -rf "$TASKDATA"/*.sqlite3* "$TASKDATA"/*.data; : > "$TIMEW_LOG"
 
@@ -206,6 +217,28 @@ GH_QUOTA=2 dots-overview sync >/dev/null 2>&1; : > "$GH_LOG"; GH_QUOTA=2 dots-ov
 dots-overview doctor >"$tmp/doctor.out" 2>&1; rcd=$?
 [ "$rcd" = 0 ] && ok "doctor passes on a healthy tree" || bad "doctor failed: $(cat "$tmp/doctor.out")"
 rm "$st2/mirror.json"; dots-overview doctor >/dev/null 2>&1 && bad "doctor passed with a missing source file" || ok "doctor exits non-zero on a missing file"
+
+echo "6b. breakdown + start with the local model, clean and hostile"
+printf '#!/bin/sh\ncat "$LLM_OUT"\n' > "$tmp/bin/llm"
+printf '#!/bin/sh\necho "$*" >> "%s/open.log"\n' "$tmp" > "$tmp/bin/xdg-open"; chmod +x "$tmp/bin/llm" "$tmp/bin/xdg-open"
+export LLM_OUT="$tmp/llm.out"
+tw add +mirror ref:HD-50 src:erp url:https://erp.example.com/app/hd-ticket/HD-50 project:work -- "Parent ticket title" >/dev/null 2>&1
+printf '["Read the ticket body", "Reproduce the problem", "Ship a fix"]' > "$LLM_OUT"
+dots-overview breakdown HD-50 --start >"$tmp/bd.out" 2>&1 && ok "breakdown --start runs" || bad "breakdown failed: $(cat "$tmp/bd.out")"
+python3 - <<'EOF' && ok "3 subtasks with parentref + project, the first one started" || bad "subtasks"
+import json, subprocess
+t = json.loads(subprocess.run(["task", "rc.json.array=on", "+sub", "export"], capture_output=True, text=True).stdout)
+assert len(t) == 3, len(t)
+assert all(x["parentref"] == "HD-50" and x["project"] == "work" and "mirror" in x["tags"] for x in t)
+assert [bool(x.get("start")) for x in sorted(t, key=lambda x: x["description"])].count(True) == 1
+EOF
+grep -qx 'https://erp.example.com/app/hd-ticket/HD-50' "$tmp/open.log" && ok "opened the ticket url" || bad "xdg-open not called: $(cat "$tmp/open.log" 2>/dev/null)"
+tw add +mirror ref:HD-51 src:erp -- "Second parent ticket" >/dev/null 2>&1
+printf '$(touch %s/PWNED) `touch %s/PWNED2`; [' "$tmp" "$tmp" > "$LLM_OUT"
+dots-overview breakdown HD-51 >/dev/null 2>&1 && ok "hostile model output still succeeds (fallback)" || bad "hostile output broke breakdown"
+[ ! -e "$tmp/PWNED" ] && [ ! -e "$tmp/PWNED2" ] && ok "nothing the model said was executed" || bad "model output was executed"
+[ "$(task rc.json.array=on parentref:HD-51 export 2>/dev/null | python3 -c 'import json,sys;print(len(json.load(sys.stdin)))')" = 1 ] && ok "fallback is one subtask" || bad "fallback count"
+: > "$LLM_OUT"; dots-overview breakdown HD-51 >/dev/null 2>&1 && ok "an empty model answer still succeeds" || bad "empty answer broke breakdown"
 
 echo "7. static: nothing in the package can write to GitHub"
 if grep -rnE 'gh api -X|"-X"|--method|-X (POST|PUT|PATCH|DELETE)' "$pkg/dots_overview" "$root/home/private_dot_local/lib/dots-ops/jobs/overview-sync.sh"; then bad "write-shaped GitHub call in the source"; else ok "no gh api -X / --method anywhere"; fi
