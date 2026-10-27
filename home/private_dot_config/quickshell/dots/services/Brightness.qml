@@ -15,13 +15,13 @@ Singleton {
   }
   function set(fraction) {
     var pct = Math.round(Math.max(0.01, Math.min(1, fraction)) * 100);
-    Quickshell.execDetached(["brightnessctl", "set", pct + "%"]);
+    Quickshell.execDetached(["brightnessctl", "-c", "backlight", "set", pct + "%"]);
     root.value = pct / 100;
   }
 
   Process {
     id: probe
-    command: ["brightnessctl", "-m"]
+    command: ["brightnessctl", "-c", "backlight", "-m"]
     stdout: StdioCollector {
       onStreamFinished: {
         // device,class,current,percent%,max

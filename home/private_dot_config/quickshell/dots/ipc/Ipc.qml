@@ -60,8 +60,9 @@ Scope {
   IpcHandler {
     target: "dots.osd"
 
-    // `dots-shell key` sets the level through wpctl/brightnessctl, then asks for the OSD
-    function show(kind: string): void {
+    // `dots-shell key` sets the level through wpctl/brightnessctl, then asks for the OSD.
+    // Not called "show": the CLI reads `ipc call t show x` as its own `ipc show` subcommand.
+    function display(kind: string): void {
       if (kind === "brightness") {
         Brightness.refresh();
         Hud.show("brightness", Brightness.value, false);

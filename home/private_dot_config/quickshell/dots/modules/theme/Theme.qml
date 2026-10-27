@@ -52,12 +52,24 @@ Singleton {
     }
   }
 
+  // false while tokens.json does not exist yet; a watch cannot be placed on a missing file,
+  // so the retry below is the ONLY polling in the theme, and it stops as soon as the file is there
+  property bool fileOk: false
+
   FileView {
+    id: file
     path: root.path
     watchChanges: true
     onFileChanged: reload()
-    onLoaded: root.apply(text())
-    onLoadFailed: root.tok = Tokens.build()
+    onLoaded: { root.fileOk = true; root.apply(text()); }
+    onLoadFailed: { root.fileOk = false; root.tok = Tokens.build(); }
+  }
+
+  Timer {
+    interval: 3000
+    running: !root.fileOk
+    repeat: true
+    onTriggered: file.reload()
   }
 
   function ease(name) {

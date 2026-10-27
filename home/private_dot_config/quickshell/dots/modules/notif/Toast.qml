@@ -16,13 +16,12 @@ Item {
   readonly property bool critical: modelData.urgency === NotificationUrgency.Critical
   readonly property int lifetime: modelData.expireTimeout > 0 ? modelData.expireTimeout * 1000 : 6000
 
-  width: 380
-  implicitHeight: alive && (!dnd || critical) ? box.height : 0
-  height: implicitHeight
-  visible: implicitHeight > 0
-  opacity: visible ? 1 : 0
+  readonly property bool shown: alive && (!dnd || critical)
 
-  Behavior on opacity { Anim { duration: Theme.motion.fast; easing.type: Theme.motion.easeOut } }
+  width: 380
+  implicitHeight: shown ? box.height : 0
+  height: implicitHeight
+  visible: shown
 
   Connections {
     target: toast.modelData
