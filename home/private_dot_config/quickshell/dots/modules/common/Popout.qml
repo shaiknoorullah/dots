@@ -12,9 +12,12 @@ PanelWindow {
 
   property string name: ""
   property int panelWidth: 320
+  readonly property int notchW: 8      // spec pixel table; the card draws the same 8x4
+  readonly property int notchH: 4
   default property alias content: body.data
   readonly property bool wanted: Ui.open === name
-  readonly property real notchX: Math.max(Theme.radius.panel + 4, Math.min(width - Theme.radius.panel - 4, Ui.anchorX - marginLeft))
+  readonly property real notchX: Math.max(Theme.radius.panel + notchW / 2,
+    Math.min(width - Theme.radius.panel - notchW / 2, Ui.anchorX - marginLeft))
   property real marginLeft: 0
 
   screen: {
@@ -48,9 +51,9 @@ PanelWindow {
 
   Canvas {
     id: notch
-    x: win.notchX - 4
-    width: 8
-    height: 4
+    x: win.notchX - win.notchW / 2
+    width: win.notchW
+    height: win.notchH
     opacity: card.opacity
     property color fill: Qt.alpha(Theme.color.surface, Theme.alpha.panel)
     onFillChanged: requestPaint()
@@ -59,9 +62,9 @@ PanelWindow {
       c.reset();
       c.fillStyle = Qt.rgba(fill.r, fill.g, fill.b, fill.a);
       c.beginPath();
-      c.moveTo(0, 4);
-      c.lineTo(4, 0);
-      c.lineTo(8, 4);
+      c.moveTo(0, height);
+      c.lineTo(width / 2, 0);
+      c.lineTo(width, height);
       c.closePath();
       c.fill();
     }
