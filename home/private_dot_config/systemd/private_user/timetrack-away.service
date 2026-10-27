@@ -1,0 +1,15 @@
+[Unit]
+Description=timetrack on-return prompt (D7: what was that away gap?)
+# Enforcement, not collection: it only asks. Stopping it loses no data -- unanswered gaps
+# stay unconfirmed for `timetrack backfill`. Its panels refuse to draw without the reaper.
+After=timetrack-deadman.timer graphical-session.target
+Wants=timetrack-deadman.timer
+PartOf=graphical-session.target
+
+[Service]
+ExecStart=%h/.nix-profile/bin/timetrack away
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=graphical-session.target

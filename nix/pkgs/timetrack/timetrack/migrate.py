@@ -323,7 +323,38 @@ LEFT JOIN v_day_deduction d ON d.attendance_day = c.day;
 COMMIT;
 """
 
-MIGRATIONS = {"work": [(1, WORK_V1), (2, WORK_V2), (3, WORK_V3)], "private": [(1, PRIVATE_V1)]}
+# --- work v4 ---------------------------------------------------------------
+# egress_field was the allow-list for a sync that will never be built: nothing leaves this
+# machine (decided 2026-10-23). A table describing an outbound path invites someone to
+# build one, so it goes.
+WORK_V4 = """
+BEGIN;
+DROP TABLE IF EXISTS egress_field;
+COMMIT;
+"""
+
+# --- private v2 -------------------------------------------------------------
+# Browser time per site and per ticket (web.py). Domain and ticket id only -- never the
+# URL or the page title. Derived: web.write() replaces a day rather than adding to it.
+PRIVATE_V2 = """
+BEGIN;
+CREATE TABLE web_domain_day (
+  day     TEXT    NOT NULL,
+  domain  TEXT    NOT NULL,
+  seconds INTEGER NOT NULL,
+  PRIMARY KEY (day, domain)
+);
+CREATE TABLE web_ticket_day (
+  day     TEXT    NOT NULL,
+  ticket  TEXT    NOT NULL,
+  seconds INTEGER NOT NULL,
+  PRIMARY KEY (day, ticket)
+);
+COMMIT;
+"""
+
+MIGRATIONS = {"work": [(1, WORK_V1), (2, WORK_V2), (3, WORK_V3), (4, WORK_V4)],
+              "private": [(1, PRIVATE_V1), (2, PRIVATE_V2)]}
 
 
 def live_counts(conn):

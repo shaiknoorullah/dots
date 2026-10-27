@@ -1,15 +1,15 @@
 """The only module in the package that opens a database connection.
 
-Two physically separate files:
+Two physically separate files, both local -- nothing leaves this machine:
 
-  work.db     facts that are allowed to leave this machine -- ticket id, minutes, status
-  private.db  everything that must not -- health, mood, salah, window titles, URLs,
-              agent telemetry, and the prose summaries
+  work.db     the attendance facts -- sessions, deductions, ticket ids, minutes
+  private.db  everything personal -- health, salah, break detail, day notes, and what
+              other tools record locally (browser time per site, agent activity)
 
-The egress side imports `open_work` and nothing else, so no code path exists from it to
-private data. That is checked statically by tests/privacy.sh and again at the kernel
-level by the egress unit's InaccessiblePaths=. Keeping every connection in one short file
-is the point: the privacy boundary has to be verifiable by reading a single page.
+The split keeps the payroll file small and reviewable: work.db can be read end to end
+without wading through personal data. Keeping every connection in one short file means
+that boundary is verifiable by reading a single page. tests/locality.sh checks the other
+half: that nothing in the package opens a connection off this machine.
 """
 import sqlite3
 

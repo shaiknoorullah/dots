@@ -73,6 +73,32 @@ def cmd_ingest_aw(a):
     return 0
 
 
+def cmd_web(a):
+    from . import web
+    if a.all:
+        start = web.first_day()
+        days = list(web.days_since(start)) if start else []
+    else:
+        days = [date.fromisoformat(a.day) if a.day else date.today()]
+    for d in days:
+        by_dom, by_tkt = web.write(d)
+        total = sum(by_dom.values())
+        print(f"{d}  browser {derive.hhmm(round(total / 60))} focused and present")
+        for k, v in sorted(by_dom.items(), key=lambda kv: -kv[1])[:a.top]:
+            print(f"  {derive.hhmm(round(v / 60)):>6}  {k}")
+        for k, v in sorted(by_tkt.items(), key=lambda kv: -kv[1]):
+            print(f"  {derive.hhmm(round(v / 60)):>6}  ticket {k}")
+    return 0
+
+
+def cmd_away(a):
+    from . import away
+    if a.ask:
+        return away.ask(a.hint)
+    away.watch()
+    return 0
+
+
 def cmd_compare_aw(a):
     from .backfill import aw
     month = _month(a.month)
@@ -446,6 +472,17 @@ def main(argv=None):
     s.add_argument("--no-refresh", action="store_true",
                    help="do not replace today's own AW session (default is to refresh it)")
     s.set_defaults(fn=cmd_ingest_aw)
+
+    s = sub.add_parser("web", help="browser time per site and ticket (local, private.db)")
+    s.add_argument("--day", help="YYYY-MM-DD (default: today)")
+    s.add_argument("--all", action="store_true", help="every day the web bucket covers")
+    s.add_argument("--top", type=int, default=8, help="domains to print per day")
+    s.set_defaults(fn=cmd_web)
+
+    s = sub.add_parser("away", help="D7: ask what an away gap was on return (watcher)")
+    s.add_argument("--ask", action="store_true", help="inside the panel: read one answer")
+    s.add_argument("--hint", help="prayer to pre-select (with --ask)")
+    s.set_defaults(fn=cmd_away)
 
     s = sub.add_parser("compare-aw", help="cross-validate recorded days against AW presence")
     s.add_argument("--month")
