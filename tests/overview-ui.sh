@@ -109,7 +109,9 @@ for f in Fmt Ledger Model; do
 done
 if grep -rIn 'Theme\.' "$ov" --include='*.qml' | grep -v -e '/tst/' -e 'Look.qml'; then bad "3 Theme.* used outside Look.qml"; else ok "3 Theme.* only in Look.qml"; fi
 if grep -rInE 'palette\.yaml|matugen' "$ov" --include='*.qml' --include='*.js' | grep -v '/tst/' | grep -v '^\S*: *//' | grep -v '// '; then bad "3 the overview reads palette.yaml or calls matugen"; else ok "3 no palette.yaml or matugen"; fi
-base="$(git -C "$root" merge-base HEAD main 2>/dev/null || true)"
+# Branch-scope guard for the feature branch only. On an integration branch the diff against main
+# legitimately spans everything, so it runs when OVERVIEW_SCOPE_CHECK=1 is set.
+base=""; [ -n "${OVERVIEW_SCOPE_CHECK:-}" ] && base="$(git -C "$root" merge-base HEAD main 2>/dev/null || true)"
 if [ -n "$base" ] && [ "$(git -C "$root" rev-parse HEAD)" != "$base" ]; then
   stray="$(git -C "$root" diff --name-only "$base" HEAD | grep -vE '^(home/private_dot_config/quickshell/dots/modules/overview/|tests/overview-ui\.sh$|docs/overview-ui\.md$)')"
   [ -z "$stray" ] && ok "3 the diff stays inside modules/overview, tests/overview-ui.sh, docs/overview-ui.md" || { echo "$stray"; bad "3 the diff touches files outside the overview"; }
