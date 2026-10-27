@@ -91,6 +91,14 @@ def cmd_web(a):
     return 0
 
 
+def cmd_away(a):
+    from . import away
+    if a.ask:
+        return away.ask(a.hint)
+    away.watch()
+    return 0
+
+
 def cmd_compare_aw(a):
     from .backfill import aw
     month = _month(a.month)
@@ -470,6 +478,11 @@ def main(argv=None):
     s.add_argument("--all", action="store_true", help="every day the web bucket covers")
     s.add_argument("--top", type=int, default=8, help="domains to print per day")
     s.set_defaults(fn=cmd_web)
+
+    s = sub.add_parser("away", help="D7: ask what an away gap was on return (watcher)")
+    s.add_argument("--ask", action="store_true", help="inside the panel: read one answer")
+    s.add_argument("--hint", help="prayer to pre-select (with --ask)")
+    s.set_defaults(fn=cmd_away)
 
     s = sub.add_parser("compare-aw", help="cross-validate recorded days against AW presence")
     s.add_argument("--month")

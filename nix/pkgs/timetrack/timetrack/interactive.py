@@ -98,6 +98,19 @@ def pending_days(conn, month, today=None):
     return out
 
 
+def answer_gap(conn, gap_id, choice, provenance=PROVENANCE):
+    """Record a human's answer for one gap. `choice` None means meeting: worked time."""
+    if choice is None:
+        # worked time: the deduction stops costing anything, and stays as the record
+        conn.execute(
+            "UPDATE deduction SET minutes = 0, confirmed = 1, provenance = ?"
+            " WHERE id = ?", (MEETING, gap_id))
+    else:
+        conn.execute(
+            "UPDATE deduction SET category = ?, confirmed = 1, provenance = ?"
+            " WHERE id = ?", (choice, provenance, gap_id))
+
+
 def resolve_gaps(conn, month):
     rows = pending_gaps(conn, month)
     if not rows:
@@ -110,16 +123,10 @@ def resolve_gaps(conn, month):
         choice = _ask("what was it?", GAP_CHOICES)
         if choice == "SKIP":
             continue
+        answer_gap(conn, g["id"], choice)
         if choice is None:
-            # worked time: the deduction stops costing anything, and stays as the record
-            conn.execute(
-                "UPDATE deduction SET minutes = 0, confirmed = 1, provenance = ?"
-                " WHERE id = ?", (MEETING, g["id"]))
             print(f"    -> meeting: {derive.hhmm(round(g['minutes']))} returned to worked time")
         else:
-            conn.execute(
-                "UPDATE deduction SET category = ?, confirmed = 1, provenance = ?"
-                " WHERE id = ?", (choice, PROVENANCE, g["id"]))
             print(f"    -> {choice}, confirmed")
         answered += 1
     conn.commit()
