@@ -1,0 +1,257 @@
+#!/usr/bin/env python3
+# dots-theme -- the only writer of ~/.local/state/dots-theme/tokens.json.
+#
+#   dots-theme preset              fixed palette (default), identical every run
+#   dots-theme wallpaper [PATH]    matugen scheme-tonal-spot on a wallpaper, same keys
+#   dots-theme wallpaper --recolour [PATH]   fit the wallpaper to the palette first (gowall)
+#   dots-theme emit                re-render the cheap consumers from tokens.json
+#   dots-theme status
+#
+# One contract, two producers: both modes emit the same key set (docs/contracts/
+# tokens.schema.json), so the shell never knows which one ran. Status colours (amber,
+# red, green ...) are semantic and stay on the preset in BOTH modes; a wallpaper must not
+# be able to turn "someone waits" into blue. Waybar's CSS is templated straight from the
+# palette and never reads a generated file, so the fallback bar cannot depend on this.
+#
+# Every derived tone is computed from the palette below, never typed by hand
+# (tests/theme.sh re-derives them and compares).
+import json, os, shutil, subprocess, sys, tempfile
+from pathlib import Path
+
+# rendered from .chezmoidata/palette.yaml by chezmoi
+PALETTE = {
+    "bg": "{{ .palette.bg }}", "fg": "{{ .palette.fg }}", "sel": "{{ .palette.sel }}",
+    "comment": "{{ .palette.comment }}", "cyan": "{{ .palette.cyan }}",
+    "green": "{{ .palette.green }}", "orange": "{{ .palette.orange }}",
+    "pink": "{{ .palette.pink }}", "purple": "{{ .palette.purple }}",
+    "red": "{{ .palette.red }}", "yellow": "{{ .palette.yellow }}",
+}
+
+HOME = Path(os.environ.get("HOME", "~")).expanduser()
+STATE = Path(os.environ.get("DOTS_THEME_DIR") or
+             (Path(os.environ.get("XDG_STATE_HOME", HOME / ".local/state")) / "dots-theme"))
+CONF = Path(os.environ.get("XDG_CONFIG_HOME", HOME / ".config"))
+TOKENS = STATE / "tokens.json"
+
+
+# ── colour maths ───────────────────────────────────────────────────────
+def rgb(h):
+    h = h.lstrip("#")
+    return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+
+
+def hexc(c):
+    return "#" + "".join(f"{max(0, min(255, round(v))):02x}" for v in c)
+
+
+def mix(a, b, t):
+    """t of b over a, in sRGB. mix(bg, white, .04) is 'bg lightened 4 %'."""
+    ra, rb = rgb(a), rgb(b)
+    return hexc(tuple(x + (y - x) * t for x, y in zip(ra, rb)))
+
+
+def lighten(h, t):
+    return mix(h, "#ffffff", t)
+
+
+def darken(h, t):
+    return mix(h, "#000000", t)
+
+
+def norm(h):
+    return hexc(rgb(h))
+
+
+# ── token sets ─────────────────────────────────────────────────────────
+def status_colours():
+    p = PALETTE
+    return {"amber": norm(p["orange"]), "red": norm(p["red"]), "green": norm(p["green"]),
+            "purple": norm(p["purple"]), "pink": norm(p["pink"]), "cyan": norm(p["cyan"]),
+            "yellow": norm(p["yellow"])}
+
+
+def static_tokens():
+    return {
+        "alpha": {"slab": 0.78, "panel": 0.86, "wash": 0.20, "hover": 0.10, "divider": 0.24},
+        "radius": {"chip": 8, "panel": 12, "card": 16, "pill": 999},
+        "space": {"xs": 2, "s": 4, "m": 6, "l": 8, "xl": 12, "xxl": 16, "xxxl": 24},
+        "font": {"sans": "Lato", "mono": "JetBrainsMono Nerd Font", "icon": "Material Symbols Rounded",
+                 "size": {"caption": 11, "bodyS": 12, "body": 13, "title": 16, "headline": 20, "display": 28}},
+        "motion": {"fast": 120, "base": 180, "slow": 240, "easeIn": "OutExpo", "easeOut": "OutCubic"},
+        "bar": {"height": 30, "gutter": 8, "chipGapPx": 6},
+    }
+
+
+def preset_tokens():
+    p = PALETTE
+    bg = norm(p["bg"])
+    color = {
+        "bg": bg,
+        "surface": lighten(bg, 0.04),
+        "surfaceDim": darken(bg, 0.20),
+        "surfaceContainer": norm(p["sel"]),
+        "surfaceContainerHigh": lighten(p["sel"], 0.06),
+        "outline": norm(p["comment"]),
+        "outlineVariant": mix(p["comment"], bg, 0.50),
+        "fg": norm(p["fg"]),
+        "fgDim": norm(p["comment"]),
+        "fgFaint": mix(bg, p["comment"], 0.55),
+        "accent": norm(p["purple"]),
+        "accentFg": bg,
+    }
+    color.update(status_colours())
+    return finish("preset", None, color)
+
+
+# matugen role -> token. Roles are M3 names as printed by `matugen --json hex`.
+M3 = {"bg": "background", "surface": "surface", "surfaceDim": "surface_dim",
+      "surfaceContainer": "surface_container", "surfaceContainerHigh": "surface_container_high",
+      "outline": "outline", "outlineVariant": "outline_variant", "fg": "on_surface",
+      "fgDim": "on_surface_variant", "accent": "primary", "accentFg": "on_primary"}
+
+
+def wallpaper_tokens(roles, wallpaper):
+    miss = [r for r in M3.values() if r not in roles]
+    if miss:
+        raise SystemExit(f"dots-theme: matugen output lacks roles: {', '.join(miss)}")
+    color = {k: norm(roles[r]) for k, r in M3.items()}
+    color["fgFaint"] = mix(color["bg"], color["fgDim"], 0.55)
+    color.update(status_colours())
+    return finish("wallpaper", wallpaper, color)
+
+
+def finish(source, wallpaper, color):
+    t = {"v": 1, "source": source, "mode": "dark", "wallpaper": wallpaper, "color": color}
+    t.update(static_tokens())
+    return t
+
+
+# ── io ─────────────────────────────────────────────────────────────────
+def write_atomic(path, text, mode=0o644):
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=path.name + ".", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as f:
+            f.write(text)
+        os.chmod(tmp, mode)
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
+def load_tokens():
+    try:
+        return json.loads(TOKENS.read_text())
+    except (OSError, ValueError):
+        return None
+
+
+def current_wallpaper():
+    try:
+        p = (HOME / ".cache/current-wallpaper").read_text().strip()
+        return p if p and Path(p).is_file() else None
+    except OSError:
+        return None
+
+
+def run_matugen(path):
+    exe = shutil.which("matugen")
+    if not exe:
+        raise SystemExit("dots-theme: matugen is not installed (nix/home.nix adds it)")
+    r = subprocess.run([exe, "image", str(path), "--json", "hex", "--dry-run",
+                        "--mode", "dark", "--type", "scheme-tonal-spot"],
+                       capture_output=True, text=True, timeout=60)
+    if r.returncode != 0:
+        raise SystemExit(f"dots-theme: matugen failed: {r.stderr.strip()[:200]}")
+    try:
+        doc = json.loads(r.stdout)
+        cols = doc["colors"]
+        roles = cols.get("dark", cols)
+        return {k: (v["color"] if isinstance(v, dict) else v) for k, v in roles.items()}
+    except (ValueError, KeyError, AttributeError, TypeError) as e:
+        raise SystemExit(f"dots-theme: unreadable matugen output ({e})")
+
+
+def recolour(path):
+    """Fit a wallpaper to the palette with gowall; returns the new path. Never in place."""
+    exe = shutil.which("gowall")
+    if not exe:
+        raise SystemExit("dots-theme: gowall is not installed (nix/home.nix adds it)")
+    out = STATE / "wallpaper-recoloured.png"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    r = subprocess.run([exe, "convert", str(path), "-t", "dracula", "--output", str(out)],
+                       capture_output=True, text=True, timeout=120)
+    if r.returncode != 0 or not out.is_file():
+        raise SystemExit(f"dots-theme: gowall failed: {r.stderr.strip()[:200]}")
+    return out
+
+
+# ── consumers (emit) ───────────────────────────────────────────────────
+def emit(t):
+    c = t["color"]
+    write_atomic(TOKENS, json.dumps(t, indent=2) + "\n")
+
+    def h(name):
+        return c[name].lstrip("#")
+
+    # hyprlang-style variables; the Lua config reads them with io.open if it wants them
+    hypr = "".join(f"${k} = rgb({h(k)})\n" for k in
+                   ("bg", "surface", "fg", "fgDim", "accent", "amber", "red", "outline"))
+    write_atomic(CONF / "hypr/colors.conf", "# written by dots-theme; do not edit\n" + hypr)
+
+    ghostty = (f"# written by dots-theme; include with: config-file = ?dots-theme.conf\n"
+               f"background = {h('bg')}\nforeground = {h('fg')}\n"
+               f"selection-background = {h('surfaceContainer')}\nselection-foreground = {h('fg')}\n"
+               f"cursor-color = {h('accent')}\ncursor-text = {h('accentFg')}\n")
+    write_atomic(CONF / "ghostty/dots-theme.conf", ghostty)
+
+    css = "/* written by dots-theme; @import it before the swaync sheet */\n" + "".join(
+        f"@define-color dots_{k} {c[k]};\n" for k in
+        ("bg", "surface", "surfaceContainer", "fg", "fgDim", "accent", "amber", "red", "outline"))
+    write_atomic(CONF / "swaync/dots-theme.css", css)
+
+    lock = ("# written by dots-theme; source it from hyprlock.conf\n"
+            f"$lock_bg = rgb({h('bg')})\n$lock_fg = rgb({h('fg')})\n$lock_accent = rgb({h('accent')})\n")
+    write_atomic(CONF / "hypr/hyprlock-colors.conf", lock)
+
+
+# ── cli ────────────────────────────────────────────────────────────────
+def main(argv):
+    cmd = argv[0] if argv else "status"
+    rest = argv[1:]
+    if cmd == "preset":
+        emit(preset_tokens())
+    elif cmd == "wallpaper":
+        do_recolour = "--recolour" in rest
+        args = [a for a in rest if a != "--recolour"]
+        cur = current_wallpaper()
+        wp = Path(args[0]).expanduser() if args else (Path(cur) if cur else None)
+        if not wp or not wp.is_file():
+            raise SystemExit("dots-theme: no wallpaper (pass a PATH, or set one with the wallpaper picker)")
+        if do_recolour:
+            wp = recolour(wp)
+        emit(wallpaper_tokens(run_matugen(wp), str(wp)))
+    elif cmd == "emit":
+        t = load_tokens()
+        if t is None:
+            raise SystemExit("dots-theme: no tokens.json yet; run `dots-theme preset` first")
+        emit(t)
+    elif cmd == "status":
+        t = load_tokens()
+        if t is None:
+            print("tokens: absent (the shell uses its built-in defaults)")
+        else:
+            print(f"tokens: {TOKENS}\nsource: {t.get('source')}\nwallpaper: {t.get('wallpaper')}\n"
+                  f"accent: {t['color']['accent']}  bg: {t['color']['bg']}")
+    else:
+        print("usage: dots-theme preset | wallpaper [--recolour] [PATH] | emit | status", file=sys.stderr)
+        sys.exit(2)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
