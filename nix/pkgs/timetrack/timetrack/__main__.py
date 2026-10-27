@@ -74,20 +74,24 @@ def cmd_ingest_aw(a):
 
 
 def cmd_web(a):
-    from . import web
+    from . import web, webclass
     if a.all:
         start = web.first_day()
         days = list(web.days_since(start)) if start else []
     else:
         days = [date.fromisoformat(a.day) if a.day else date.today()]
     for d in days:
-        by_dom, by_tkt = web.write(d)
+        by_dom, _ = web.write(d)
+        rows = webclass.classify(d, use_llm=not a.no_llm)
         total = sum(by_dom.values())
-        print(f"{d}  browser {derive.hhmm(round(total / 60))} focused and present")
-        for k, v in sorted(by_dom.items(), key=lambda kv: -kv[1])[:a.top]:
-            print(f"  {derive.hhmm(round(v / 60)):>6}  {k}")
-        for k, v in sorted(by_tkt.items(), key=lambda kv: -kv[1]):
-            print(f"  {derive.hhmm(round(v / 60)):>6}  ticket {k}")
+        split = {}
+        for r in rows:
+            split[r[13]] = split.get(r[13], 0) + r[3]
+        print(f"{d}  browser {derive.hhmm(round(total / 60))} focused and present  "
+              + "  ".join(f"{k} {derive.hhmm(round(v / 60))}" for k, v in sorted(split.items())))
+        for r in sorted(rows, key=lambda r: -r[3])[:a.top]:
+            link = f"  {r[8]}" if r[8] else ""
+            print(f"  {derive.hhmm(round(r[3] / 60)):>6}  {r[13]:<12} {r[11]:<14} {r[10][:60]}{link}")
     return 0
 
 
@@ -480,7 +484,8 @@ def main(argv=None):
     s = sub.add_parser("web", help="browser time per site and ticket (local, private.db)")
     s.add_argument("--day", help="YYYY-MM-DD (default: today)")
     s.add_argument("--all", action="store_true", help="every day the web bucket covers")
-    s.add_argument("--top", type=int, default=8, help="domains to print per day")
+    s.add_argument("--top", type=int, default=12, help="visits to print per day")
+    s.add_argument("--no-llm", action="store_true", help="rules only; skip the local model")
     s.set_defaults(fn=cmd_web)
 
     s = sub.add_parser("away", help="D7: declare or ask what an away gap was (watcher)")
