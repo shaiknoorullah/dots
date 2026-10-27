@@ -131,7 +131,19 @@ def declare(key, now=None):
     if key == "salah" and (p := salah_hint(now, now)):
         label = f"Salah · {p}"
     _write(INTENT, {"key": key, "label": label, "since": now})
+    if key == "logout":
+        _brief()
     return label
+
+
+def _brief():
+    """Write the day's brief on the way out. Detached and best effort: it must never hold up the picker."""
+    if exe := shutil.which("dots-overview"):
+        try:
+            subprocess.Popen([exe, "report", "--reason", "logout"], stdin=subprocess.DEVNULL,
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+        except OSError:
+            pass
 
 
 def take_intent(g0, g1):
