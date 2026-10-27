@@ -8,6 +8,9 @@ from datetime import datetime
 import helpers
 from dots_overview import config, local_tt, report
 
+# built from parts: the literal never appears in shipped source (only tests/lint.sh's denylist names it)
+HANDLE = "web" + "sleak"
+
 
 def make_db(path, day_epoch):
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -34,14 +37,14 @@ class Brief(helpers.Scratch):
         make_db(config.TT_DIR / "work.db", t0)
         self.t0 = t0
         self.tw = helpers.FakeTw(self)
-        self.cfg = config.Work({"WORK_GH_ORG": "acme", "WORK_PROJECTS": "work", "REPORT_DIR": str(self.root / "daily")})
+        self.cfg = config.Work({"WORK_GH_ORG": "acme", "WORK_PROJECTS": "work", "REDACT_WORDS": HANDLE, "REPORT_DIR": str(self.root / "daily")})
         end = t0 + 15 * 3600
         self.tw.seed(desc="Fix the intake form validation", ref="HD-123", src="erp", status="completed", end_ts=end)
         self.tw.seed(desc="Detection rules", ref="gh:acme/r#886", src="gh", status="completed", end_ts=end + 60, srcstate="review:reviewed")
         self.tw.seed(desc="Buy birthday present for ada@example.com", project="personal", status="completed", end_ts=end)
         self.tw.seed(desc="Personal repo chore", ref="gh:me/dots#3", src="gh", status="completed", end_ts=end)
         self.tw.seed(desc="SHA-pin Actions", ref="TASK-2026-00561", src="erp", tags=["mirror", "attn"])
-        self.tw.seed(desc="Weekend hobby websleak thing", project="personal", start_ts=t0 + 100)
+        self.tw.seed(desc=f"Weekend hobby {HANDLE} thing", project="personal", start_ts=t0 + 100)
         self.tw.seed(desc="Old work item from last week", project="work", status="completed", end_ts=t0 - 86400)
 
     def build(self):
@@ -56,7 +59,7 @@ class Brief(helpers.Scratch):
         self.assertIn("`HD-123` Fix the intake form validation — 1h 40m", text)
         self.assertIn("`gh:acme/r#886` Detection rules — 10m — review submitted", text)
         self.assertIn("`TASK-2026-00561` SHA-pin Actions", text)
-        for leak in ("birthday", "Personal repo", "hobby", "Old work item", "@", "websleak"):
+        for leak in ("birthday", "Personal repo", "hobby", "Old work item", "@", HANDLE):
             self.assertNotIn(leak, text)
 
     def test_worked_time_unions_overlap_and_subtracts_deductions(self):
@@ -69,11 +72,18 @@ class Brief(helpers.Scratch):
             self.assertNotIn(word, text)
 
     def test_emails_and_banned_handle_are_scrubbed_from_titles(self):
-        self.tw.seed(desc="Mail ops@example.com about websleak.dev", ref="HD-9", src="erp", status="completed", end_ts=self.t0 + 16 * 3600)
+        self.tw.seed(desc=f"Mail ops@example.com about {HANDLE}.dev", ref="HD-9", src="erp", status="completed", end_ts=self.t0 + 16 * 3600)
         text = self.build()
         self.assertNotIn("ops@example.com", text)
-        self.assertNotRegex(text.lower(), "websleak")
+        self.assertNotIn(HANDLE, text.lower())
         self.assertIn("[email]", text)
+
+    def test_email_floor_needs_no_config_and_words_are_opt_in(self):
+        bare = config.Work({})
+        self.assertEqual(report.scrub("ping a.b+c@ex-ample.co.uk now", bare), "ping [email] now")
+        self.assertIn(HANDLE, report.scrub(f"about {HANDLE}.dev", bare))          # no word list: not touched
+        self.assertEqual(report.scrub(f"about {HANDLE}.dev x@y.zz", self.cfg), "about [redacted] [email]")
+        self.assertEqual(report.scrub("x@y.zz", config.Work({"REDACT_WORDS": ""})), "[email]")
 
     def test_write_is_0600_idempotent_and_nightly_is_a_noop(self):
         t = self.t0 + 23 * 3600

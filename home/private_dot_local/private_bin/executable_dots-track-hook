@@ -66,7 +66,17 @@ if not SESS_RE.match(sess):
     raise SystemExit(0)
 
 
-def run(argv, timeout=2):
+# The installer gives this hook 5 s. Every child has its own cap and they sum to 4.0 s
+# (herdr get 1.5 + name 1.5 + report-metadata 1.0), so even when all three hang the hook
+# ends under the limit with 1 s for interpreter start and the file writes.
+T_PANE, T_NAME, T_META = 1.5, 1.5, 1.0
+DEADLINE = time.monotonic() + 4.0
+
+
+def run(argv, timeout=1.5):
+    timeout = min(timeout, DEADLINE - time.monotonic())
+    if timeout <= 0.05:
+        return ""
     try:
         p = subprocess.run(argv, capture_output=True, text=True, timeout=timeout, stdin=subprocess.DEVNULL)
         return p.stdout if p.returncode == 0 else ""
@@ -86,7 +96,7 @@ def write_atomic(path, text):
 tab = workspace = None
 if shutil.which("herdr"):
     try:
-        p = json.loads(run(["herdr", "pane", "get", pane]) or "{}")["result"]["pane"]
+        p = json.loads(run(["herdr", "pane", "get", pane], T_PANE) or "{}")["result"]["pane"]
         tab, workspace = p.get("tab_id"), p.get("workspace_id")
     except (ValueError, KeyError, TypeError):
         pass
@@ -95,7 +105,7 @@ if workspace is None and ":" in pane:
 
 agent = None
 if shutil.which("dots-overview"):
-    agent = run(["dots-overview", "name", sess]).strip() or None
+    agent = run(["dots-overview", "name", sess], T_NAME).strip() or None
 
 prev_path = os.path.join(state, "sessions", sess + ".json")
 try:
@@ -130,10 +140,21 @@ line = json.dumps(rec, separators=(",", ":")) + "\n"
 fd = os.open(os.path.join(state, "sessions.jsonl"), os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
 with os.fdopen(fd, "a", encoding="utf-8") as fh:
     fh.write(line)
+RING = 5000
+log = os.path.join(state, "sessions.jsonl")
+try:
+    # ring like notifications.jsonl: trim in batches (a stat per call, a rewrite per ~200)
+    if os.stat(log).st_size > RING * 100:
+        with open(log, encoding="utf-8") as fh:
+            lines = fh.read().splitlines()
+        if len(lines) > RING + 200:
+            write_atomic(log, "\n".join(lines[-RING:]) + "\n")
+except OSError:
+    pass
 write_atomic(prev_path, json.dumps(rec, separators=(",", ":")) + "\n")
 
 if action == "session" and agent and shutil.which("herdr"):
     # herdr is local; this is display metadata only. The pane id goes FIRST.
-    run(["herdr", "pane", "report-metadata", pane, "--source", "dots-track", "--display-agent", agent], timeout=3)
+    run(["herdr", "pane", "report-metadata", pane, "--source", "dots-track", "--display-agent", agent], T_META)
 PY
 exit 0

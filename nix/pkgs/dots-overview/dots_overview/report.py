@@ -17,10 +17,16 @@ EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
 MAX_OPEN = 10
 
 
-def scrub(s):
-    """Titles are free text. An address or the banned personal handle never reaches the file."""
+def scrub(s, cfg=None):
+    """Titles are free text. The floor is the EMAIL scrub, which nothing can switch off.
+
+    work.conf REDACT_WORDS adds words on top (case-insensitive, with the rest of the token);
+    no word is written in this public repo.
+    """
     s = EMAIL.sub("[email]", s or "")
-    return re.sub(r"websleak\S*", "[redacted]", s, flags=re.I)
+    for w in getattr(cfg, "redact_words", None) or []:
+        s = re.sub(re.escape(w) + r"\S*", "[redacted]", s, flags=re.I)
+    return s
 
 
 def dur(sec):
@@ -31,10 +37,10 @@ def dur(sec):
     return f"{h}h" if h else (f"{m}m" if m else "")
 
 
-def _line(i, t, secs):
+def _line(i, t, secs, cfg=None):
     ref = f"`{t['ref']}` " if t.get("ref") else ""
     tail = f" — {dur(secs)}" if secs else ""
-    return ref, f"{i}. {ref}{scrub(t.get('desc', ''))[:100]}{tail}"
+    return ref, f"{i}. {ref}{scrub(t.get('desc', ''), cfg)[:100]}{tail}"
 
 
 def build(day, cfg, now=None):
@@ -53,7 +59,7 @@ def build(day, cfg, now=None):
         if not rows:
             return out + ["Nothing.", ""]
         for i, t in enumerate(rows, 1):
-            line = _line(i, t, times.get(t.get("ref")))[1]
+            line = _line(i, t, times.get(t.get("ref")), cfg)[1]
             if (t.get("srcstate") or "").endswith(":reviewed"):
                 line += " — review submitted"
             elif t in still and "attn" in (t.get("tags") or []) and t.get("src") in ("gh", "erp"):
@@ -68,7 +74,7 @@ def build(day, cfg, now=None):
     titles = {t["ref"]: t.get("desc", "") for t in pend + done if t.get("ref")}
     for ref, sec in sorted(times.items(), key=lambda kv: -kv[1])[:15]:
         if dur(sec):
-            lines.append(f"| `{scrub(ref)}` | {scrub(titles.get(ref, ''))[:60]} | {dur(sec)} |")
+            lines.append(f"| `{scrub(ref, cfg)}` | {scrub(titles.get(ref, ''), cfg)[:60]} | {dur(sec)} |")
     return "\n".join(lines) + "\n"
 
 

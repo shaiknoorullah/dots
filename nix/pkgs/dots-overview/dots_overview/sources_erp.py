@@ -10,6 +10,9 @@ Auth is an open decision, so both adapters ship and `ERP_MODE` defaults to `off`
 
 There is no POST, PUT or DELETE anywhere in this module, and the mcp allow-list comes from
 work.conf (ERP_MCP_TOOLS) so no tool or company name is written in this public repo.
+An allow-list alone is not enough, so the call also passes --disallowedTools from
+ERP_MCP_DENY (every write-capable tool, by pattern) and --permission-mode default, and
+refuses to run at all when ERP_MCP_DENY is empty.
 """
 import json
 import os
@@ -107,10 +110,14 @@ def fetch_mcp(cfg, runner=subprocess.run):
     """Ask `claude -p` for my open items, with only read tools allowed. Output is validated."""
     if not cfg.raw.get("ERP_MCP_TOOLS"):
         raise ErpError("mcp mode needs ERP_MCP_TOOLS (the read-only tool names) in work.conf")
+    if not cfg.raw.get("ERP_MCP_DENY", "").strip():
+        raise ErpError("mcp mode needs ERP_MCP_DENY (the write-capable tool patterns) in work.conf")
     prompt = ("List my open items in these ERP doctypes: " + ", ".join(cfg.erp_doctypes) +
               ". Read only. Reply with ONLY a JSON array of objects with keys "
               "doctype, name, title, status, modified. No prose.")
-    argv = ["claude", "-p", prompt, "--allowedTools", ",".join(cfg.raw["ERP_MCP_TOOLS"].split()), "--output-format", "text"]
+    argv = ["claude", "-p", prompt, "--allowedTools", ",".join(cfg.raw["ERP_MCP_TOOLS"].split()),
+            "--disallowedTools", ",".join(cfg.raw["ERP_MCP_DENY"].replace(",", " ").split()),
+            "--permission-mode", "default", "--output-format", "text"]
     try:
         p = runner(argv, capture_output=True, text=True, timeout=180, stdin=subprocess.DEVNULL)
         rows = json.loads(p.stdout[p.stdout.index("["):p.stdout.rindex("]") + 1])

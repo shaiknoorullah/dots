@@ -98,6 +98,31 @@ for pair in "session session.json" "prompt prompt.json" "prompt prompt-ticket.js
   run_hook "$1" "$fix/hooks/$2" && ok "$1 < $2: empty stdout, exit 0" || bad "$1 < $2: output or non-zero exit"
 done
 run_hook bogus "$fix/hooks/prompt.json" && ok "unknown action exits 0" || bad "unknown action"
+
+# every child hangs: the SessionStart path (pane get + name + report-metadata) must still end under
+# the installer's 5 s timeout, silent, exit 0
+mkdir -p "$tmp/slow"
+for c in herdr dots-overview; do printf '#!/bin/sh\nexec sleep 30\n' > "$tmp/slow/$c"; chmod +x "$tmp/slow/$c"; done
+t0=$(date +%s%N)
+out=$(env PATH="$tmp/slow:$PATH" HERDR_ENV=1 HERDR_PANE_ID=w9:p1 DOTS_OVERVIEW_STATE_DIR="$tmp/state-slow" sh "$hook" session < "$fix/hooks/session.json" 2>/dev/null); rc_=$?
+ms=$(( ($(date +%s%N) - t0) / 1000000 ))
+[ -z "$out" ] && [ "$rc_" = 0 ] && ok "hung children: silent, exit 0" || bad "hung children: output or exit $rc_"
+[ "$ms" -lt 4900 ] && ok "hung children: session hook ends in ${ms} ms (< 5 s installer timeout)" || bad "session hook took ${ms} ms"
+python3 - "$hook" <<'PYT' && ok "child timeouts in the hook sum to <= 4 s" || bad "child timeouts exceed 4 s"
+import re, sys
+src = open(sys.argv[1]).read()
+m = re.search(r"T_PANE, T_NAME, T_META = ([\d.]+), ([\d.]+), ([\d.]+)", src)
+assert m and sum(map(float, m.groups())) <= 4.0
+body = src.split("def run(")[1].split("def write_atomic")[0]
+assert "min(timeout, DEADLINE" in body
+PYT
+# sessions.jsonl is a ring: a hand-grown 6000-line log is trimmed by the next hook run
+mkdir -p "$tmp/state-ring"
+python3 -c "
+import json
+print('\n'.join(json.dumps({'v':1,'pad':'x'*90,'n':i}) for i in range(6000)))" > "$tmp/state-ring/sessions.jsonl"
+run_hook stop "$fix/hooks/stop.json" DOTS_OVERVIEW_STATE_DIR="$tmp/state-ring"
+n=$(wc -l < "$tmp/state-ring/sessions.jsonl"); [ "$n" -le 5001 ] && [ "$n" -ge 4900 ] && ok "sessions.jsonl trimmed to the ring ($n lines)" || bad "sessions.jsonl has $n lines"
 sid=11111111-2222-3333-4444-555555555555
 [ -f "$st/sessions/$sid.json" ] && ok "session record written" || bad "no session record"
 [ "$(stat -c %a "$st/sessions/$sid.json" "$st/sessions.jsonl" | sort -u)" = 600 ] && ok "records are mode 0600" || bad "record mode"
@@ -176,6 +201,32 @@ dots-jump "$agent" >/dev/null 2>&1 && ok "dots-jump <agent> runs" || bad "dots-j
 grep -q '^workspace focus w9$' "$HERDR_LOG" && ok "it focuses the workspace" || bad "no workspace focus: $(cat "$HERDR_LOG")"
 dots-jump --dry-run "$agent" 2>&1 | grep -q 'herdr workspace focus w9' && ok "dry-run prints the plan" || bad "dry-run output"
 dots-jump --resume "$agent" 2>&1 | grep -qx 'claude --resume 11111111-2222-3333-4444-555555555555' && ok "--resume prints the claude command" || bad "--resume output"
+dots-jump --last --dry-run 2>&1 | grep -q 'herdr workspace focus w9' && ok "dots-jump --last resolves the newest task with a pane" || bad "dots-jump --last"
+# every dots-overview / dots-jump argv the shell's overview module execs must parse and act
+dots-overview focus start >/dev/null 2>&1 && grep -q '"state":"running"' "$st2/focus.json" && ok "dots-overview focus start" || bad "focus start"
+dots-overview focus break >/dev/null 2>&1 && grep -q '"state":"break"' "$st2/focus.json" && ok "dots-overview focus break" || bad "focus break"
+dots-overview focus stop >/dev/null 2>&1 && grep -q '"state":"idle"' "$st2/focus.json" && ok "dots-overview focus stop" || bad "focus stop"
+dots-overview focus pause >/dev/null 2>&1; [ $? -ne 0 ] && ok "an unknown focus action is refused" || bad "focus pause accepted"
+dots-overview report --help >/dev/null 2>&1 && dots-overview breakdown --help 2>&1 | grep -q -- --start && ok "report and breakdown <ref> --start parse" || bad "report/breakdown argv"
+cat > "$tmp/bin/dbus-monitor" <<'DBUS'
+#!/bin/sh
+cat <<'OUT'
+method call time=1.0 sender=:1.5 -> destination=org.freedesktop.Notifications serial=3 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+   string "notify-send"
+   uint32 0
+   string ""
+   string "Build ok"
+   string "nothing private"
+   array [
+   ]
+   array [
+   ]
+   int32 -1
+OUT
+DBUS
+chmod +x "$tmp/bin/dbus-monitor"
+dots-overview notifylog >/dev/null 2>&1 && grep -q '"summary":"Build ok"' "$st2/notifications.jsonl" && ! grep -q 'nothing private' "$st2/notifications.jsonl" \
+  && ok "dots-overview notifylog logs the summary, not the body" || bad "notifylog"
 dots-overview fast >/dev/null 2>&1 && ok "fast cycle runs" || bad "fast cycle failed"
 for f in now activity attention heatmap meta; do [ -f "$st2/$f.json" ] && ok "$f.json written" || bad "$f.json missing"; done
 
@@ -249,7 +300,7 @@ if out=$(cd "$pkg" && python3 -m unittest discover -s tests 2>&1); then ok "$(ec
 echo "9. work.conf.example is placeholders only"
 ex="$root/home/private_dot_config/dots-work/work.conf.example"
 grep -q '^ERP_MODE=off' "$ex" && ok "ERP defaults to off" || bad "ERP_MODE is not off in the example"
-grep -qiE 'pnow|proficient|kaarbaaz|code42|websleak|@' "$ex" && bad "the example names a company or address" || ok "example names no company or address"
+grep -qiE "$(printf 'pnow|proficient|kaarbaaz|code42|%s|@' "web""sleak")" "$ex" && bad "the example names a company or address" || ok "example names no company or address"
 grep -qE 'example-org|example\.com' "$ex" && ok "uses placeholder values" || bad "placeholders missing"
 
 [ "$fails" = 0 ] && echo "track ok" || { echo "track: $fails failure(s)"; exit 1; }

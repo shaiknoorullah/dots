@@ -67,6 +67,7 @@ class Work:
         self.erp_doctypes = [d.strip() for d in raw.get("ERP_DOCTYPES", "ToDo,HD Ticket,Task").split(",") if d.strip()]
         self.work_projects = _split(raw.get("WORK_PROJECTS", ""))
         self.notify_body_apps = _split(raw.get("NOTIFY_BODY_APPS", ""))
+        self.redact_words = _split(raw.get("REDACT_WORDS", ""))
         self.report_dir = Path(os.path.expanduser(raw.get("REPORT_DIR") or "~/powerhouse/reports/daily"))
 
     @staticmethod

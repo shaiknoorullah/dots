@@ -46,6 +46,11 @@ jobs:
       - run: bash tests/web.sh
       - run: bash tests/away.sh
       - run: bash tests/locality.sh
+      # Work tracking (dots-overview) and the daily brief. Stub gh/herdr/timew, scratch Taskwarrior,
+      # no network; only `task` itself has to be real.
+      - run: sudo apt-get install -y taskwarrior
+      - run: bash tests/track.sh
+      - run: bash tests/report.sh
       - name: in-home.sh (sentinel mode)
         run: |
           d="$(mktemp -d)"

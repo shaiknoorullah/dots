@@ -26,12 +26,23 @@ ERP_DOCTYPES="ToDo,HD Ticket,Task"
 # mcp mode only: the read-only tool names `claude -p` may call (space separated).
 ERP_MCP_TOOLS=
 
+# mcp mode only, REQUIRED: every write-capable tool, passed as --disallowedTools next to
+# --allowedTools. mcp mode refuses to run while this is empty. The names below are the
+# generic shape; in your real work.conf write the FULL tool names with your server prefix
+# (mcp__<server>__create_document ...), because a bare name matches nothing.
+ERP_MCP_DENY="create_document update_document delete_document submit_document cancel_document run_sql run_python"
+
 # Taskwarrior projects counted as company work (space separated).
 WORK_PROJECTS=work
 
 # Apps whose notification BODY may be stored in the local notification log. Every other
 # app stores its summary only. Leave empty to store no body at all.
 NOTIFY_BODY_APPS=
+
+# Extra words scrubbed from titles in the daily brief (space separated, case-insensitive,
+# each also removes the rest of its token). Email addresses are ALWAYS scrubbed; this
+# list only adds to that floor.
+REDACT_WORDS=
 
 # Where the daily brief is written. Default shown.
 REPORT_DIR=~/powerhouse/reports/daily

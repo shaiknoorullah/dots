@@ -42,7 +42,7 @@ Internal: `sessions.jsonl`, `sessions/<id>.json`, `notifications.jsonl`, `focus.
 `~/.config/dots-work/work.conf` is written **by hand** and never committed.
 Copy `work.conf.example`; every value there is a placeholder.
 
-Extra key beyond the spec: `ERP_MCP_TOOLS`, so no tool or company name lives in this public repo.
+Extra keys beyond the spec: `ERP_MCP_TOOLS` (read tools), `ERP_MCP_DENY` (every write-capable tool; mcp mode refuses to run while it is empty; passed as `--disallowedTools` with `--permission-mode default`) and `REDACT_WORDS` (extra words scrubbed from the brief on top of the always-on email scrub), so no tool, company or handle name lives in this public repo.
 
 ---
 

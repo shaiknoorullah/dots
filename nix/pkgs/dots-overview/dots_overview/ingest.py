@@ -7,12 +7,41 @@ is enforced in a single, testable function instead of scattered across hooks.
 Idempotent: a task is found by `sess` first and `ref` second, so running it twice in a row
 changes nothing.
 """
+import os
 import time
 
 from . import atomic, config, herdr, names, tw
 
 SESS_DIR = "sessions"
 MAX_AGE = 24 * 3600
+LOG = "sessions.jsonl"
+LOG_CAP = 5000
+
+
+def prune(now=None, cap=LOG_CAP):
+    """Bound the hook's state: sessions.jsonl is a ring of `cap` lines, and a per-session
+    file older than MAX_AGE is deleted (load_sessions would skip it anyway)."""
+    now = int(now or time.time())
+    d = config.STATE_DIR
+    log = d / LOG
+    try:
+        lines = log.read_text(encoding="utf-8").splitlines()
+        if len(lines) > cap:
+            atomic.write_text(log, "\n".join(lines[-cap:]) + "\n")
+    except OSError:
+        pass
+    removed = 0
+    for f in (d / SESS_DIR).glob("*.json") if (d / SESS_DIR).is_dir() else []:
+        rec = atomic.read_json(f)
+        try:
+            ts = int(rec.get("ts") or 0) if isinstance(rec, dict) else 0
+            ts = ts or int(f.stat().st_mtime)
+            if now - ts > MAX_AGE:
+                os.unlink(f)
+                removed += 1
+        except OSError:
+            pass
+    return removed
 
 
 def load_sessions(now=None):
@@ -60,6 +89,7 @@ def _adopt_ticket(t, ticket, by_ref, want):
 
 def run(now=None, live=None):
     """Make sure every recorded session has a task. Returns {'created': n, 'updated': n}."""
+    prune(now)
     live = live if live is not None else herdr.snapshot()
     live_by_sess = {a["sess"]: a for a in (live or []) if a.get("sess")}
     pend = tw.pending()

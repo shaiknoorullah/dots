@@ -7,12 +7,14 @@ import re
 import stat
 import subprocess
 import time
+import types
 import unittest
 from pathlib import Path
 
 import helpers
 from dots_overview import (atomic, breakdown, config, detect, ingest, names, notifylog, sources_erp,
                            sources_gh, sync, tw)
+from dots_overview import cli, jump, nowstate
 
 PKG = Path(helpers.HERE.parent / "dots_overview")
 
@@ -268,6 +270,29 @@ class Sources(helpers.Scratch):
             sources_erp.fetch_token(cfg, opener=boom)
         self.assertNotIn("s3cr3t", str(cm.exception))
 
+    def test_erp_mcp_argv_denies_writes_and_refuses_without_a_deny_list(self):
+        raw = {"ERP_MODE": "mcp", "ERP_MCP_TOOLS": "mcp__x__get_document mcp__x__query_documents",
+               "ERP_MCP_DENY": "mcp__x__create_document, mcp__x__run_sql mcp__x__cancel_document"}
+        seen = []
+
+        def runner(argv, **kw):
+            seen.append(argv)
+            return types.SimpleNamespace(stdout='[{"doctype": "Task", "name": "TASK-1", "title": "t", "status": "Open"}]')
+        items = sources_erp.fetch_mcp(config.Work(raw), runner=runner)
+        self.assertEqual(items[0]["ref"], "TASK-1")
+        argv = seen[0]
+        self.assertEqual(argv[argv.index("--allowedTools") + 1], "mcp__x__get_document,mcp__x__query_documents")
+        self.assertEqual(argv[argv.index("--disallowedTools") + 1],
+                         "mcp__x__create_document,mcp__x__run_sql,mcp__x__cancel_document")
+        self.assertEqual(argv[argv.index("--permission-mode") + 1], "default")
+        for bad in ({"ERP_MCP_DENY": ""}, {"ERP_MCP_DENY": "  "}):
+            seen.clear()
+            with self.assertRaises(sources_erp.ErpError):
+                sources_erp.fetch_mcp(config.Work(dict(raw, **bad)), runner=runner)
+            self.assertEqual(seen, [])           # claude was never started
+        with self.assertRaises(sources_erp.ErpError):
+            sources_erp.fetch_mcp(config.Work({k: v for k, v in raw.items() if k != "ERP_MCP_DENY"}), runner=runner)
+
     def test_erp_requires_https(self):
         key = self.root / "k"
         key.write_text("a:b")
@@ -406,6 +431,58 @@ class NotifyLog(helpers.Scratch):
         self.assertLessEqual(len(lines), 250)
         self.assertEqual(json.loads(lines[-1])["summary"], "119")
         self.assertEqual(stat.S_IMODE(p.stat().st_mode), 0o600)
+
+
+class CliSurface(helpers.Scratch):
+    """Every dots-overview / dots-jump argv the shell's overview module execs (Actions.qml)."""
+
+    def test_focus_actions_report_and_notifylog_and_jump_last(self):
+        for action, state in (("start", "running"), ("break", "break"), ("stop", "idle")):
+            self.assertEqual(cli.main(["focus", action]), 0)
+            self.assertEqual(atomic.read_json(config.STATE_DIR / nowstate.FOCUS)["state"], state)
+        with self.assertRaises(SystemExit):
+            cli.main(["focus", "pause"])
+        # `notifylog` reaches the eavesdropper, `report` writes today's brief
+        called = []
+        import dots_overview.notifylog as nl
+        from unittest import mock
+        with mock.patch.object(nl, "main", lambda: called.append("notifylog") or 0):
+            self.assertEqual(cli.main(["notifylog"]), 0)
+        self.assertEqual(called, ["notifylog"])
+        helpers.FakeTw(self)
+        config.CONF.write_text(f"REPORT_DIR={self.root / 'daily'}\n")
+        self.assertEqual(cli.main(["report"]), 0)
+        self.assertEqual(len(list((self.root / "daily").glob("*.md"))), 1)
+        # `dots-jump --last` picks the newest task with a pane; `<handle>` resolves a ref
+        tasks = [{"ref": "HD-1", "pane": "w1:p1", "modified": "20261028T100000Z", "uuid": "a"},
+                 {"ref": "HD-2", "pane": "w1:p2", "modified": "20261028T110000Z", "uuid": "b"},
+                 {"ref": "HD-3", "modified": "20261028T120000Z", "uuid": "c"}]
+        self.assertEqual(jump.last_session(tasks)["ref"], "HD-2")
+        self.assertEqual(jump.resolve("HD-1", tasks)["uuid"], "a")
+        from unittest import mock
+        with mock.patch.object(jump, "load_tasks", lambda: tasks), mock.patch.object(jump, "tab_for", lambda t: ("w1", None, t["pane"])):
+            self.assertEqual(cli.main(["jump", "--last", "--dry-run"]), 0)
+
+
+class SessionLog(helpers.Scratch):
+    def test_ring_cap_and_old_session_files_are_pruned(self):
+        d = config.STATE_DIR
+        (d / "sessions").mkdir(parents=True)
+        (d / "sessions.jsonl").write_text("".join(json.dumps({"n": i}) + "\n" for i in range(120)))
+        now = 10**9
+        atomic.write_json(d / "sessions" / "old.json", {"v": 1, "ts": now - ingest.MAX_AGE - 5, "sess": "old"})
+        atomic.write_json(d / "sessions" / "new.json", {"v": 1, "ts": now - 60, "sess": "new"})
+        (d / "sessions" / "junk.json").write_text("{not json")
+        os.utime(d / "sessions" / "junk.json", (now - ingest.MAX_AGE - 5,) * 2)
+        self.assertEqual(ingest.prune(now, cap=50), 2)
+        lines = (d / "sessions.jsonl").read_text().splitlines()
+        self.assertEqual((len(lines), json.loads(lines[0])["n"], json.loads(lines[-1])["n"]), (50, 70, 119))
+        self.assertEqual(sorted(p.name for p in (d / "sessions").glob("*.json")), ["new.json"])
+        self.assertEqual(ingest.prune(now, cap=50), 0)              # idempotent
+        self.assertEqual(stat.S_IMODE((d / "sessions.jsonl").stat().st_mode), 0o600)
+
+    def test_prune_with_nothing_there_is_a_noop(self):
+        self.assertEqual(ingest.prune(10**9), 0)
 
 
 class Ingest(helpers.Scratch):

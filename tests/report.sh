@@ -22,7 +22,8 @@ export HTTP_PROXY=http://127.0.0.1:1 HTTPS_PROXY=http://127.0.0.1:1 ALL_PROXY=ht
 unset GH_TOKEN GITHUB_TOKEN
 export TASKRC="$tmp/taskrc" TIMETRACK_STATE_DIR="$tmp/tt" DOTS_OVERVIEW_STATE_DIR="$tmp/state" DOTS_WORK_CONF="$tmp/work.conf" TIMEWARRIORDB="$tmp/none"
 sed -e "s#^data.location=.*#data.location=$tmp/task#" "$root/home/create_dot_taskrc" > "$TASKRC"
-printf 'WORK_GH_ORG=acme\nWORK_PROJECTS=work\nREPORT_DIR=%s/daily\n' "$tmp" > "$DOTS_WORK_CONF"
+printf 'WORK_GH_ORG=acme\nWORK_PROJECTS=work\nREDACT_WORDS=%s\nREPORT_DIR=%s/daily\n' "web""sleak" "$tmp" > "$DOTS_WORK_CONF"
+handle="web""sleak"   # built from parts: the literal is lint's business only
 tw() { task rc.confirmation=off rc.verbose=nothing "$@"; }
 
 python3 - "$tmp/tt/work.db" <<'EOF'
@@ -41,7 +42,7 @@ EOF
 tw add project:work +mirror ref:HD-123 src:erp -- "Fix the intake form validation" >/dev/null 2>&1
 tw add project:work +mirror ref:TASK-2026-00561 src:erp +attn -- "SHA-pin Actions" >/dev/null 2>&1
 tw add project:personal -- "Book the dentist for ada@example.com" >/dev/null 2>&1
-tw add project:personal -- "websleak newsletter chores" >/dev/null 2>&1
+tw add project:personal -- "$handle newsletter chores" >/dev/null 2>&1
 tw add +mirror ref:gh:me/dots#9 src:gh -- "Tidy the dots readme" >/dev/null 2>&1
 tw add +mirror ref:gh:acme/r#886 src:gh -- "Detection rules" >/dev/null 2>&1
 for ref in HD-123 gh:me/dots#9 gh:acme/r#886; do tw "ref.is:$ref" "done" >/dev/null 2>&1; done
@@ -61,7 +62,7 @@ grep -q '`gh:acme/r#886` Detection rules' "$f" && ok "closed company repo item i
 grep -q 'SHA-pin Actions' "$f" && ok "open company item is listed" || bad "open item missing"
 
 echo "2. what must never be in it"
-for leak in "dentist" "newsletter" "dots readme" "personal" "ada@" "@example" "websleak"; do
+for leak in "dentist" "newsletter" "dots readme" "personal" "ada@" "@example" "$handle"; do
   grep -qi -- "$leak" "$f" && bad "brief contains '$leak'" || ok "no '$leak'"
 done
 grep -qiE 'firefox|chromium|ghostty|slack|spotify|idle|afk|away' "$f" && bad "brief carries app or idle/away data" || ok "no app names, idle or away time"
