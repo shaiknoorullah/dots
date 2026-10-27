@@ -43,8 +43,11 @@ else ok "no vendor/ (no GPL file copied)"; fi
 grep -q 'ii-p3drovfx' "$root/third_party/NOTICE" && grep -q 'tally-screentime' "$root/third_party/NOTICE" \
   && ok "NOTICE lists both upstreams" || fail "NOTICE misses an upstream"
 
-# every file that mentions a company-ish name would trip lint.sh; this is the shell's own copy of the rule
-if grep -rIiE 'pnow|kaarbaaz|code42|proficient|websleak|contabo' "$dots" "$out/.local/bin/dots-shell" "$out/.local/bin/dots-theme" "$out/.config/matugen" 2>/dev/null | grep .; then
+# every file that mentions a company-ish name would trip lint.sh; this is the shell's own copy of the rule.
+# The banned handle is assembled at run time (as tests/track.sh does): it is a pattern this
+# file must MATCH, and writing it as a literal would make this very file a hit for the rule.
+pat_co="$(printf 'pnow|kaarbaaz|code42|proficient|%s|contabo' "web""sleak")"
+if grep -rIiE "$pat_co" "$dots" "$out/.local/bin/dots-shell" "$out/.local/bin/dots-theme" "$out/.config/matugen" 2>/dev/null | grep .; then
   fail "company name in the shell tree"; else ok "shell tree names no company"; fi
 
 # ── 2. hyprland wiring ─────────────────────────────────────────────────
