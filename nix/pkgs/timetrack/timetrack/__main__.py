@@ -93,8 +93,12 @@ def cmd_web(a):
 
 def cmd_away(a):
     from . import away
-    if a.ask:
-        return away.ask(a.hint)
+    if a.prayer:
+        print(away.prayer_now())
+        return 0
+    if a.declare:
+        print(away.declare(a.declare))
+        return 0
     away.watch()
     return 0
 
@@ -479,9 +483,9 @@ def main(argv=None):
     s.add_argument("--top", type=int, default=8, help="domains to print per day")
     s.set_defaults(fn=cmd_web)
 
-    s = sub.add_parser("away", help="D7: ask what an away gap was on return (watcher)")
-    s.add_argument("--ask", action="store_true", help="inside the panel: read one answer")
-    s.add_argument("--hint", help="prayer to pre-select (with --ask)")
+    s = sub.add_parser("away", help="D7: declare or ask what an away gap was (watcher)")
+    s.add_argument("--declare", metavar="REASON", help="Super+Esc: record why you are leaving")
+    s.add_argument("--prayer", action="store_true", help="the prayer whose iqamah is near now")
     s.set_defaults(fn=cmd_away)
 
     s = sub.add_parser("compare-aw", help="cross-validate recorded days against AW presence")

@@ -1,0 +1,15 @@
+#!/bin/sh
+# timetrack-away-label — one line for hyprlock: what the user declared, and for how long.
+# Runs every second on the lock screen, so: plain sh, one file read, no python.
+f="${XDG_DATA_HOME:-$HOME/.local/share}/timetrack/away-intent.json"
+[ -r "$f" ] || exit 0
+label=$(sed -n 's/.*"label": *"\([^"]*\)".*/\1/p' "$f")
+since=$(sed -n 's/.*"since": *\([0-9]*\).*/\1/p' "$f")
+[ -n "$label" ] && [ -n "$since" ] || exit 0
+s=$(( $(date +%s) - since ))
+[ "$s" -ge 0 ] && [ "$s" -lt 86400 ] || exit 0
+if grep -q '"key": *"logout"' "$f"; then
+  printf 'Logged out for today · since %s\n' "$(date -d "@$since" +%H:%M)"
+  exit 0
+fi
+printf '%s · %d:%02d:%02d\n' "$label" $((s / 3600)) $((s % 3600 / 60)) $((s % 60))
