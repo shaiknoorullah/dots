@@ -74,6 +74,7 @@ LUA
   # scale 1: the compositor picks 2 for a headless output, which doubles every pixel the
   # assertions count. The 0x0 HDMI-A-2 ghost is the headless backend's own placeholder.
   hyprctl eval 'hl.monitor({ output = "HL-1", mode = "1920x1080@60", position = "0x0", scale = 1 })' >/dev/null 2>&1
+  hyprctl dismissnotify >/dev/null 2>&1      # the "started without start-hyprland" banner
   sleep 0.5
 }
 
@@ -84,20 +85,36 @@ qsh_shell() {
   local -a envs=("HOME=$QSH_DIR/home" "XDG_STATE_HOME=$QSH_DIR/home/.local/state"
                  "XDG_CONFIG_HOME=$QSH_DIR/home/.config" "XDG_CACHE_HOME=$QSH_DIR/home/.cache"
                  "QT_QUICK_BACKEND=software" "QT_QPA_PLATFORM=wayland")
-  env "${envs[@]}" "$@" timeout "${QSH_TIMEOUT:-90}" quickshell -p "$dir" >| "$QSH_DIR/qs.log" 2>&1 &
+  QSH_LOG="${QSH_LOG_NAME:-qs.log}"; QSH_LOG="$QSH_DIR/$QSH_LOG"
+  env "${envs[@]}" "$@" timeout "${QSH_TIMEOUT:-90}" quickshell -p "$dir" >| "$QSH_LOG" 2>&1 &
+  QSH_LAST_PID=$!
   QSH_PIDS+=($!)
   local i
   for i in $(seq 1 60); do
-    grep -q 'Configuration Loaded' "$QSH_DIR/qs.log" 2>/dev/null && break
+    grep -q 'Configuration Loaded' "$QSH_LOG" 2>/dev/null && break
     sleep 0.25
   done
-  grep -q 'Configuration Loaded' "$QSH_DIR/qs.log" 2>/dev/null || { echo "qs-harness: shell did not load"; tail -15 "$QSH_DIR/qs.log"; return 1; }
+  grep -q 'Configuration Loaded' "$QSH_LOG" 2>/dev/null || { echo "qs-harness: shell did not load"; tail -15 "$QSH_LOG"; return 1; }
   sleep "${QSH_SETTLE:-1.2}"
 }
 
 qsh_ipc() {
   local s="$1" f="$2"; shift 2
   env HOME="$QSH_DIR/home" timeout 10 quickshell -p "${QSH_SHELL_DIR:?}" ipc call "dots.$s" "$f" "$@" 2>&1
+}
+
+# stop one process we started (the timeout wrapper and what it runs), by pid
+qsh_kill() {
+  local p="$1"
+  pkill -P "$p" 2>/dev/null
+  kill "$p" 2>/dev/null
+  sleep 0.3
+}
+
+# size of a layer surface by namespace, from the compositor itself: "W H". Exact, unlike a
+# screenshot, so panel/toast/OSD widths are asserted against what was actually mapped.
+qsh_layer_size() {
+  hyprctl -j layers | jq -r --arg ns "$1" '[.[] | .levels[][] | select(.namespace == $ns and .w > 0)] | first | "\(.w) \(.h)"' 2>/dev/null
 }
 
 qsh_shot() { timeout 20 grim -o HL-1 "$1"; }
