@@ -91,13 +91,18 @@ def rules(v, conf):
     r = {"ticket": web.ticket(v["url"]), "link": None, "work": None, "activity": None}
     if r["ticket"]:
         r["link"], r["work"] = v["url"], True
-    m = GH_ITEM.match(urlsplit(v["url"]).path) if v["domain"] == "github.com" else None
-    if m:
-        org, repo, kind, num = m.groups()
-        r["link"] = v["url"]
-        r["activity"] = f"{'PR' if kind == 'pull' else 'Issue'} #{num} in {repo}"
-        if org.lower() in {o.lower() for o in conf.get("work_github_orgs", [])}:
+    if v["domain"] == "github.com":
+        path = urlsplit(v["url"]).path
+        segs = path.strip("/").split("/")
+        # repo pages are /<owner>/...; org and enterprise settings are /organizations/<org>/...
+        owner = segs[1] if len(segs) > 1 and segs[0] in ("organizations", "enterprises", "orgs") else segs[0]
+        if owner.lower() in {o.lower() for o in conf.get("work_github_orgs", [])}:
             r["work"] = True
+        m = GH_ITEM.match(path)
+        if m:
+            _, repo, kind, num = m.groups()
+            r["link"] = v["url"]
+            r["activity"] = f"{'PR' if kind == 'pull' else 'Issue'} #{num} in {repo}"
     if _in(v["domain"], conf.get("nonwork_domains", [])):
         r["work"] = False if r["work"] is None else r["work"]
     elif _in(v["domain"], conf.get("work_domains", [])) and r["work"] is None:
