@@ -329,7 +329,8 @@ hl.bind("XF86MonBrightnessUp",   hl.dsp.exec_cmd("swayosd-client --brightness ra
 hl.bind("XF86MonBrightnessDown", hl.dsp.exec_cmd("swayosd-client --brightness lower"))
 hl.bind("Caps_Lock",             hl.dsp.exec_cmd("swayosd-client --caps-lock"))
 
-hl.bind(mod .. " + Escape",     hl.dsp.exec_cmd("hyprlock"))
+-- Super+Esc asks WHY before it locks (timetrack D7); the lock screen then shows it with a timer.
+hl.bind(mod .. " + Escape",     hl.dsp.exec_cmd("ghostty --class=dots.otter --gtk-single-instance=false --config-file={{ .chezmoi.homeDir }}/.config/ghostty/popup -e {{ .chezmoi.homeDir }}/.local/bin/timetrack-away-pick --declare"))
 
 -- Focus (vim + arrows)
 local focusdirs = { H = "l", J = "d", K = "u", L = "r", left = "l", down = "d", up = "u", right = "r" }

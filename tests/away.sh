@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# D7, the on-return prompt (away.py). What must never happen: a gap answered without the
-# user, a neighbouring gap answered by mistake, or a prompt past the D21 budget.
+# D7 (away.py): declared on the way out (Super+Esc) or asked on the way back. What must
+# never happen: a gap answered without the user, a neighbouring gap answered by mistake, a
+# stale declaration answering a later gap, or a prompt past the D21 budget.
 set -euo pipefail
 root="$(git rev-parse --show-toplevel)"
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
@@ -20,6 +21,7 @@ def check(name, got, want):
 
 tmp = Path(sys.argv[1])
 away.STATE = tmp / "state" / "away-state.json"
+away.INTENT = tmp / "state" / "away-intent.json"
 config.PANIC = tmp / "config" / "timetrack" / "PANIC"
 away._toast = lambda body: None
 aw.write = lambda conn, **kw: None      # the refresh is tests/refresh.sh's subject
@@ -56,7 +58,8 @@ def gap(g0, g1):
                         (sid, "2026-10-27", g0, g1, "misc", (g1 - g0) / 60, 0,
                          "backfill:aw")).lastrowid
 row = lambda i: dict(conn.execute("SELECT * FROM deduction WHERE id=?", (i,)).fetchone())
-short, long_, other = gap(T - 7200, T - 6900), gap(T - 3600, T - 1800), gap(T - 1700, T - 1000)
+short, long_, other = gap(T - 7200, T - 6960), gap(T - 3600, T - 1800), gap(T - 1700, T - 1000)
+decl, stale, meal = gap(T - 12000, T - 10000), gap(T - 20000, T - 19000), gap(T - 30000, T - 28000)
 conn.commit()
 
 # 4. find_gap never answers a neighbour
@@ -65,7 +68,7 @@ check("no match on a sliver", away.find_gap(conn, T - 1810, T - 1100) and
       away.find_gap(conn, T - 1810, T - 1100)["id"], other)
 
 # 5. handle
-check("short gap auto", away.handle(T - 7200, T - 6900, T), "auto")
+check("short gap auto", away.handle(T - 7200, T - 6960, T), "auto")
 r = row(short)
 check("short: deducted, confirmed, marked auto", (r["category"], r["confirmed"], r["provenance"]),
       ("misc", 1, away.AUTO))
@@ -79,25 +82,49 @@ def panel(answer, rc=0):
 
 check("timeout leaves it alone", away.handle(T - 3600, T - 1800, T, launch=panel("", 2)), "unanswered")
 check("still unconfirmed", row(long_)["confirmed"], 0)
-check("meeting answered", away.handle(T - 3600, T - 1800, T + 100, launch=panel("4\n")),
+check("meeting answered", away.handle(T - 3600, T - 1800, T + 100, launch=panel("meeting\n")),
       "answered:meeting")
 r = row(long_)
 check("meeting costs nothing", (r["minutes"], r["confirmed"], r["provenance"]),
       (0, 1, "manual:meeting"))
 
 before = len(calls)
-check("over budget defers", away.handle(T - 1700, T - 1000, T + 200, launch=panel("1\n")), "deferred")
+check("over budget defers", away.handle(T - 1700, T - 1000, T + 200, launch=panel("salah\n")), "deferred")
 check("no panel when over budget", len(calls), before)
 check("deferred stays unconfirmed", row(other)["confirmed"], 0)
 
 away.STATE.unlink()
 config.PANIC.parent.mkdir(parents=True, exist_ok=True); config.PANIC.touch()
-check("PANIC defers", away.handle(T - 1700, T - 1000, T + 9000, launch=panel("1\n")), "deferred")
+check("PANIC defers", away.handle(T - 1700, T - 1000, T + 9000, launch=panel("salah\n")), "deferred")
 check("no panel under PANIC", len(calls), before)
+
+# 6. declared with Super+Esc: answered from the pick, no panel
+config.PANIC.unlink()
+away.declare("washroom", now=T - 12030)
+n = len(calls)
+check("declared answers the gap", away.handle(T - 12000, T - 10000, T + 20000, launch=panel("")),
+      "declared:washroom")
+r = row(decl)
+check("declared: washroom, confirmed", (r["category"], r["confirmed"], r["provenance"]),
+      ("washroom", 1, away.DECLARED))
+check("declared: no panel", len(calls), n)
+check("declaration consumed", away.INTENT.exists(), False)
+
+away.declare("walk", now=T - 30000)   # stale: long before this gap began
+away.STATE.unlink(missing_ok=True)
+check("stale declaration ignored", away.handle(T - 20000, T - 19000, T + 30000,
+      launch=panel("salah\n")), "answered:salah")
+
+away.declare("meal", now=T - 30000)
+check("morning long break is lunch", (away.handle(T - 30000, T - 28000, T + 40000),
+      row(meal)["category"]), ("declared:meal", "lunch"))
+check("long break from 17:00 is dinner", away.category("meal", T + 60), "dinner")
+check("garbage panel output is no answer", away.handle(T - 1700, T - 1000, T + 50000,
+      launch=panel("rm -rf /\n")), "unanswered")
 
 if fails:
     print("away FAILED:")
     for f in fails: print("  " + f)
     raise SystemExit(1)
-print("away ok (5 scenarios, 22 assertions)")
+print("away ok (6 scenarios, 30 assertions)")
 PY

@@ -1,11 +1,15 @@
-"""D7: ask what an away gap was the moment the user comes back, not days later.
+"""D7: what an away gap was -- declared on the way out, or asked on the way back.
 
 Meetings are offline, so no local sensor can tell a meeting from a break. Only the user
-can, and only while they still remember. So on return from AFK:
+can. Two paths, both ending in the same human answer:
 
-    gap < MIN_GAP (3 min)     AW ingest already deducts it, confirmed; nothing to ask
-    gap < PROMPT_MIN (10 min) auto-classified as a short break (deducted) + a 4s toast
-    longer                    a blocking panel, salah pre-selected near an iqamah
+    Super+Esc      timetrack-away-pick --declare: pick a reason, the screen locks and
+                   shows it with a timer. On return the gap is answered from that pick;
+                   nothing is asked.
+    forgot to lock hypridle locks after 5 min idle. On return:
+                     gap < MIN_GAP (3 min)    AW ingest already deducts it; nothing asked
+                     gap < PROMPT_MIN (5 min) a short break (deducted) + a 4s toast
+                     longer                   the same picker, in a blocking panel
 
 The prompt budget (D21) caps blocking panels at 2 an hour and 8 a day. Over budget, or on
 no answer, the gap stays UNCONFIRMED for the batch fallback (`timetrack backfill`).
@@ -19,20 +23,41 @@ import shutil
 import subprocess
 import sys
 import time
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 
 from . import config, dbs, interactive
 from .backfill import aw
 
 MIN_GAP = aw.MIN_GAP
-PROMPT_MIN = 10 * 60
+PROMPT_MIN = 5 * 60        # matches hypridle's lock: an undeclared lock is always asked
 RECENT = 5 * 60            # a return older than this was missed; the batch panel has it
 BUDGET_HOUR, BUDGET_DAY = 2, 8
 SALAH_BEFORE, SALAH_AFTER = 10 * 60, 30 * 60
+DECLARE_SLACK = 10 * 60    # a declaration this long before the user left still counts
 AUTO = "return:auto"
+DECLARED = "manual:declared"
 STATE = config.STATE_DIR / "away-state.json"
+INTENT = config.STATE_DIR / "away-intent.json"
 PRAYER_TIMES = config.HOME / ".config/adhd/prayer-times.conf"
 POLL = 15
+DINNER_FROM = 17           # a long break from 17:00 on is dinner, not lunch (WORK_V2)
+
+# picker key -> (lock-screen label, deduction category; None = meeting = worked time)
+CHOICES = {
+    "salah":    ("Salah", "salah"),
+    "washroom": ("Washroom / pantry", "washroom"),
+    "walk":     ("Walk / short break", "misc"),
+    "meal":     ("Lunch / long break", "lunch"),
+    "meeting":  ("Meeting", None),
+    "logout":   ("Logged out for today", "misc"),
+}
+
+
+def category(key, at):
+    cat = CHOICES[key][1]
+    if cat == "lunch" and datetime.fromtimestamp(at).hour >= DINNER_FROM:
+        return "dinner"
+    return cat
 
 
 def _ts(s):
@@ -61,7 +86,7 @@ def last_return(events, now):
 
 
 def salah_hint(g0, g1, path=None):
-    """The prayer whose iqamah falls inside the gap (with margins), or None."""
+    """The prayer whose iqamah falls inside [g0, g1] (with margins), or None."""
     path = path or PRAYER_TIMES
     try:
         lines = path.read_text().splitlines()
@@ -79,18 +104,45 @@ def salah_hint(g0, g1, path=None):
     return None
 
 
-def _state():
+def _read(path, default):
     try:
-        return json.loads(STATE.read_text())
+        return json.loads(path.read_text())
     except (OSError, ValueError):
-        return {"handled": 0, "prompts": []}
+        return default
 
 
-def _save(st):
-    STATE.parent.mkdir(parents=True, exist_ok=True)
-    tmp = STATE.with_suffix(".tmp")
-    tmp.write_text(json.dumps(st))
-    tmp.replace(STATE)
+def _write(path, data):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(data))
+    tmp.replace(path)
+
+
+def _state():
+    return _read(STATE, {"handled": 0, "prompts": []})
+
+
+def declare(key, now=None):
+    """Super+Esc: record why the user is leaving. The lock screen reads this file."""
+    if key not in CHOICES:
+        raise SystemExit(f"timetrack: unknown away reason {key!r}")
+    now = int(now or time.time())
+    label = CHOICES[key][0]
+    if key == "salah" and (p := salah_hint(now, now)):
+        label = f"Salah · {p}"
+    _write(INTENT, {"key": key, "label": label, "since": now})
+    return label
+
+
+def take_intent(g0, g1):
+    """The declaration covering a gap that began at g0, consumed so it answers once."""
+    it = _read(INTENT, None)
+    if not it or it.get("key") not in CHOICES:
+        return None
+    if not (g0 - DECLARE_SLACK <= it.get("since", 0) <= g1):
+        return None
+    INTENT.unlink(missing_ok=True)
+    return it["key"]
 
 
 def within_budget(prompts, now):
@@ -124,85 +176,67 @@ def _clock(t):
     return datetime.fromtimestamp(t).strftime("%H:%M")
 
 
-def ask(hint=None):
-    """Inside the panel. Menu to stderr; only the answer key goes to stdout."""
-    default = next((k for k, lbl, _ in interactive.GAP_CHOICES if lbl == "salah"), None) \
-        if hint else None
-    for key, label, _ in interactive.GAP_CHOICES:
-        mark = "  <- Enter" if key == default else ""
-        print(f"    {key}) {label}{mark}", file=sys.stderr)
-    valid = {c[0] for c in interactive.GAP_CHOICES}
-    while True:
-        try:
-            # the prompt to stderr too: input()'s own prompt goes to stdout, the answer file
-            print("  what was it? ", end="", file=sys.stderr, flush=True)
-            got = input().strip().lower()
-        except EOFError:
-            return 1
-        if not got and default:
-            got = default
-        if got in valid:
-            print(got)
-            return 0
-        print("    ?", file=sys.stderr)
-
-
-def _choice(key):
-    return next((c[2] for c in interactive.GAP_CHOICES if c[0] == key), "SKIP")
+def _answer(g0, g1, key, provenance=interactive.PROVENANCE):
+    with dbs.open_work() as conn:
+        gap = find_gap(conn, g0, g1)
+        if not gap:
+            return False
+        interactive.answer_gap(conn, gap["id"], category(key, g0), provenance=provenance)
+        conn.commit()
+    return True
 
 
 def handle(g0, g1, now, launch=None):
     """Classify or ask about one return. Returns what happened, for the log and tests."""
     with dbs.open_work() as conn:
         aw.write(conn, refresh_day=date.today().isoformat())
-        gap = find_gap(conn, g0, g1)
-        if not gap:
-            return "no-gap"
-        mins = round((g1 - g0) / 60)
-        if g1 - g0 < PROMPT_MIN:
-            interactive.answer_gap(conn, gap["id"], "misc", provenance=AUTO)
-            conn.commit()
-            _toast(f"{mins} min away · counted as a short break")
-            return "auto"
+    mins = round((g1 - g0) / 60)
 
+    if key := take_intent(g0, g1):
+        return f"declared:{key}" if _answer(g0, g1, key, DECLARED) else "no-gap"
+
+    if g1 - g0 < PROMPT_MIN:
+        if not _answer(g0, g1, "walk", AUTO):
+            return "no-gap"
+        _toast(f"{mins} min away · counted as a short break")
+        return "auto"
+
+    with dbs.open_work(readonly=True) as conn:
+        if not find_gap(conn, g0, g1):
+            return "no-gap"
     st = _state()
     if config.panic() or not within_budget(st["prompts"], now):
         _toast(f"{mins} min away ({_clock(g0)}–{_clock(g1)}) · answer later: timetrack backfill")
         return "deferred"
     st["prompts"] = [t for t in st["prompts"] if now - t < 86400] + [now]
-    _save(st)
+    _write(STATE, st)
 
-    hint = salah_hint(g0, g1)
-    title = f"Away {_clock(g0)}–{_clock(g1)} ({mins} min). What was it?"
-    if hint:
-        title += f"  (near {hint} iqamah)"
+    title = f"Away {_clock(g0)}–{_clock(g1)} ({mins} min)"
     # absolute paths: the panel runs under the user manager, whose PATH may lack both
-    tt = shutil.which("timetrack") or str(config.HOME / ".nix-profile/bin/timetrack")
-    cmd = [str(config.HOME / ".local/bin/timetrack-panel"), f"away-{g1}", title, "--",
-           tt, "away", "--ask"]
-    if hint:
-        cmd += ["--hint", hint]
+    bin_ = config.HOME / ".local/bin"
+    cmd = [str(bin_ / "timetrack-panel"), f"away-{g1}", title, "--",
+           str(bin_ / "timetrack-away-pick"), "--ask"]
     launch = launch or (lambda c: subprocess.run(c, capture_output=True, text=True, timeout=700))
     try:
         res = launch(cmd)
     except (OSError, subprocess.SubprocessError):
         return "panel-failed"
-    if res.returncode != 0 or not res.stdout.strip():
+    key = (res.stdout or "").strip().splitlines()[-1:] if res.returncode == 0 else []
+    if not key or key[0] not in CHOICES:
         return "unanswered"      # the panel spooled timeout/dismissal itself
-    choice = _choice(res.stdout.strip().splitlines()[-1])
-    if choice == "SKIP":
-        return "skipped"
-    with dbs.open_work() as conn:
-        gap = find_gap(conn, g0, g1)  # re-find: an hourly refresh may have re-numbered it
-        if not gap:
-            return "no-gap"
-        interactive.answer_gap(conn, gap["id"], choice)
-        conn.commit()
-    return f"answered:{choice or 'meeting'}"
+    # re-found inside _answer: an hourly refresh may have re-numbered the gap meanwhile
+    return f"answered:{key[0]}" if _answer(g0, g1, key[0]) else "no-gap"
+
+
+def prayer_now(now=None):
+    now = int(now or time.time())
+    return salah_hint(now, now) or ""
 
 
 def watch():
     """Poll the afk bucket; handle each return once."""
+    if shutil.which("notify-send") is None:
+        print("away: notify-send missing; toasts will be silent", file=sys.stderr)
     while True:
         now = time.time()
         try:
@@ -214,7 +248,7 @@ def watch():
         st = _state()
         if ret and ret[1] > st.get("handled", 0):
             st["handled"] = ret[1]
-            _save(st)
+            _write(STATE, st)
             try:
                 out = handle(*ret, now)
             except (Exception, SystemExit) as e:   # one bad return must not kill the watcher

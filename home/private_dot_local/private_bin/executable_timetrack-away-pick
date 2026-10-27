@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# timetrack-away-pick — what is (or was) this away gap? Otter-styled fzf.
+#
+#   --declare   Super+Esc: pick, record the intent, lock. Esc cancels; nothing locks.
+#   --ask       on return (inside timetrack-panel): pick; the key goes to stdout.
+#
+# Only the KEY is printed. Mapping a key to a deduction lives in timetrack/away.py, so
+# the two cannot drift. Salah is named after the prayer whose iqamah is nearest now.
+set -uo pipefail
+source "$HOME/.config/otter-launcher/scripts/_otter-fzf.sh" 2>/dev/null || true
+mode="${1:---declare}"
+tt="$(command -v timetrack || echo "$HOME/.nix-profile/bin/timetrack")"
+
+prayer="$("$tt" away --prayer 2>/dev/null)"
+salah="salah	Salah${prayer:+ · $prayer}"
+rest="washroom	Washroom / pantry
+walk	Walk / short break
+meal	Lunch / long break
+meeting	Meeting
+logout	Log out for today"
+# near an iqamah, salah goes first so Enter takes it
+if [ -n "$prayer" ]; then list="$salah
+$rest"; else list="$rest
+$salah"; fi
+
+header="away"; [ "$mode" = --ask ] && header="you were away — what was it?"
+key="$(printf '%s\n' "$list" | fzf --with-nth=2 --delimiter='\t' --header="$header" \
+        --no-multi | cut -f1)"
+[ -n "$key" ] || exit 1
+
+if [ "$mode" = --ask ]; then
+  printf '%s\n' "$key"
+  exit 0
+fi
+# Super+Esc is the lock key first: a broken or absent timetrack must never stop the lock.
+"$tt" away --declare "$key" >/dev/null 2>&1 || notify-send -a timetrack "Away" "reason not recorded; locking anyway"
+loginctl lock-session
