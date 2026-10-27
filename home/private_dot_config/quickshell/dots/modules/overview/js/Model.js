@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2026 luna (@lunanoir21)
+// Copyright (c) 2026 Shaik Noorullah Shareef
+// Fresh implementation, inspired by tally-screentime (MIT).
 //
 // View-model rules for the overview: validation, staleness, urgency order, what
 // the pill shows, onset coalescing, focus arithmetic. Pure functions with no QML
 // imports, so qmltestrunner covers them without a compositor.
-// Fresh implementation in the shape of tally-screentime (MIT); see Fmt.js.
 .pragma library
 
 var SPEC_V = 1

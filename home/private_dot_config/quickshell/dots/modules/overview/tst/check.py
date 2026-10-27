@@ -6,7 +6,7 @@ usage: check.py <name> <outdir>
 Each check reads the PROBE json lines (<outdir>/<scenario>-<tag>.json, written by
 the shell script from the scene log) and the PNG of the same stem. It prints one
 "PASS|FAIL <name>: detail" line per assertion and exits non-zero on any FAIL.
-Colours are the Dracula preset in tst/stub/modules/theme/Theme.qml.
+Colours are the stub Theme's (derived from the palette exactly like the real Tokens.qml).
 """
 import json
 import math
@@ -17,7 +17,7 @@ import zlib
 
 AMBER = (0xFF, 0xB8, 0x6C)
 RED = (0xFF, 0x55, 0x55)
-FGFAINT = (0x6F, 0x73, 0x91)
+FGFAINT = (0x48, 0x52, 0x72)   # mix(bg, comment, 0.55), as the stub derives it
 ACCENT = (0xBD, 0x93, 0xF9)
 STAGE_BG = (0x1A, 0x1A, 0x2E)
 
@@ -191,23 +191,91 @@ def t5_card(out):
     report(m["rows"] >= 1, "5 card lists attention rows", "rows=%s" % m["rows"])
 
 
-def t6_heatmap(out):
-    m, im = load(out, "panel", "heatmap")
+def ramp_checks(m, im, tag):
     h = m["heat"]
-    report(h["count"] == 119, "6 119 cells", "n=%s" % h["count"])
-    report(h["sizeOk"], "6 every cell is 11x11")
-    report(h["gapX"] == 3 and h["gapY"] == 3, "6 gap is 3", "gx=%s gy=%s" % (h["gapX"], h["gapY"]))
-    report(near(h["w"], 235, 1) and near(h["h"], 95, 1), "6 grid box is 235x95", "%sx%s" % (h["w"], h["h"]))
-    report(h["cols"] == 17 and h["rows"] == 7, "6 17 columns x 7 rows", "%dx%d" % (h["cols"], h["rows"]))
     colours = {}
     for (x, y) in h["centres"]:
         px = im.px(x, y)
         colours[tuple(v // 6 for v in px)] = px
-    report(len(colours) >= 5, "6 five distinct ramp colours", "distinct=%d" % len(colours))
+    report(len(colours) >= 5, "%s five distinct ramp colours" % tag, "distinct=%d" % len(colours))
     # ramp must be monotonic toward the accent: collect by score order of the fixture (score = i % 5)
     base = im.px(h["centres"][0][0], h["centres"][0][1])      # cell 0 has score 0 -> panel background
     lum = [dist(im.px(*h["centres"][i]), base) for i in range(1, 5)]
-    report(all(lum[i] < lum[i + 1] for i in range(3)), "6 ramp rises with score", "d=%s" % lum)
+    report(all(lum[i] < lum[i + 1] for i in range(3)), "%s ramp rises with score" % tag, "d=%s" % lum)
+
+
+def fixture_days(name="full"):
+    here = os.path.dirname(os.path.abspath(__file__))
+    with open(os.path.join(here, "fixtures", name, "heatmap.json")) as f:
+        return json.load(f)["days"]
+
+
+def hm_fmt(sec):
+    m = int(max(0, sec) // 60)
+    return "%dm" % m if m < 60 else "%dh %02dm" % (m // 60, m % 60)
+
+
+def t6_compact(out):
+    """The 235x95 grid of the card: unchanged by the page's large variant."""
+    m, im = load(out, "heatcompact", "main")
+    h = m["heat"]
+    report(h["count"] == 119, "6c 119 cells", "n=%s" % h["count"])
+    report(h["sizeOk"] and h["cell"] == 11, "6c every cell is 11x11", "cell=%s" % h["cell"])
+    report(h["gapX"] == 3 and h["gapY"] == 3, "6c gap is 3", "gx=%s gy=%s" % (h["gapX"], h["gapY"]))
+    report(near(h["w"], 235, 1) and near(h["h"], 95, 1), "6c grid box is 235x95", "%sx%s" % (h["w"], h["h"]))
+    report(m["heatBox"]["w"] == 235 and m["heatBox"]["h"] == 95, "6c compact part carries no labels", "box=%sx%s" % (m["heatBox"]["w"], m["heatBox"]["h"]))
+    report(not m["heatLabels"]["weekdays"] and not m["heatLabels"]["months"], "6c no weekday or month labels")
+    report(h["cols"] == 17 and h["rows"] == 7, "6c 17 columns x 7 rows", "%dx%d" % (h["cols"], h["rows"]))
+    ramp_checks(m, im, "6c")
+
+
+def t6_heatmap(out):
+    """The Heatmap page: big token-fitted cells, labels, streak and best-week figures."""
+    m, im = load(out, "panel", "heatmap")
+    h, days = m["heat"], fixture_days()
+    pageW, pageH = 920 - 48 - 148 - 1 - 24, 640 - 48          # panel padding, nav, divider, gaps
+    report(h["count"] == 119, "6 119 cells", "n=%s" % h["count"])
+    report(h["sizeOk"], "6 every cell is square and the same size", "cell=%s" % h["cell"])
+    report(h["cell"] >= 2 * 11, "6 cells are at least twice the compact size", "cell=%s" % h["cell"])
+    report(h["gapX"] == 4 and h["gapY"] == 4, "6 gap is space.s (4)", "gx=%s gy=%s" % (h["gapX"], h["gapY"]))
+    report(h["cols"] == 17 and h["rows"] == 7, "6 17 columns x 7 rows", "%dx%d" % (h["cols"], h["rows"]))
+    report(near(h["w"], 17 * h["cell"] + 16 * 4, 1) and near(h["h"], 7 * h["cell"] + 6 * 4, 1),
+           "6 grid box follows cell and gap", "%sx%s" % (h["w"], h["h"]))
+    box = m["heatBox"]
+    report(box["w"] <= pageW and box["w"] >= 0.9 * pageW, "6 the grid uses at least 90%% of the page width", "%s of %s" % (box["w"], pageW))
+    tiles = m["tiles"]
+    bottom = max(t["y"] + t["h"] for t in tiles) if tiles else 0
+    top = m["panelBox"]["y"]
+    report(bottom - top <= m["panelBox"]["h"] - 24, "6 nothing is pushed past the panel's bottom padding", "bottom=%.0f" % (bottom - top))
+    report(bottom - top >= 0.75 * m["panelBox"]["h"], "6 the page fills at least 75%% of the panel height", "bottom=%.0f of %s" % (bottom - top, m["panelBox"]["h"]))
+    wd = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    import datetime
+    want_wd = [wd[datetime.date.fromisoformat(days[r]["d"]).weekday()] for r in range(7)]
+    report(m["heatLabels"]["weekdays"] == want_wd, "6 weekday labels follow the dates in each row", "%s" % m["heatLabels"]["weekdays"])
+    mon, last, want_m = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"], -1, []
+    for c in range(17):
+        mo = datetime.date.fromisoformat(days[c * 7]["d"]).month
+        if mo != last:
+            want_m.append(mon[mo - 1])
+            last = mo
+    report(m["heatLabels"]["months"] == want_m, "6 month labels open at the right columns", "%s" % m["heatLabels"]["months"])
+    # streak / best week, computed here from the fixture rather than read back from Ledger.js
+    worked = [d["workedSec"] for d in days]
+    best = run = 0
+    for w in worked:
+        run = run + 1 if w > 0 else 0
+        best = max(best, run)
+    end = len(worked) - 1 - (0 if worked[-1] > 0 else 1)
+    cur = 0
+    while end >= 0 and worked[end] > 0:
+        cur, end = cur + 1, end - 1
+    bw = max(sum(worked[max(0, i - 6):i + 1]) for i in range(len(worked)))
+    byname = dict((t["label"], t) for t in tiles)
+    report(byname.get("Streak", {}).get("value") == "%d days" % cur and byname["Streak"]["note"] == "longest %d" % best,
+           "6 streak tile shows current and longest", "%s" % byname.get("Streak"))
+    report(byname.get("Best week", {}).get("value") == hm_fmt(bw), "6 best-week tile shows the best 7 days", "%s want %s" % (byname.get("Best week", {}).get("value"), hm_fmt(bw)))
+    report(byname.get("Total", {}).get("value") == hm_fmt(sum(worked)), "6 total tile", byname.get("Total", {}).get("value"))
+    ramp_checks(m, im, "6")
 
 
 def angle_lit(im, cx, cy, r, tol=70):
@@ -265,6 +333,31 @@ def t_full(out):
     report(a > 0 and r > 0, "full: amber and red both present when both are true", "amber=%d red=%d" % (a, r))
 
 
+def t_footer(out):
+    """The footer row is pinned outside the scroller and a fade shows when content overflows."""
+    m, im = load(out, "card", "full")
+    f, c, s = m["foot"], m["card"], m["scroll"]
+    report(f["visible"] and f["buttons"] == 2, "footer: Open panel and Start focus are present", "buttons=%s" % f["buttons"])
+    report(f["y"] + f["h"] <= c["y"] + c["h"] + 0.5, "footer: bottom edge is inside the card", "foot bottom=%.1f card bottom=%.1f" % (f["y"] + f["h"], c["y"] + c["h"]))
+    report(s["y"] + s["h"] <= f["y"] + 0.5, "footer: the scroller ends above the footer (nothing scrolls under it)", "scroll bottom=%.1f foot top=%.1f" % (s["y"] + s["h"], f["y"]))
+    report(s["contentH"] > s["h"] and m["fadeVisible"], "footer: overflowing content shows the bottom fade", "content=%s view=%s" % (s["contentH"], s["h"]))
+    # the fade ends opaque: every pixel along the scroller's last row is solid, which the bare
+    # translucent card (alpha ~0.86) is not
+    y = int(round(s["y"] + s["h"])) - 1
+    alphas = [im.alpha(c["x"] + 16 + dx, y) for dx in range(0, int(c["w"]) - 32, 6)]
+    report(min(alphas) >= 250, "footer: the fade reaches the card colour at the scroller's end", "min alpha=%s" % min(alphas))
+    w, imw = load(out, "card", "stale")
+    report(not w["fadeVisible"] and w["scroll"]["contentH"] <= w["scroll"]["h"], "footer: no fade when everything fits", "fade=%s" % w["fadeVisible"])
+    report(w["foot"]["y"] + w["foot"]["h"] <= w["card"]["y"] + w["card"]["h"] + 0.5, "footer: bottom edge is inside a short card")
+
+
+def t_pressed(out):
+    m, _ = load(out, "card", "waiting")
+    lk = m["look"]
+    report(lk["aPressed"] > lk["aHover"], "button: pressed overlay is stronger than hover (Look.aPressed from Theme.alpha.pressed)",
+           "pressed=%.2f hover=%.2f" % (lk["aPressed"], lk["aHover"]))
+
+
 def t_lamp(out):
     m, im = load(out, "pill", "lamp")
     a, r = im.count_near(AMBER, 40), im.count_near(RED, 40)
@@ -274,7 +367,7 @@ def t_lamp(out):
 
 CHECKS = {
     "nominal": t1_nominal, "waiting": t2_waiting, "failed": t3_failed, "stale": t4_stale,
-    "card": t5_card, "heatmap": t6_heatmap, "focus": t7_focus, "v2": t8_v2,
+    "card": t5_card, "heatmap": t6_heatmap, "compact": t6_compact, "footer": t_footer, "pressed": t_pressed, "focus": t7_focus, "v2": t8_v2,
     "live": t_live, "dimcard": t_dim_card, "full": t_full, "lamp": t_lamp,
 }
 

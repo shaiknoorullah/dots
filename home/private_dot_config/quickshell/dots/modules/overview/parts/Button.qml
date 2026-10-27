@@ -1,7 +1,7 @@
 import QtQuick
 import qs.modules.overview
 
-// Quiet text button. Hover lifts (neutral overlay), it does not recolour.
+// Quiet text button. Hover and press lift (neutral overlays), they do not recolour.
 // primary fills with accent; everything else is an outline chip.
 Item {
     id: b
@@ -27,7 +27,15 @@ Item {
         anchors.fill: parent
         radius: Look.rChip
         color: Look.withAlpha(Look.fg, Look.aHover)
-        visible: ma.containsMouse && b.enabled
+        visible: ma.containsMouse && b.enabled && !ma.pressed
+    }
+    // pressed: a stronger neutral overlay than hover, alpha from Look.aPressed
+    Rectangle {
+        objectName: "pressedOverlay"
+        anchors.fill: parent
+        radius: Look.rChip
+        color: Look.withAlpha(Look.fg, Look.aPressed)
+        visible: ma.pressed && b.enabled
     }
     Row {
         id: row

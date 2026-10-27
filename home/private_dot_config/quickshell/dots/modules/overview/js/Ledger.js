@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2026 luna (@lunanoir21)
+// Copyright (c) 2026 Shaik Noorullah Shareef
+// Fresh implementation, inspired by tally-screentime (MIT).
 //
 // Day-bucket arithmetic for the Week page and the heatmap grid. Pure functions,
 // no QML imports. The heatmap SCORE is never computed here: it comes from
 // dots-overview in heatmap.json. This module only sums, pads and lays out.
-// Fresh implementation in the shape of tally-screentime (MIT); see Fmt.js.
 .pragma library
 
 // Day keys are "YYYY-MM-DD" built from local calendar parts. They are never
@@ -107,4 +107,64 @@ function maxSec(rows) {
     var m = 0
     for (var i = 0; i < (rows || []).length; i++) m = Math.max(m, +rows[i].sec || +rows[i].workedSec || 0)
     return m
+}
+
+// Streaks over a day list in ascending order. A run is consecutive entries with
+// workedSec > 0. `current` ends at the latest day; if the latest day has no work yet
+// (today, early) the run ending the day before still counts, so a streak does not
+// read 0 at breakfast.
+function streaks(days) {
+    var list = days || []
+    var best = 0, run = 0
+    for (var i = 0; i < list.length; i++) {
+        run = (+list[i].workedSec || 0) > 0 ? run + 1 : 0
+        best = Math.max(best, run)
+    }
+    var end = list.length - 1
+    if (end >= 0 && !((+list[end].workedSec || 0) > 0)) end--
+    var cur = 0
+    for (var j = end; j >= 0 && (+list[j].workedSec || 0) > 0; j--) cur++
+    return { current: cur, best: best }
+}
+
+// The best 7 consecutive days: { sec, from, to } (keys), or sec 0 for no data.
+function bestWeek(days) {
+    var list = days || []
+    var out = { sec: 0, from: "", to: "" }
+    var win = 0
+    for (var i = 0; i < list.length; i++) {
+        win += Math.max(0, +list[i].workedSec || 0)
+        if (i >= 7) win -= Math.max(0, +list[i - 7].workedSec || 0)
+        if (win > out.sec) out = { sec: win, from: list[Math.max(0, i - 6)].d, to: list[i].d }
+    }
+    return out
+}
+
+// Month label marks for the grid header: [{ col, label }] at the first column whose first
+// dated cell opens a new month. cells is the output of heatCells.
+function monthMarks(cells, rows) {
+    var names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    var out = [], last = -1
+    for (var c = 0; c * rows < (cells || []).length; c++) {
+        var p = null
+        for (var r = 0; r < rows && !p; r++) {
+            var cell = cells[c * rows + r]
+            if (cell && !cell.empty) p = parseKey(cell.d)
+        }
+        if (p && p.m !== last) { out.push({ col: c, label: names[p.m - 1] }); last = p.m }
+    }
+    return out
+}
+
+// Weekday name for each grid row, from the dates in it ("" for a row with no dated cell).
+function rowWeekdays(cells, rows) {
+    var names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    var out = []
+    for (var r = 0; r < rows; r++) {
+        var label = ""
+        for (var i = r; i < (cells || []).length && label === ""; i += rows)
+            if (!cells[i].empty) label = names[weekdayOf(cells[i].d)]
+        out.push(label)
+    }
+    return out
 }

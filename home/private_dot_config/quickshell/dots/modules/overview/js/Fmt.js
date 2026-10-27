@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2026 luna (@lunanoir21)
+// Copyright (c) 2026 Shaik Noorullah Shareef
+// Fresh implementation, inspired by tally-screentime (MIT).
 //
 // Duration and label formatting for the overview surfaces. The shape of this
 // module (small pure functions, no QML imports, tested under qmltestrunner)
-// follows tally-screentime, which is MIT. No tally source was available when
-// this was written, so the code is a fresh implementation; see
-// third_party/NOTICE for the upstream.
+// follows tally-screentime; none of its source is copied.
 .pragma library
 
 function pad2(n) { return (n < 10 ? "0" : "") + n }

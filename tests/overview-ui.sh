@@ -79,6 +79,25 @@ else
   echo "SKIP 2 qmllint not available"
 fi
 
+# ---- 2b. the stub Theme derives colours exactly like the real theme/Tokens.qml -----------
+# Real theme dir: the repo's own once T2 is merged, or REAL_THEME_DIR (a checkout of it).
+realtheme="${REAL_THEME_DIR:-$root/home/private_dot_config/quickshell/dots/modules/theme}"
+if [ -f "$realtheme/Tokens.qml" ] && [ -f "$realtheme/Palette.qml.tmpl" ]; then
+  agroot="$work/agree"; mkdir -p "$agroot/modules" "$agroot/real"
+  ln -s "$tst/stub/modules/theme" "$agroot/modules/theme"
+  cp "$realtheme/Tokens.qml" "$agroot/real/Tokens.qml"
+  python3 "$tst/agree.py" render "$root/home/.chezmoidata/palette.yaml" "$realtheme/Palette.qml.tmpl" "$agroot/real/Palette.qml"
+  printf 'singleton Palette 1.0 Palette.qml\nsingleton Tokens 1.0 Tokens.qml\n' > "$agroot/real/qmldir"
+  cp "$tst/Agree.qml" "$agroot/shell.qml"
+  XDG_RUNTIME_DIR="$(mktemp -d /tmp/ovx.XXXXXX)" timeout 40 "$QS" -p "$agroot" > "$work/agree.log" 2>&1
+  sed -i 's/\x1b\[[0-9;]*m//g' "$work/agree.log"
+  if grep -aq 'AGREE ' "$work/agree.log"; then
+    python3 "$tst/agree.py" check "$root/home/.chezmoidata/palette.yaml" "$work/agree.log" || fails=$((fails + 1))
+  else head -8 "$work/agree.log"; bad "2b the Agree scene printed nothing"; fi
+else
+  echo "SKIP 2b stub-vs-real Theme: no theme/Tokens.qml at $realtheme (set REAL_THEME_DIR)"
+fi
+
 [ -n "${ONLY_LINT:-}" ] && { [ "$fails" -eq 0 ] && exit 0 || exit 1; }
 
 # ---- 3. static rules ---------------------------------------------------------------------
@@ -86,7 +105,7 @@ if grep -rIlP '[\x{E000}-\x{F8FF}\x{F0000}-\x{FFFFD}]' "$ov" 2>/dev/null | grep 
 if grep -rInE 'execDetached\(' "$ov" --include='*.qml' | grep -v '/tst/' | grep -vE 'Actions.qml:.*execDetached\(\['; then bad "3 execDetached outside Actions.qml, or not an argv array"; else ok "3 every exec is an argv array in Actions.qml"; fi
 if grep -rInE '"(sh|bash|zsh)"|-c"|Process *\{|SplitParser|StdioCollector' "$ov" --include='*.qml' | grep -v '/tst/'; then bad "3 a shell or Process is used (overview execs argv only)"; else ok "3 no shell, no Process"; fi
 for f in Fmt Ledger Model; do
-  grep -q 'SPDX-License-Identifier: MIT' "$ov/js/$f.js" && grep -q 'Copyright (c) 2026 luna' "$ov/js/$f.js" && ok "3 js/$f.js carries the MIT header" || bad "3 js/$f.js lacks the MIT header"
+  grep -q 'SPDX-License-Identifier: MIT' "$ov/js/$f.js" && grep -q 'Copyright (c) 2026 Shaik Noorullah Shareef' "$ov/js/$f.js" && ok "3 js/$f.js carries the MIT header" || bad "3 js/$f.js lacks the MIT header"
 done
 if grep -rIn 'Theme\.' "$ov" --include='*.qml' | grep -v -e '/tst/' -e 'Look.qml'; then bad "3 Theme.* used outside Look.qml"; else ok "3 Theme.* only in Look.qml"; fi
 if grep -rInE 'palette\.yaml|matugen' "$ov" --include='*.qml' --include='*.js' | grep -v '/tst/' | grep -v '^\S*: *//' | grep -v '// '; then bad "3 the overview reads palette.yaml or calls matugen"; else ok "3 no palette.yaml or matugen"; fi
@@ -134,9 +153,11 @@ scene stale pill stale;               scene v2 pill v2;            scene lamp pi
 check nominal "$out"; check waiting "$out"; check failed "$out"; check stale "$out"; check v2 "$out"; check lamp "$out"
 
 scene waiting card waiting;            scene stale card stale;      scene full card full
-check card "$out" ; check dimcard "$out"; check full "$out"
+check card "$out" ; check dimcard "$out"; check full "$out"; check footer "$out"; check pressed "$out"
 scene heatmap panel full PAGE=heatmap
 check heatmap "$out"
+scene main heatcompact full
+check compact "$out"
 # the remaining pages are rendered for errors and for the eye (KEEP=1 keeps the PNGs)
 for pg in today week attention; do scene "page-$pg" panel full PAGE=$pg; done
 scene page-item panel full PAGE=item SELECT=a1

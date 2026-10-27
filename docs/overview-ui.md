@@ -114,6 +114,10 @@ KEEP=1 bash tests/overview-ui.sh   # keep the PNGs, prints the directory
 
 No compositor, no T1, no T2.
 It renders the real components on Qt's offscreen platform with a stub Theme.
+The stub derives its colours with the same `mix()` as the real `theme/Tokens.qml`, and the suite
+asserts key for key that the two agree (`REAL_THEME_DIR` points at a checkout until T2 is merged).
+The card footer is pinned below the scroller with a bottom fade; the heatmap page sizes its cells
+to the page and keeps the 235x95 compact grid as the part's default.
 Fixtures: `tst/fixtures/`, regenerate with `python3 tst/mkfixtures.py`.
 
 1. `qmltestrunner` on `js/Fmt`, `js/Ledger`, `js/Model`
@@ -128,6 +132,5 @@ Fixtures: `tst/fixtures/`, regenerate with `python3 tst/mkfixtures.py`.
 
 ## 7. Licence
 
-`js/*.js` carry `SPDX-License-Identifier: MIT` and luna's line, per the spec.
-The upstream source (tally-screentime) was not available offline.
-The code is a fresh implementation in its shape, not a copy.
+`js/*.js` carry `SPDX-License-Identifier: MIT` and the repo owner's copyright line.
+They are fresh implementations, inspired by tally-screentime (MIT).

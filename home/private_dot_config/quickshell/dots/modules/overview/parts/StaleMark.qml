@@ -3,6 +3,8 @@ import qs.modules.overview
 
 // Hollow "?": the data layer is stale, wrong version or unreadable. Outline only,
 // at fgFaint, so it claims no attention. Never animated.
+// This is the canonical stale glyph: T2's bar chip adopts this exact shape (outlined
+// circle, 1px stroke, centred "?" at 0.62 of the size).
 Item {
     id: m
     property int size: Look.iconSize

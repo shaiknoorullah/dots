@@ -94,4 +94,40 @@ TestCase {
         compare(c[117].score, 4)
         compare(c[118].score, 0)
     }
+
+    function test_streaks() {
+        var d = days([["2026-10-20", 0], ["2026-10-21", 5], ["2026-10-22", 5], ["2026-10-23", 0],
+                      ["2026-10-24", 5], ["2026-10-25", 5], ["2026-10-26", 5], ["2026-10-27", 0]])
+        compare(Ledger.streaks(d).best, 3)
+        compare(Ledger.streaks(d).current, 3)       // today has no work yet: yesterday's run stands
+        compare(Ledger.streaks(d.slice(0, 7)).current, 3)
+        compare(Ledger.streaks(d.slice(0, 4)).current, 2)
+        compare(Ledger.streaks(d.slice(0, 1)).current, 0)
+        compare(Ledger.streaks([]).best, 0)
+    }
+
+    function test_bestWeek() {
+        var d = days([["2026-10-01", 1], ["2026-10-02", 1], ["2026-10-03", 1], ["2026-10-04", 1], ["2026-10-05", 1],
+                      ["2026-10-06", 1], ["2026-10-07", 1], ["2026-10-08", 9], ["2026-10-09", 9]])
+        var b = Ledger.bestWeek(d)
+        compare(b.sec, 1 * 5 + 18)
+        compare(b.from, "2026-10-03")
+        compare(b.to, "2026-10-09")
+        compare(Ledger.bestWeek(d.slice(0, 3)).sec, 3)
+        compare(Ledger.bestWeek([]).sec, 0)
+    }
+
+    function test_month_and_weekday_labels() {
+        var all = []
+        var key = "2026-08-30"
+        for (var i = 0; i < 119; i++) { all.push({ d: key, workedSec: 1, done: 0, score: 1 }); key = Ledger.addDays(key, 1) }
+        var cells = Ledger.heatCells(all, 17, 7)
+        var marks = Ledger.monthMarks(cells, 7)
+        compare(marks[0].label, "Aug")
+        compare(marks[0].col, 0)
+        compare(marks[1].label, "Sep")
+        compare(marks[1].col, 0 + 1)          // 2026-08-30 is col 0 row 0; Sep 1 is in col 0 too, so Sep starts at col 1
+        compare(Ledger.rowWeekdays(cells, 7).join(), "Sun,Mon,Tue,Wed,Thu,Fri,Sat")
+        compare(Ledger.rowWeekdays(Ledger.heatCells([], 17, 7), 7).join(""), "")
+    }
 }

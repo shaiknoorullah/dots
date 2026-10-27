@@ -74,15 +74,19 @@ Item {
         objectName: "cardWrap"
         y: Look.notchH
         width: parent.width
-        height: Math.min(Look.cardMaxHeight, body.implicitHeight + card.pad * 2)
+        height: Math.min(Look.cardMaxHeight, body.implicitHeight + foot.height + Look.sXl + card.pad * 2)
         radius: Look.rCard
         color: Look.withAlpha(Look.surface, Look.aPanel)
         border.width: 1
         border.color: Look.withAlpha(Look.outline, Look.aDivider)
 
         Flickable {
-            anchors.fill: parent
-            anchors.margins: card.pad
+            id: scroller
+            objectName: "cardScroll"
+            x: card.pad
+            y: card.pad
+            width: parent.width - card.pad * 2
+            height: parent.height - card.pad * 2 - foot.height - Look.sXl
             contentWidth: width
             contentHeight: body.implicitHeight
             clip: true
@@ -195,25 +199,44 @@ Item {
                 }
 
                 Empty { visible: card.nothing }
+            }
+        }
 
-                // footer
-                Row {
-                    spacing: Look.sL
-                    Button {
-                        objectName: "openPanel"
-                        text: "Open panel"
-                        icon: "open_in_full"
-                        dim: card.dim
-                        onClicked: card.panelRequested("today")
-                    }
-                    Button {
-                        objectName: "focusToggle"
-                        text: Feed.focusRunning ? "Stop focus" : "Start focus"
-                        icon: Feed.focusRunning ? "stop" : "timer"
-                        dim: card.dim
-                        onClicked: Actions.focus(Feed.focusRunning ? "stop" : "start")
-                    }
-                }
+        // Bottom fade: only while there is more below the fold.
+        Rectangle {
+            id: fade
+            objectName: "cardFade"
+            x: scroller.x
+            y: scroller.y + scroller.height - height
+            width: scroller.width
+            height: Look.sXxxl
+            visible: scroller.contentHeight > scroller.height + 1 && !scroller.atYEnd
+            gradient: Gradient {
+                GradientStop { position: 0; color: Look.withAlpha(Look.surface, 0) }
+                GradientStop { position: 1; color: Look.surface }
+            }
+        }
+
+        // Footer is pinned outside the Flickable: always on screen, whatever scrolls.
+        Row {
+            id: foot
+            objectName: "cardFooter"
+            x: card.pad
+            y: parent.height - card.pad - height
+            spacing: Look.sL
+            Button {
+                objectName: "openPanel"
+                text: "Open panel"
+                icon: "open_in_full"
+                dim: card.dim
+                onClicked: card.panelRequested("today")
+            }
+            Button {
+                objectName: "focusToggle"
+                text: Feed.focusRunning ? "Stop focus" : "Start focus"
+                icon: Feed.focusRunning ? "stop" : "timer"
+                dim: card.dim
+                onClicked: Actions.focus(Feed.focusRunning ? "stop" : "start")
             }
         }
     }

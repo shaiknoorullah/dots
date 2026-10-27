@@ -25,6 +25,9 @@ QtObject {
     readonly property real aWash: Theme.alpha.wash
     readonly property real aHover: Theme.alpha.hover
     readonly property real aDivider: Theme.alpha.divider
+    // pressed overlay on a Button. Key name `pressed` is agreed with T2 (alpha.pressed in
+    // tokens.json); until the real Theme carries it, hover*1.8 keeps the step visible.
+    readonly property real aPressed: Theme.alpha.pressed !== undefined ? Theme.alpha.pressed : Theme.alpha.hover * 1.8
     // the unlit track behind an accent fill (progress bar, focus ring): one value,
     // not one per part. Not a tokens.json key; it lives here with the other fixed ones.
     readonly property real aTrack: 0.12
