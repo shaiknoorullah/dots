@@ -39,6 +39,25 @@ def _title(rec, agent):
     return head or f"claude session {agent}"
 
 
+def _adopt_ticket(t, ticket, by_ref, want):
+    """A session task created before the user named a ticket joins that ticket on the next cycle.
+
+    With no task carrying the ticket yet, the session task takes it as its ref. With one
+    already (a mirrored ticket), the session coordinates move onto it and the now redundant
+    claude placeholder is completed, so the session id never sits on two pending tasks.
+    """
+    if t is None or t.get("src") != "claude" or t.get("ref") or not ticket or not tw.valid_ref(ticket):
+        return t
+    other = by_ref.get(ticket)
+    if other is None:
+        tw.modify(t["uuid"], ref=ticket)
+        t["ref"] = ticket
+        by_ref[ticket] = t
+        return t
+    tw.done(t["uuid"])
+    return other
+
+
 def run(now=None, live=None):
     """Make sure every recorded session has a task. Returns {'created': n, 'updated': n}."""
     live = live if live is not None else herdr.snapshot()
@@ -55,6 +74,7 @@ def run(now=None, live=None):
         ticket = rec.get("ticket")
         want = {"agent": agent, "sess": sess, "pane": pane, "wspace": wspace}
         t = by_sess.get(sess) or (by_ref.get(ticket) if ticket and tw.valid_ref(ticket) else None)
+        t = _adopt_ticket(t, ticket, by_ref, want)
         if t is not None:
             diff = {k: v for k, v in want.items() if v and t.get(k) != v}
             # a ref-attached task is somebody else's (a mirrored ticket): only its session

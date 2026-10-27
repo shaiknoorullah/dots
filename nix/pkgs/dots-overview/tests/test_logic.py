@@ -436,6 +436,23 @@ class Ingest(helpers.Scratch):
         self.assertEqual((r["created"], r["updated"]), (0, 1))
         self.assertEqual((orig["desc"], orig["src"], orig["sess"]), ("Mirrored title", "erp", "sess-2"))
 
+    def test_ticket_named_on_a_later_prompt_joins_the_mirrored_ticket(self):
+        mirrored = self.tw.seed(desc="Mirrored title", ref="HD-50", src="erp", srcstate="hd:open", tags=["mirror", "attn"])
+        self.session("sess-6")
+        ingest.run(live=[])
+        self.session("sess-6", ticket="HD-50")
+        ingest.run(live=[])
+        self.assertEqual(mirrored["sess"], "sess-6")
+        pending = [t for t in self.tw.tasks if t["status"] == "pending"]
+        self.assertEqual([t["ref"] for t in pending], ["HD-50"])
+
+    def test_ticket_named_later_becomes_the_ref_when_nothing_mirrors_it(self):
+        self.session("sess-7")
+        ingest.run(live=[])
+        self.session("sess-7", ticket="HD-51")
+        ingest.run(live=[])
+        self.assertEqual([(t["ref"], t["src"]) for t in self.tw.tasks], [("HD-51", "claude")])
+
     def test_session_without_a_prompt_is_not_work_yet(self):
         self.session("sess-3", prompt_head="", action="session")
         self.assertEqual(ingest.run(live=[])["created"], 0)
