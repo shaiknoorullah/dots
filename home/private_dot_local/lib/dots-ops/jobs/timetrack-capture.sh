@@ -43,6 +43,11 @@ job_main() {
   "$tt" attest --drain >/dev/null 2>&1 || \
     ops_state timetrack-capture warn "attest --drain failed; the enforcement spool is not being recorded"
 
+  # Browser time per site and ticket (private.db). Yesterday too, so the last hour before
+  # midnight is not lost to the day rolling over between runs.
+  { "$tt" web --day "$(date -d yesterday +%F)" && "$tt" web; } >/dev/null 2>&1 || \
+    ops_state timetrack-capture warn "web ingest failed; is the ActivityWatch browser extension installed?"
+
   out=$("$tt" doctor 2>&1); rc=$?
   summary=$(printf '%s' "$out" | tail -1)
   if [ "$rc" -ne 0 ]; then

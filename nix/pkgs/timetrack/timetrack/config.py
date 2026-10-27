@@ -35,7 +35,6 @@ VAULT = Path(os.environ.get("TIMETRACK_VAULT") or HOME / "powerhouse")
 VAULT_DAILY = VAULT / "timetrack" / "daily"
 EXPORT_DIR = VAULT / "exports"
 
-AW_BASE = os.environ.get("TIMETRACK_AW_BASE", "http://127.0.0.1:5600")
 TASK = "task"
 TIMEW = "timew"
 
@@ -102,6 +101,14 @@ def backfill_authors():
 
 def backfill_repo_globs():
     return [str(g) for g in payroll().get("backfill", {}).get("repos", ["~/work/*"])]
+
+
+def web_ticket_prefixes():
+    """Which id prefixes in a URL count as a ticket. An allow-list: ERP URLs also carry
+    employee and HR record ids (EMP-00097), which are not work items and must not be
+    counted as one."""
+    raw = payroll().get("web", {}).get("ticket_prefixes", ["TASK", "PROJ", "ISS"])
+    return tuple(str(p).strip().upper() + "-" for p in raw if str(p).strip())
 
 
 def gap_bridge_seconds():

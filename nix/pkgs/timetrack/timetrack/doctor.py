@@ -30,7 +30,7 @@ def _r(name, status, detail, fix=""):
 
 
 def _schema(results):
-    for which, path, want in (("work", config.WORK_DB, 3), ("private", config.PRIVATE_DB, 1)):
+    for which, path, want in (("work", config.WORK_DB, 4), ("private", config.PRIVATE_DB, 2)):
         if not path.exists():
             results.append(_r(f"db:{which}", FAIL, "database file does not exist",
                               "timetrack migrate"))
@@ -330,6 +330,28 @@ def _activitywatch(results):
                           "awatcher is not reporting; this is the original silent-zero bug"))
     else:
         results.append(_r("activitywatch", OK, f"{len(buckets)} bucket(s), window + afk present"))
+    _web(results, types)
+
+
+def _web(results, types):
+    """Browser time (web.py). Attribution only, so a gap here is a warning, never a fail."""
+    if "web.tab.current" not in types:
+        results.append(_r("aw:web", WARN, "no browser bucket",
+                          "install the ActivityWatch extension in the browser"))
+        return
+    try:
+        conn = sqlite3.connect(f"file:{config.PRIVATE_DB}?mode=ro", uri=True)
+        last = conn.execute("SELECT MAX(day) FROM web_domain_day").fetchone()[0]
+        conn.close()
+    except sqlite3.Error as e:
+        results.append(_r("aw:web", WARN, f"web tables unreadable: {e}", "timetrack migrate"))
+        return
+    age = (date.today() - date.fromisoformat(last)).days if last else None
+    if age is None or age > 2:
+        results.append(_r("aw:web", WARN, f"browser time last ingested {last or 'never'}",
+                          "timetrack web --all"))
+    else:
+        results.append(_r("aw:web", OK, f"browser time ingested through {last}"))
 
 
 def _backup(results):
