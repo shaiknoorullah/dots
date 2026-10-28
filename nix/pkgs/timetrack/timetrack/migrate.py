@@ -548,9 +548,17 @@ ALTER TABLE salah_log ADD COLUMN status_by TEXT CHECK (status_by IN ('user','aut
 COMMIT;
 """
 
+# --- private v7 -------------------------------------------------------------
+# When the user was last asked, on coming back, whether a prayer was prayed.
+PRIVATE_V7 = """
+BEGIN;
+ALTER TABLE salah_log ADD COLUMN asked_unix INTEGER;
+COMMIT;
+"""
+
 MIGRATIONS = {"work": [(1, WORK_V1), (2, WORK_V2), (3, WORK_V3), (4, WORK_V4), (5, WORK_V5)],
               "private": [(1, PRIVATE_V1), (2, PRIVATE_V2), (3, PRIVATE_V3), (4, PRIVATE_V4),
-                          (5, PRIVATE_V5), (6, PRIVATE_V6)]}
+                          (5, PRIVATE_V5), (6, PRIVATE_V6), (7, PRIVATE_V7)]}
 
 
 def live_counts(conn):

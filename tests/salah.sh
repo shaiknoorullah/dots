@@ -252,6 +252,33 @@ check("the user overrides auto", (row("Dhuhr")["status"], row("Dhuhr")["status_b
 n = salah.sweep(at(5, 2) + 86400)
 check("sweep is idempotent", n, 0)
 
+# 15. back inside a prayer's time, unmarked: asked; away turns pending; not asked twice
+world(); spawned = []; salah._spawn = lambda argv: spawned.append(argv)
+seed("Dhuhr", enforcement="away", iqamah_unix=at(13, 30))
+salah.on_return(at(15, 0))
+check("on return spawns the question", [a[-1] for a in spawned], ["ask-return"])
+script[:] = ["alone"]; clock[0] = at(15, 0)
+got = salah.ask_return(at(15, 0))
+check("asked about Dhuhr only", (got, asks[0]["summary"]), ({"Dhuhr": "alone"}, "Have you prayed Dhuhr?"))
+check("answer recorded", (row("Dhuhr")["status"], row("Dhuhr")["status_by"]), ("alone", "user"))
+spawned.clear(); salah.on_return(at(15, 5))
+check("marked: nothing to ask", spawned, [])
+world(); seed("Dhuhr", enforcement="away", iqamah_unix=at(13, 30)); script[:] = ["later"]
+salah.ask_return(at(15, 0))
+check("not yet: away becomes pending", (row("Dhuhr")["enforcement"], row("Dhuhr")["status"]), ("pending", None))
+check("not asked again within 20 min", salah.due_on_return(at(15, 10)), [])
+check("asked again later", [x[1] for x in salah.due_on_return(at(15, 30))], ["Dhuhr"])
+salah.sweep(at(16, 10))
+check("still unmarked at its end: qaza", (row("Dhuhr")["status"], row("Dhuhr")["status_by"]), ("qaza", "auto"))
+world(); script[:] = [None]
+salah.ask_return(at(14, 0))
+check("no row yet: created and asked", (row("Dhuhr")["enforcement"], row("Dhuhr")["status"]), ("pending", None))
+world(); seed("Dhuhr", enforcement="pending", nudged_unix=at(13, 30))
+check("iqamah question still up: not asked", salah.due_on_return(at(13, 32)), [])
+world(); config.PANIC.parent.mkdir(parents=True, exist_ok=True); config.PANIC.write_text(""); spawned.clear()
+salah.on_return(at(15, 0))
+check("panic: not asked", spawned, [])
+
 if fails:
     print("\n".join(fails)); sys.exit(1)
 print(f"salah ok ({n_scen} scenarios, {n_assert} assertions)")

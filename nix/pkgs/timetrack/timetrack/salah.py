@@ -15,6 +15,11 @@ happens away from the desk is not this machine's business. Inside a session, a p
 still unmarked when its time ends (prayer-times.conf `ends HH:MM`) becomes qaza on its
 own (`status_by = 'auto'`); `sweep` does that, hourly and before every enforcement.
 
+Coming back while a prayer's time is still open and it is unmarked (a return from an
+away gap, or a login), the user is asked whether they prayed it (the user's call,
+2026-10-29). Being back inside its time makes it theirs: an `away` row turns `pending`,
+so it too becomes qaza if still unmarked at its end. Asked at most every 20 minutes.
+
 A prayer's `day` is the calendar date of its iqamah, not the session's attendance day:
 each prayer happens once per date, and keying by session would let a night session that
 spans two Fajrs write both to one row.
@@ -31,6 +36,8 @@ tests never touch the desktop. Everything here is local; salah_log lives in priv
 """
 import os
 import re
+import shutil
+import subprocess
 import time
 from datetime import date, datetime, timedelta
 
@@ -49,6 +56,8 @@ UNLOCK_MAX = 90 * 60
 ESCAPE_S = 120              # unlocked this soon after the lock = escaped
 APPEAR_S = 30               # hyprlock never showing up means the lock failed: no verdict
 PAUSE_S = 7 * 86400
+ASK_AGAIN = 20 * 60         # on return: not asked about the same prayer more often
+RETURN_ASK_S = 10 * 60
 VETO_COMMS = {"terraform", "kubectl", "helm", "ssh", "psql", "argocd"}
 
 
@@ -413,6 +422,68 @@ def sweep(now=None):
     return n
 
 
+# --- on return --------------------------------------------------------------
+
+def due_on_return(now):
+    """[(day, prayer, iqamah, end)] still inside their time, unmarked, not just asked."""
+    today = date.fromtimestamp(now)
+    out = []
+    with dbs.open_private() as conn:
+        for d in (today - timedelta(days=1), today):
+            for prayer, iq, end in _schedule(d):
+                if not iq <= now < end:
+                    continue
+                r = _row(conn, d.isoformat(), prayer)
+                if r is not None:
+                    if r["status"]:
+                        continue
+                    if r["asked_unix"] and now - r["asked_unix"] < ASK_AGAIN:
+                        continue
+                    # the iqamah question itself is still up: don't ask twice at once
+                    if (r["enforcement"] == "pending" and r["nudged_unix"]
+                            and now - r["nudged_unix"] < ASK_S + ARMED_S + 60):
+                        continue
+                out.append((d.isoformat(), prayer, iq, end))
+    return out
+
+
+def _spawn(argv):
+    subprocess.Popen(argv, start_new_session=True, stdin=subprocess.DEVNULL,
+                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def on_return(now):
+    """Called by the away watcher on a return or a login. Spawns the question and returns."""
+    if config.panic() or not due_on_return(now):
+        return
+    tt = shutil.which("timetrack") or str(config.HOME / ".nix-profile/bin/timetrack")
+    _spawn([tt, "salah", "ask-return"])
+
+
+def ask_return(now=None):
+    """Ask about each open, unmarked prayer. Returns {prayer: answer or None}."""
+    now = int(now or _now())
+    got = {}
+    for day, prayer, iq, end in due_on_return(now):
+        with dbs.open_private() as conn:
+            conn.execute("INSERT OR IGNORE INTO salah_log(day, prayer, iqamah_unix, enforcement)"
+                         " VALUES(?,?,?, 'pending')", (day, prayer, iq))
+            # back inside its time: the prayer is the user's now, so qaza if left unmarked
+            conn.execute("UPDATE salah_log SET asked_unix = ?, enforcement = CASE enforcement"
+                         " WHEN 'away' THEN 'pending' ELSE enforcement END"
+                         " WHERE day = ? AND prayer = ?", (now, day, prayer))
+            conn.commit()
+        key = notify.ask(app="Salah", summary=f"Have you prayed {prayer}?",
+                         body=f"Its time ends at {_clock(end)}.",
+                         actions=[("jamaah", "Yes · jamaah"), ("alone", "Yes · alone"),
+                                  ("later", "Not yet")],
+                         timeout=RETURN_ASK_S, urgency="critical")
+        if key in ("jamaah", "alone"):
+            _log_day(day, prayer, iq, key, int(_now()))
+        got[prayer] = key
+    return got
+
+
 # --- log / status -----------------------------------------------------------
 
 def log(prayer, status, now=None):
@@ -423,6 +494,10 @@ def log(prayer, status, now=None):
     now = int(now or _now())
     day = _day(now, prayer)
     iq = _iqamah(prayer, int(datetime.fromisoformat(day).timestamp()) + 43200)
+    _log_day(day, prayer, iq, status, now)
+
+
+def _log_day(day, prayer, iq, status, now):
     with dbs.open_private() as conn:
         conn.execute("INSERT INTO salah_log(day, prayer, iqamah_unix, enforcement, status,"
                      " status_by, logged_unix) VALUES(?,?,?, 'logged', ?, 'user', ?)"
@@ -468,5 +543,7 @@ def add_parser(sub):
     lg.set_defaults(fn=lambda a: (log(a.prayer, a.status), 0)[1])
     ss.add_parser("status", help="today's prayers, recent strikes, any pause"
                   ).set_defaults(fn=lambda a: (status(), 0)[1])
+    ss.add_parser("ask-return", help="ask about open, unmarked prayers (spawned on return)"
+                  ).set_defaults(fn=lambda a: (ask_return(), 0)[1])
     ss.add_parser("sweep", help="settle prayers whose time is over (run hourly)"
                   ).set_defaults(fn=lambda a: (print(f"{sweep()} prayer(s) settled"), 0)[1])

@@ -41,6 +41,9 @@ INTENT = config.STATE_DIR / "away-intent.json"
 PRAYER_TIMES = config.HOME / ".config/adhd/prayer-times.conf"
 POLL = 15
 QUIET_LOGIN = 150 * 60     # clockd's QUIET_CLOSE: this long without presence ends a session
+# The afk watcher stops extending a not-afk event at the last input and only writes the afk
+# event after its idle timeout (180 s here), so "present" must tolerate that much silence.
+PRESENT_SLACK = 5 * 60
 DINNER_FROM = 17           # a long break from 17:00 on is dinner, not lunch (WORK_V2)
 
 # picker key -> (lock-screen label, deduction category; None = meeting = worked time)
@@ -258,13 +261,13 @@ def prayer_now(now=None):
 
 
 def present(events, now):
-    """True while the newest afk event is not-afk and still being extended."""
+    """True while the newest afk event is not-afk and recent (PRESENT_SLACK)."""
     if not events:
         return False
     cur = events[0]
     if (cur.get("data") or {}).get("status") != "not-afk":
         return False
-    return _ts(cur["timestamp"]) + float(cur.get("duration") or 0) >= now - 120
+    return _ts(cur["timestamp"]) + float(cur.get("duration") or 0) >= now - PRESENT_SLACK
 
 
 def _logged_out_since(t):
@@ -321,12 +324,27 @@ def watch():
             except (Exception, SystemExit) as e:   # one bad return must not kill the watcher
                 out = f"error: {e}"
             print(f"away {_clock(ret[0])}-{_clock(ret[1])}: {out}", file=sys.stderr, flush=True)
+            back = True
+        else:
+            back = False
         st = _state()
         before = st.get("last_active")
         if login_due(st, events, now):
             _write(STATE, st)
             print(f"away: login at {_clock(now)}", file=sys.stderr, flush=True)
             on_login(now)
+            back = True
         elif before is None or now - before >= 60:
             _write(STATE, st)      # a heartbeat a minute is plenty against 150 min
+        if back:
+            _salah_on_return(now)
         time.sleep(POLL)
+
+
+def _salah_on_return(now):
+    """Back inside a prayer's time and it is unmarked: ask whether it was prayed (D8)."""
+    from . import salah
+    try:
+        salah.on_return(int(now))
+    except (Exception, SystemExit) as e:
+        print(f"away: salah on return: {e}", file=sys.stderr, flush=True)
