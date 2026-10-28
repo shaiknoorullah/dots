@@ -1,0 +1,110 @@
+"""activity.json carries terminal and browser attention: byRef, byProject, byAgent, and the
+terminal app line read as its breakdown. All of it comes from timetrack's private.db, read-only."""
+import sqlite3
+import time
+import unittest
+from datetime import datetime
+
+import helpers
+import schema
+from dots_overview import activity, config, local_tt
+
+DDL = """
+CREATE TABLE term_segment (start_unix INTEGER, end_unix INTEGER, task_uuid TEXT, ref TEXT,
+  project TEXT, agent_name TEXT, verdict TEXT, activity TEXT, pane_id TEXT, cwd_secret TEXT,
+  labelled_by TEXT);
+CREATE TABLE web_visit (start_unix INTEGER, end_unix INTEGER, ticket TEXT, task_uuid TEXT);
+"""
+
+
+class TerminalAttention(helpers.Scratch):
+    def setUp(self):
+        super().setUp()
+        self.tw = helpers.FakeTw(self)
+        self.now = int(time.time())
+        self.t0 = local_tt.day_start(datetime.fromtimestamp(self.now).date())
+        self.a = self.tw.seed(desc="Fix ingress", ref="HD-101", project="alpha")["uuid"]
+        self.b = self.tw.seed(desc="Cluster upgrade", ref=None, project="beta")["uuid"]
+        config.TT_DIR.mkdir(parents=True, exist_ok=True)
+        self.db = sqlite3.connect(config.TT_DIR / "private.db")
+        self.db.executescript(DDL)
+        self.stub("app_seconds", lambda *a, **k: [("com.mitchellh.ghostty", 7200), ("zen-beta", 600)])
+        self.stub("project_intervals", lambda t0, now: [])
+        self.stub("ref_seconds", lambda t0, t1: [])
+
+    def stub(self, name, fn):
+        self.addCleanup(setattr, local_tt, name, getattr(local_tt, name))
+        setattr(local_tt, name, fn)
+
+    def seg(self, a, b, **kw):
+        row = dict(task_uuid=None, ref=None, project=None, agent_name=None, verdict="work",
+                   activity="secret activity text", pane_id="w1:p1", cwd_secret="/home/x/private-repo",
+                   labelled_by="llm")
+        row.update(kw)
+        self.db.execute("INSERT INTO term_segment VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+                        (self.t0 + a, self.t0 + b) + tuple(row[k] for k in (
+                            "task_uuid", "ref", "project", "agent_name", "verdict", "activity", "pane_id", "cwd_secret",
+                            "labelled_by")))
+        self.db.commit()
+
+    def build(self):
+        return activity.build([], self.tw.tasks, now=self.t0 + 7 * 3600, apps="all")["buckets"]["today"]
+
+    def test_terminal_time_fills_ref_project_agent(self):
+        self.seg(0, 1800, task_uuid=self.a, ref="HD-101", project="alpha", agent_name="Vega")
+        self.seg(1800, 2400, task_uuid=self.b, agent_name="Vega")           # task only: ref and project via Taskwarrior
+        self.seg(2400, 3000, project="gamma", verdict="delegated")
+        t = self.build()
+        self.assertEqual(t["byRef"], [{"ref": "HD-101", "sec": 1800, "title": "Fix ingress"}])
+        self.assertEqual({p["project"]: p["sec"] for p in t["byProject"]}, {"alpha": 1800, "beta": 600, "gamma": 600})
+        self.assertEqual(t["byAgent"], [{"agent": "Vega", "sec": 2400}])
+
+    def test_browser_visits_add_to_the_same_ref(self):
+        self.seg(0, 600, task_uuid=self.a, ref="HD-101", project="alpha")
+        self.db.execute("INSERT INTO web_visit VALUES(?,?,?,?)", (self.t0 + 700, self.t0 + 1000, None, self.a))
+        self.db.execute("INSERT INTO web_visit VALUES(?,?,?,?)", (self.t0 + 1100, self.t0 + 1200, "TASK-2026-00512", None))
+        self.db.commit()
+        refs = {r["ref"]: r["sec"] for r in self.build()["byRef"]}
+        self.assertEqual(refs, {"HD-101": 900, "TASK-2026-00512": 100})
+
+    def test_clock_time_is_not_added_on_top(self):
+        self.stub("ref_seconds", lambda t0, t1: [("HD-101", 5000)])
+        self.seg(0, 600, task_uuid=self.a, ref="HD-101")
+        self.assertEqual(self.build()["byRef"][0]["sec"], 5000)             # max of the two, not 5600
+
+    def test_terminal_app_line_reads_as_its_breakdown(self):
+        self.seg(0, 3600, project="alpha", verdict="work")
+        self.seg(3600, 4200, verdict="delegated")
+        apps = {a["app"]: a for a in self.build()["byApp"]}
+        self.assertEqual(apps["com.mitchellh.ghostty"]["detail"], "work 1h00m · delegated 10m")
+        self.assertNotIn("detail", apps["zen-beta"])
+
+    def test_a_default_verdict_is_called_unattributed(self):
+        self.seg(0, 600, project="alpha")
+        self.seg(600, 1800, verdict="unproductive", labelled_by="title")     # no evidence: a default
+        self.seg(1800, 2000, verdict="unproductive", labelled_by="llm")      # the model said so
+        detail = {a["app"]: a for a in self.build()["byApp"]}["com.mitchellh.ghostty"]["detail"]
+        self.assertEqual(detail, "unattributed 20m \u00b7 work 10m \u00b7 unproductive 3m")
+
+    def test_no_private_db_is_just_empty(self):
+        (config.TT_DIR / "private.db").unlink()
+        t = self.build()
+        self.assertEqual((t["byRef"], t["byProject"], t["byAgent"]), ([], [], []))
+
+    def test_labels_only_never_a_title_cwd_or_activity(self):
+        self.seg(0, 600, task_uuid=self.a, ref="HD-101", project="alpha", agent_name="Vega")
+        out = repr(self.build())
+        for secret in ("secret activity text", "private-repo", "w1:p1"):
+            self.assertNotIn(secret, out)
+
+    def test_validates_against_the_contract(self):
+        self.seg(0, 600, task_uuid=self.a, ref="HD-101", project="alpha", agent_name="Vega")
+        doc = activity.build([], self.tw.tasks, now=self.t0 + 7 * 3600, apps="all")
+        self.assertEqual(schema.errors(doc, schema.load("activity")), [])
+        old = {"v": 1, "ts": 1, "buckets": {k: {"workedSec": 0, "tasksDone": 0, "byProject": [], "byApp": [], "byRef": []}
+                                           for k in ("today", "week", "month", "quarter")}}
+        self.assertTrue(schema.errors(old, schema.load("activity")))        # byAgent is required now
+
+
+if __name__ == "__main__":
+    unittest.main()

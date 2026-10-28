@@ -40,10 +40,12 @@ def attention(ts, items, v=1, bad_source=None):
             "sources": srcs}
 
 
-def bucket(worked, done, projects, refs, apps):
+def bucket(worked, done, projects, refs, apps, agents=()):
     return {"workedSec": worked, "tasksDone": done,
             "byProject": [{"project": p, "sec": s} for p, s in projects],
-            "byApp": [{"app": a, "sec": s} for a, s in apps],
+            # an app may carry a `detail`: the terminal line reads as what it was spent on
+            "byApp": [{"app": a[0], "sec": a[1], **({"detail": a[2]} if len(a) > 2 else {})} for a in apps],
+            "byAgent": [{"agent": a, "sec": s} for a, s in agents],
             "byRef": [{"ref": r, "sec": s, "title": t} for r, s, t in refs]}
 
 
@@ -54,7 +56,8 @@ def activity(ts, v=1, empty=False):
     today = bucket(14400 + 900, 3, [("alpha", 9000), ("beta", 4500), ("misc", 1800)],
                    [("HD-101", 5400, "Fix the login redirect"), ("TASK-2026-0042", 3600, "Quarterly cleanup"),
                     ("gh:acme/widgets#12", 2700, "Review widget parser")],
-                   [("editor", 8000), ("terminal", 5000), ("browser", 2300)])
+                   [("editor", 8000), ("terminal", 5000, "work 1h10m \u00b7 delegated 8m"), ("browser", 2300)],
+                   [("Vega", 3600), ("Isis", 1500)])
     week = bucket(5 * 25200, 11, [("alpha", 70000), ("beta", 40000), ("misc", 16000)],
                   [("HD-101", 30000, "Fix the login redirect"), ("HD-088", 22000, "Backfill report")], [("editor", 90000)])
     month = bucket(20 * 25200, 38, [("alpha", 300000)], [], [])

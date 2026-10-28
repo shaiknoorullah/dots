@@ -1,6 +1,7 @@
 {
  "buckets": {
   "month": {
+   "byAgent": [],
    "byApp": [],
    "byProject": [],
    "byRef": [],
@@ -8,6 +9,7 @@
    "workedSec": 0
   },
   "quarter": {
+   "byAgent": [],
    "byApp": [],
    "byProject": [],
    "byRef": [],
@@ -15,6 +17,7 @@
    "workedSec": 0
   },
   "today": {
+   "byAgent": [],
    "byApp": [],
    "byProject": [],
    "byRef": [],
@@ -22,6 +25,7 @@
    "workedSec": 0
   },
   "week": {
+   "byAgent": [],
    "byApp": [],
    "byProject": [],
    "byRef": [],

@@ -4,14 +4,15 @@ import qs.modules.overview
 import qs.modules.overview.parts
 import "../js/Fmt.js" as Fmt
 
-// Today: time worked, tasks done, by project, by item, by app. Two columns.
+// Today: time worked, tasks done, by project, by item, by agent, by app. Two columns.
 FocusScope {
     id: pg
     readonly property var b: Feed.today
     readonly property bool dim: Feed.dim
 
     function asBars(list, key) {
-        return (list || []).map(function (r) { return { name: r[key], sec: r.sec } })
+        // a row may carry a `detail` (the terminal line: what that time went on)
+        return (list || []).map(function (r) { return { name: r.detail ? r[key] + " \u00b7 " + r.detail : r[key], sec: r.sec } })
     }
 
     Flickable {
@@ -47,6 +48,8 @@ FocusScope {
 
                 Txt { text: "By item"; role: "caption"; faint: true; dim: pg.dim }
                 RefTable { width: parent.width; rows: pg.b ? pg.b.byRef : []; dim: pg.dim }
+                Txt { text: "By agent"; role: "caption"; faint: true; dim: pg.dim; visible: !!pg.b && !!pg.b.byAgent && pg.b.byAgent.length > 0 }
+                Bars { width: parent.width; rows: pg.asBars(pg.b ? pg.b.byAgent : [], "agent"); dim: pg.dim }
                 Txt { text: "By app"; role: "caption"; faint: true; dim: pg.dim; visible: !!pg.b && !!pg.b.byApp && pg.b.byApp.length > 0 }
                 Bars { width: parent.width; rows: pg.asBars(pg.b ? pg.b.byApp : [], "app"); dim: pg.dim }
             }

@@ -51,10 +51,32 @@
                   },
                   "sec": {
                     "type": "integer"
+                  },
+                  "detail": {
+                    "type": "string"
                   }
                 },
                 "required": [
                   "app",
+                  "sec"
+                ],
+                "additionalProperties": true
+              }
+            },
+            "byAgent": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "agent": {
+                    "type": "string"
+                  },
+                  "sec": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "agent",
                   "sec"
                 ],
                 "additionalProperties": true
@@ -89,6 +111,7 @@
             "tasksDone",
             "byProject",
             "byApp",
+            "byAgent",
             "byRef"
           ],
           "additionalProperties": true
@@ -131,10 +154,32 @@
                   },
                   "sec": {
                     "type": "integer"
+                  },
+                  "detail": {
+                    "type": "string"
                   }
                 },
                 "required": [
                   "app",
+                  "sec"
+                ],
+                "additionalProperties": true
+              }
+            },
+            "byAgent": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "agent": {
+                    "type": "string"
+                  },
+                  "sec": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "agent",
                   "sec"
                 ],
                 "additionalProperties": true
@@ -169,6 +214,7 @@
             "tasksDone",
             "byProject",
             "byApp",
+            "byAgent",
             "byRef"
           ],
           "additionalProperties": true
@@ -211,10 +257,32 @@
                   },
                   "sec": {
                     "type": "integer"
+                  },
+                  "detail": {
+                    "type": "string"
                   }
                 },
                 "required": [
                   "app",
+                  "sec"
+                ],
+                "additionalProperties": true
+              }
+            },
+            "byAgent": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "agent": {
+                    "type": "string"
+                  },
+                  "sec": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "agent",
                   "sec"
                 ],
                 "additionalProperties": true
@@ -249,6 +317,7 @@
             "tasksDone",
             "byProject",
             "byApp",
+            "byAgent",
             "byRef"
           ],
           "additionalProperties": true
@@ -291,10 +360,32 @@
                   },
                   "sec": {
                     "type": "integer"
+                  },
+                  "detail": {
+                    "type": "string"
                   }
                 },
                 "required": [
                   "app",
+                  "sec"
+                ],
+                "additionalProperties": true
+              }
+            },
+            "byAgent": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "agent": {
+                    "type": "string"
+                  },
+                  "sec": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "agent",
                   "sec"
                 ],
                 "additionalProperties": true
@@ -329,6 +420,7 @@
             "tasksDone",
             "byProject",
             "byApp",
+            "byAgent",
             "byRef"
           ],
           "additionalProperties": true
