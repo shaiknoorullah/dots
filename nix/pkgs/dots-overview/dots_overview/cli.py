@@ -124,6 +124,12 @@ def cmd_doctor(args):
 
 def cmd_focus(args):
     st = nowstate.focus_cmd(args.action, args.minutes, args.zone)
+    # the bar reads now.json, which the fast cycle rewrites only once a minute: rewrite it here
+    # so a keypress shows on the bar at once, not up to 60 s later
+    errors = []
+    live = _stage(errors, "herdr", herdr.snapshot)
+    pend = _stage(errors, "task", tw.pending, [])
+    _put("now", nowstate.build(pend, live, local_tt.clock_state()))
     print(st["state"])
     return 0
 
