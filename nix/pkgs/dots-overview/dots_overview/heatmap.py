@@ -19,13 +19,13 @@ def score(sec, max_sec):
 
 def build(done_tasks, now=None, span=SPAN_DAYS):
     now = int(now or time.time())
-    today = datetime.fromtimestamp(now).date()
+    today = local_tt.workday(now)
     first = today - timedelta(days=span - 1)
     worked = local_tt.worked_by_day(first, today, now)
     done = {}
     for t in done_tasks:
         if t.get("end_ts"):
-            d = datetime.fromtimestamp(t["end_ts"]).date()
+            d = local_tt.workday(t["end_ts"])
             done[d] = done.get(d, 0) + 1
     mx = max(worked.values(), default=0)
     days = []

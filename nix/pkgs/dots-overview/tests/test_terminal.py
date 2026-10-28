@@ -26,8 +26,9 @@ class TerminalAttention(helpers.Scratch):
     def setUp(self):
         super().setUp()
         self.tw = helpers.FakeTw(self)
-        self.now = int(time.time())
-        self.t0 = local_tt.day_start(datetime.fromtimestamp(self.now).date())
+        # pinned to noon of a workday: "now" from the real clock made these fail after midnight
+        self.t0 = local_tt.workday_start(local_tt.workday(time.time()))
+        self.now = self.t0 + 6 * 3600
         self.a = self.tw.seed(desc="Fix ingress", ref="HD-101", project="alpha")["uuid"]
         self.b = self.tw.seed(desc="Cluster upgrade", ref=None, project="beta")["uuid"]
         config.TT_DIR.mkdir(parents=True, exist_ok=True)
@@ -150,3 +151,14 @@ class AppSecondsAndProjects(unittest.TestCase):
                 mock.patch.object(local_tt.Path, "is_dir", return_value=True):
             got = local_tt.project_intervals(0, 2_000_000_000)
         self.assertEqual([g[2] for g in got], ["dots", "unassigned"])
+
+
+class Workday(unittest.TestCase):
+    """Today runs 06:00 -> 06:00: work past midnight stays on the evening's day."""
+
+    def test_rollover_at_six(self):
+        at = lambda h, m=0: datetime(2026, 10, 29, h, m).timestamp()  # noqa: E731
+        self.assertEqual(str(local_tt.workday(at(0, 30))), "2026-10-28")
+        self.assertEqual(str(local_tt.workday(at(5, 59))), "2026-10-28")
+        self.assertEqual(str(local_tt.workday(at(6, 0))), "2026-10-29")
+        self.assertEqual(local_tt.workday_start(local_tt.workday(at(0, 30))), int(datetime(2026, 10, 28, 6).timestamp()))

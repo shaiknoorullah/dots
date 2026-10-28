@@ -106,8 +106,9 @@ def write(day, cfg, reason=None, now=None):
 
 
 def parse_day(s):
+    today = local_tt.workday(time.time())   # a logout at 01:00 briefs the evening's workday
     if not s or s == "today":
-        return date.today()
+        return today
     if s == "yesterday":
-        return date.today() - timedelta(days=1)
+        return today - timedelta(days=1)
     return datetime.strptime(s, "%Y-%m-%d").date()

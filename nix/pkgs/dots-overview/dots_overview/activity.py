@@ -14,7 +14,7 @@ TOP = 8
 
 
 def bucket_starts(today):
-    """Local midnight starts for today / week (Monday) / month / quarter."""
+    """Start dates for today / week (Monday) / month / quarter; each begins at 06:00 (workday)."""
     q = (today.month - 1) // 3 * 3 + 1
     return {"today": today, "week": today - timedelta(days=today.weekday()),
             "month": today.replace(day=1), "quarter": today.replace(month=q, day=1)}
@@ -34,14 +34,14 @@ def _maps(tasks):
 def build(done_tasks, tasks, now=None, apps="today"):
     """apps: "all" queries ActivityWatch for every bucket, "today" only for today (the rest from cache)."""
     now = int(now or time.time())
-    today = datetime.fromtimestamp(now).date()
+    today = local_tt.workday(now)
     titles = _titles(tasks + done_tasks)
     out = {}
-    first = local_tt.day_start(bucket_starts(today)["quarter"])
+    first = local_tt.workday_start(bucket_starts(today)["quarter"])
     ints = local_tt.project_intervals(first, now)
     uuid_ref, uuid_project = _maps(tasks + done_tasks)
     for name, start in bucket_starts(today).items():
-        t0 = local_tt.day_start(start)
+        t0 = local_tt.workday_start(start)
         segs = local_tt.term_segments(t0, now)
         att_refs, att_projects, att_agents = local_tt.attention(
             segs, local_tt.web_links(t0, now), uuid_ref, uuid_project)
