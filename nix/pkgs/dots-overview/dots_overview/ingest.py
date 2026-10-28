@@ -88,7 +88,11 @@ def _adopt_ticket(t, ticket, by_ref, want):
 
 
 def run(now=None, live=None):
-    """Make sure every recorded session has a task. Returns {'created': n, 'updated': n}."""
+    """Keep each declared session's task carrying its live coordinates (agent, pane, workspace).
+
+    It no longer invents a task per session: an agent names its task with `dots-task`
+    (the PreToolUse gate refuses work until it does), and a placeholder titled with the
+    first prompt was noise in every list. Returns {'created': 0, 'updated': n}."""
     prune(now)
     live = live if live is not None else herdr.snapshot()
     live_by_sess = {a["sess"]: a for a in (live or []) if a.get("sess")}
@@ -113,15 +117,4 @@ def run(now=None, live=None):
                 tw.modify(t["uuid"], **diff)
                 updated += 1
             continue
-        if not (rec.get("prompt_head") or ticket):
-            continue            # a session that never got a prompt is not work yet
-        attrs = dict(want, src="claude")
-        if ticket and tw.valid_ref(ticket):
-            attrs["ref"] = ticket
-        uuid = tw.add(_title(rec, agent), tags=("mirror", "attn"), **attrs)
-        created += 1
-        t = {"uuid": uuid, **want}
-        by_sess[sess] = t
-        if ticket:
-            by_ref[ticket] = t
     return {"created": created, "updated": updated}

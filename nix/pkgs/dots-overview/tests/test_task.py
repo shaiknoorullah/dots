@@ -69,7 +69,7 @@ class Switches(helpers.Scratch):
 
     def test_headless_runs_are_exempt(self):
         self.assertTrue(gate.headless({"CLAUDE_CODE_ENTRYPOINT": "sdk-cli", "HERDR_PANE_ID": "w1:p1"}))
-        self.assertTrue(gate.headless({"CLAUDE_CODE_SESSION_ATTENDED": "0", "HERDR_PANE_ID": "w1:p1"}))
+        self.assertFalse(gate.headless({}))
         self.assertFalse(gate.headless({"CLAUDE_CODE_ENTRYPOINT": "cli", "HERDR_PANE_ID": "w1:p1"}))
 
     def test_pretool_decisions(self):

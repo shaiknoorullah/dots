@@ -117,7 +117,7 @@ A session becomes a task on its **first prompt**, not at `SessionStart`. A sessi
    Only as a single plain command: any `;` `&` `|` `<` `>` `$` backtick, backslash, parenthesis or newline outside quotes is refused.
 3. Reading and searching tools are never gated.
 4. A subagent inherits its parent's declaration (same session id, else the same herdr pane or cwd).
-5. Headless runs are exempt: `claude -p` / SDK (`CLAUDE_CODE_ENTRYPOINT=sdk-*`), `CLAUDE_CODE_SESSION_ATTENDED=0`, or no herdr pane and no terminal. The ERP mcp job also sets `DOTS_TASK_GATE=off`.
+5. Headless runs are exempt: `claude -p` / SDK runs, whose hooks see `CLAUDE_CODE_ENTRYPOINT=sdk-cli` (interactive sessions see `cli`; verified 2026-10-28). They inherit the launching pane's `HERDR_PANE_ID`, so the pane proves nothing. The ERP mcp job also sets `DOTS_TASK_GATE=off`. Subagents' hooks carry the parent's `session_id` (verified), so the parent's declaration covers them.
 6. Fails open: a missing `dots-overview`, bad input, a crash or a timeout allows the call. The deny is the only hard edge.
 
 **Kill switch.** `DOTS_TASK_GATE=off` in the environment, or an empty file `~/.config/dots-work/task-gate-off`. Both silence the gate, the context and the Stop check.

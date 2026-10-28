@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Bridge taskwarrior start/stop → timewarrior intervals, tagged by project.
 # (taskwarrior runs hooks from data.location/hooks = ~/.task/hooks)
+# timew never touches the hook's stdin/stdout: a first-run "create database? (yes/no)"
+# prompt there would eat the task JSON and taskwarrior would reject the change.
 read -r old; read -r new
 get(){ printf '%s' "$1" | python3 -c "import json,sys;d=json.load(sys.stdin);print(d.get('$2',''))"; }
 o_start=$(get "$old" start); n_start=$(get "$new" start)
@@ -12,11 +14,11 @@ if [ -z "$o_start" ] && [ -n "$n_start" ]; then
     tags=()
     [ -n "$proj" ] && tags+=("$proj")
     [ -n "$desc" ] && tags+=("$desc")
-    timew start "${tags[@]}" :quiet 2>/dev/null || true
+    timew start "${tags[@]}" :quiet </dev/null >/dev/null 2>&1 || true
 fi
 # task STOP → timew stop.
 if [ -n "$o_start" ] && [ -z "$n_start" ]; then
-    timew stop :quiet 2>/dev/null || true
+    timew stop :quiet </dev/null >/dev/null 2>&1 || true
 fi
 
 # Refresh the quickshell drawer's task snapshot after this change settles

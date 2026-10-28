@@ -169,15 +169,16 @@ pre Edit $S3 "" DOTS_TASK_GATE=off | grep -q . && bad "kill switch env ignored" 
 touch "$tmp/task-gate-off"; pre Edit $S3 "" | grep -q . && bad "kill switch file ignored" || ok "task-gate-off file opens the gate"; rm -f "$tmp/task-gate-off"
 pre Edit $S3 "" | denied && ok "...and removing the file closes it again" || bad "gate stayed open"
 pre Edit $S3 "" CLAUDE_CODE_ENTRYPOINT=sdk-cli | grep -q . && bad "claude -p (sdk entrypoint) gated" || ok "claude -p / SDK runs are exempt (entrypoint sdk-*)"
-pre Edit $S3 "" CLAUDE_CODE_SESSION_ATTENDED=0 | grep -q . && bad "unattended session gated" || ok "unattended sessions are exempt"
-pre Edit $S3 "" CLAUDE_CODE_ENTRYPOINT=cli CLAUDE_CODE_SESSION_ATTENDED=1 | denied && ok "an attended interactive session is gated" || bad "interactive session not gated"
+: > "$HERDR_LOG"
+hk prompt "$(mk $S3 "$tmp/work" UserPromptSubmit 'do a thing in the background')" CLAUDE_CODE_ENTRYPOINT=sdk-cli | grep -q . && bad "claude -p got context" || ok "claude -p gets no injection"
+grep -q report-metadata "$HERDR_LOG" && bad "claude -p rewrote the pane's ticket token" || ok "claude -p leaves the launching pane's ticket token alone"
+pre Edit $S3 "" CLAUDE_CODE_ENTRYPOINT=cli | denied && ok "an interactive session (entrypoint cli) is gated" || bad "interactive session not gated"
 out=$(printf '%s' "$(python3 -c "import json; print(json.dumps({'session_id':'$S3','hook_event_name':'PreToolUse','tool_name':'Edit','tool_input':{}}))")" | env -u HERDR_PANE_ID -u HERDR_ENV setsid -w sh "$hook" pretool 2>/dev/null)
-[ -z "$out" ] && ok "no herdr pane and no controlling terminal (a timer job) is exempt" || bad "headless job gated: $out"
+[ -n "$out" ] && ok "no pane and no terminal is NOT a pass: only the sdk entrypoint exempts" || bad "tty-less interactive session slipped through"
 # a subagent inherits the parent's declaration
 subj() { python3 -c "import json,sys; print(json.dumps({'session_id':sys.argv[1],'cwd':sys.argv[2],'agent_id':'sub1','agent_type':'Explore','hook_event_name':'PreToolUse','tool_name':'Edit','tool_input':{}}))" "$@"; }
 hk pretool "$(subj $S1 "$tmp/work")" | grep -q . && bad "subagent with the parent's session id gated" || ok "subagent (same session id) inherits the declaration"
-hk prompt "$(mk $S1 "$tmp/work" UserPromptSubmit 'refresh live record')" >/dev/null
-hk pretool "$(subj sub-own-session-id "$tmp/work")" | grep -q . && bad "subagent with its own session id gated" || ok "subagent (own session id, same pane) inherits the pane's declaration"
+hk pretool "$(subj sub-own-session-id "$tmp/work")" | denied && ok "an undeclared session id is gated even from a subagent (no pane guessing)" || bad "pane guess let an undeclared session through"
 for bad_in in '' 'not json' '[]' '{"session_id":"../x","tool_name":"Edit"}' '{"tool_name":"Edit"}'; do
   out=$(printf '%s' "$bad_in" | env HERDR_ENV=1 HERDR_PANE_ID=w9:p1 sh "$hook" pretool 2>/dev/null); rc_=$?
   [ -z "$out" ] && [ "$rc_" = 0 ] && ok "malformed input fails open: ${bad_in:-empty}" || bad "malformed input: $out"

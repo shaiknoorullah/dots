@@ -48,29 +48,15 @@ def kill_switch(env):
     return (config.CONF.parent / "task-gate-off").exists()
 
 
-def has_tty():
-    try:
-        os.close(os.open("/dev/tty", os.O_RDWR))
-        return True
-    except OSError:
-        return False
-
-
 def headless(env):
-    """Is this a run with nobody to declare a task: `claude -p`, an SDK job, a systemd timer?
+    """`claude -p` and SDK runs: nobody is there to declare a task.
 
-    Any one of these exempts the session:
-      - CLAUDE_CODE_ENTRYPOINT starting with "sdk" (what `claude -p` / the SDK set)
-      - CLAUDE_CODE_SESSION_ATTENDED=0
-      - no herdr pane AND no controlling terminal (a timer or cron job has neither; an
-        interactive claude, in herdr or a plain terminal, has at least one)
-    The explicit door is DOTS_TASK_GATE=off, which jobs that spawn `claude -p` should set.
+    Verified 2026-10-28: a `claude -p` run's hooks see CLAUDE_CODE_ENTRYPOINT=sdk-cli (an
+    interactive session sees "cli"), and they also inherit HERDR_PANE_ID from the pane that
+    launched them, so the pane says nothing about who is at the keyboard. Jobs that spawn
+    `claude -p` may also set DOTS_TASK_GATE=off explicitly.
     """
-    if (env.get("CLAUDE_CODE_ENTRYPOINT") or "").startswith("sdk"):
-        return True
-    if env.get("CLAUDE_CODE_SESSION_ATTENDED") == "0":
-        return True
-    return not env.get("HERDR_PANE_ID") and not has_tty()
+    return (env.get("CLAUDE_CODE_ENTRYPOINT") or "").startswith("sdk")
 
 
 # ---- the Bash allowlist ---------------------------------------------------------------
@@ -131,21 +117,6 @@ def allowlisted(cmd):
 
 # ---- PreToolUse -----------------------------------------------------------------------
 
-def inherited(sess, cwd, pane):
-    """A subagent's declaration is its parent's: same session id if Claude Code reuses it, else
-    the newest declared session in the same herdr pane (or, outside herdr, the same cwd)."""
-    d = task.read_decl(sess)
-    if task.declared_ok(d):
-        return d
-    best = None
-    for r in task._records(int(time.time())):
-        if (pane and r.get("pane") == pane) or (not pane and cwd and r.get("cwd") == cwd):
-            cand = task.read_decl(r["sess"])
-            if task.declared_ok(cand) and (best is None or (r.get("ts") or 0) > best[0]):
-                best = (r.get("ts") or 0, cand)
-    return best[1] if best else None
-
-
 def deny_text(tool):
     return (f"No task declared for this session, so {tool} is refused (reading and searching are still open). "
             + NO_TASK + " For genuinely trivial non-work: `dots-task none \"<reason>\"`. "
@@ -160,9 +131,9 @@ def pretool(hook, env):
     sess = str(hook.get("session_id") or "")
     if not task.SESS_RE.match(sess):
         return None
+    # a subagent's hook carries its parent's session_id (verified 2026-10-28), so the
+    # parent's declaration covers it with no further lookup
     d = task.read_decl(sess)
-    if not task.declared_ok(d) and hook.get("agent_id"):
-        d = inherited(sess, hook.get("cwd"), env.get("HERDR_PANE_ID"))
     if task.declared_ok(d):
         return None
     if tool == "Bash" and allowlisted(str((hook.get("tool_input") or {}).get("command") or "")):
@@ -195,6 +166,10 @@ def on_context(event, hook, env):
     sess = str(hook.get("session_id") or "")
     if not task.SESS_RE.match(sess) or hook.get("agent_id"):
         return None
+    # a `claude -p` run inherits the launching pane: recording it, or refreshing that pane's
+    # ticket token from it, would overwrite the interactive agent that owns the pane
+    if headless(env):
+        return None
     pane = env.get("HERDR_PANE_ID") or None
     task.touch_live(sess, hook.get("cwd"), pane if pane and task.PANE_RE.match(pane) else None)
     if event == "UserPromptSubmit":
@@ -202,7 +177,7 @@ def on_context(event, hook, env):
         atomic.write_json(task._p(TURN, sess), {"v": 1, "ts": int(time.time()), "prompt": p[:600],
                                                 "hash": hashlib.sha256(p.encode("utf-8", "replace")).hexdigest()[:16]})
     task.refresh_token(pane, token_value(sess), timeout=1.0)
-    if kill_switch(env) or headless(env):
+    if kill_switch(env):
         return None
     return {"hookSpecificOutput": {"hookEventName": event, "additionalContext": context_text(sess)}}
 
