@@ -44,6 +44,31 @@ def mirror_doc(now):
     return {"v": 1, "ts": now, "refs": refs}
 
 
+GONE_FLOOR = 0.5   # an open list under half the mirror is a bad read, not mass completion
+
+
+def close_gone(got, now):
+    """mcp mode has no per-item status read, so completion is: no longer in the open list.
+
+    Read-only on the ERP side; marks done in local Taskwarrior only. A list that shrank by
+    more than half is treated as a failed or truncated model answer, and closes nothing --
+    unreachable or partial is never read as "done". Returns the count closed, or None.
+    """
+    fetched = {it["ref"] for it in got}
+    pending = [t for t in tw.export("status:pending", "+mirror") if t.get("src") == "erp"]
+    if not pending:
+        return 0
+    if len(fetched) < GONE_FLOOR * len(pending):
+        return None
+    n = 0
+    for t in pending:
+        if t.get("ref") and t["ref"] not in fetched:
+            kind = (t.get("srcstate") or "erp:").split(":", 1)[0]
+            tw.done(t["uuid"], srcstate=f"{kind}:gone", srcsync=now)
+            n += 1
+    return n
+
+
 def run(cfg, erp_mcp=False, gh=sources_gh, erp=sources_erp, sleep=time.sleep, now=None):
     """Fetch, mirror, write. Returns (created count, per-source state, errors)."""
     now = int(now or time.time())
@@ -63,6 +88,12 @@ def run(cfg, erp_mcp=False, gh=sources_gh, erp=sources_erp, sleep=time.sleep, no
             got = erp.fetch_token(cfg) if cfg.erp_mode == "token" else erp.fetch_mcp(cfg)
             items += got
             status["erp"] = {"state": "ok", "ts": now, "detail": f"{len(got)} item(s)"}
+            if cfg.erp_mode == "mcp":
+                closed = close_gone(got, now)
+                if closed is None:
+                    status["erp"]["detail"] += "; open list looked partial, nothing closed"
+                elif closed:
+                    status["erp"]["detail"] += f"; {closed} closed upstream"
         except (sources_erp.ErpError, OSError) as e:
             status["erp"] = {"state": "stale", "ts": now, "detail": str(e)[:80]}
             errors.append({"source": "erp", "msg": str(e)[:120]})

@@ -590,3 +590,23 @@ class TeamReviewAndEndTime(unittest.TestCase):
         v = {"reviews": [{"author": {"login": "Me"}, "submittedAt": "2026-10-21T09:00:00Z"}]}
         self.assertEqual(detect.finished_at("review", v, "me", 999), detect._iso("2026-10-21T09:00:00Z"))
         self.assertEqual(detect.finished_at("issue", {}, "me", 999), 999)
+
+
+class ErpGone(unittest.TestCase):
+    def _run(self, pending_refs, fetched_refs):
+        from unittest import mock
+        from dots_overview import sync
+        pend = [{"uuid": f"u{i}", "ref": r, "src": "erp", "srcstate": "task:open"} for i, r in enumerate(pending_refs)]
+        done = []
+        with mock.patch.object(sync.tw, "export", return_value=pend), \
+             mock.patch.object(sync.tw, "done", side_effect=lambda u, **k: done.append(u)):
+            n = sync.close_gone([{"ref": r} for r in fetched_refs], 1)
+        return n, done
+
+    def test_missing_item_closed(self):
+        n, done = self._run(["A", "B", "C"], ["A", "B"])
+        self.assertEqual((n, done), (1, ["u2"]))
+
+    def test_partial_list_closes_nothing(self):
+        n, done = self._run(["A", "B", "C", "D"], ["A"])
+        self.assertEqual((n, done), (None, []))

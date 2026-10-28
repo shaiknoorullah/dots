@@ -9,7 +9,16 @@ job_main() {
   if ! timeout 5 getent hosts api.github.com >/dev/null 2>&1; then
     ops_state overview-sync ok "offline; skipped"; return 0
   fi
-  out=$(timeout 600 dots-overview sync 2>&1) || rc=$?
+  # ERP in mcp mode spends model tokens, so it rides along at most every ERP_EVERY seconds
+  # rather than hourly. Token mode costs nothing and runs every time.
+  local erp_flag="" stamp="${XDG_STATE_HOME:-$HOME/.local/state}/dots-overview/erp-mcp.stamp"
+  if grep -qs '^ERP_MODE=mcp' "${XDG_CONFIG_HOME:-$HOME/.config}/dots-work/work.conf"; then
+    local last; last=$(stat -c %Y "$stamp" 2>/dev/null || echo 0)
+    if [ $(( $(date +%s) - last )) -ge "${ERP_EVERY:-14400}" ]; then
+      erp_flag="--erp-mcp"; mkdir -p "${stamp%/*}"; : > "$stamp"
+    fi
+  fi
+  out=$(timeout 600 dots-overview sync $erp_flag 2>&1) || rc=$?
   timeout 600 dots-overview detect >/dev/null 2>&1 || rc=$((rc + 1))
   timeout 120 dots-overview fast --apps all >/dev/null 2>&1 || rc=$((rc + 1))
   sum=$(dots-overview doctor 2>&1 | tail -n 1)
