@@ -83,8 +83,66 @@ The installer script now finds each hook by its own marker, so two hooks share `
 |---|---|
 | `timetrack-ticket-hook` | `UserPromptSubmit`, `SessionStart` |
 | `dots-track-hook` | `UserPromptSubmit`, `SessionStart`, `Stop`, `SessionEnd` |
+| `dots-task-hook` | `SessionStart`, `UserPromptSubmit`, `PreToolUse` (matcher `Edit\|Write\|MultiEdit\|NotebookEdit\|Bash`), `Stop` |
 
 A session becomes a task on its **first prompt**, not at `SessionStart`. A session that never gets a prompt is not work yet.
+
+---
+
+## 5b. Task discipline for agents
+
+> No Claude agent edits files or runs commands until its session has declared a task.
+
+**The rule.** A session declares one task with `dots-task`. Everything is local; nothing leaves the machine.
+
+| command | does |
+|---|---|
+| `dots-task list [--grep W] [--project P]` | open tasks to pick from (ref, project, title) |
+| `dots-task declare <ref\|id\|uuid>` | bind this session to a task, start its clock, label the herdr pane |
+| `dots-task new "<title>" --project P [--parent REF]` | create a local task (`src=claude`, tag `claude`, ref `local:<6 hex>`) and declare it |
+| `dots-task switch <ref>` | move to another task; the old one stops |
+| `dots-task none "<reason>"` | trivial non-work: opens the gate, logged |
+| `dots-task current` | what this session declared |
+
+**Which session is "this" one**, first match wins:
+
+1. `CLAUDE_CODE_SESSION_ID` in the environment. Claude Code exports it to every Bash tool call. (`DOTS_SESSION_ID` and `CLAUDE_SESSION_ID` also work.)
+2. `HERDR_PANE_ID`, then the newest recorded session for that pane.
+3. The newest recorded session whose `cwd` is this directory or a parent.
+
+**The gate** (`dots-task-hook`, `PreToolUse`).
+
+1. No declaration and no exemption: `Edit`, `Write`, `MultiEdit`, `NotebookEdit` and `Bash` are denied, with the way out in the reason.
+2. Always allowed: `dots-task ...`, `task ... list|export|info`, `git status|log|diff`, `ls`, `cat`, `rg`, `grep`, `pwd`.
+   Only as a single plain command: any `;` `&` `|` `<` `>` `$` backtick, backslash, parenthesis or newline outside quotes is refused.
+3. Reading and searching tools are never gated.
+4. A subagent inherits its parent's declaration (same session id, else the same herdr pane or cwd).
+5. Headless runs are exempt: `claude -p` / SDK (`CLAUDE_CODE_ENTRYPOINT=sdk-*`), `CLAUDE_CODE_SESSION_ATTENDED=0`, or no herdr pane and no terminal. The ERP mcp job also sets `DOTS_TASK_GATE=off`.
+6. Fails open: a missing `dots-overview`, bad input, a crash or a timeout allows the call. The deny is the only hard edge.
+
+**Kill switch.** `DOTS_TASK_GATE=off` in the environment, or an empty file `~/.config/dots-work/task-gate-off`. Both silence the gate, the context and the Stop check.
+
+**Steering.** `SessionStart` and `UserPromptSubmit` tell the agent its task (or to declare one) and refresh the herdr `$ticket` token (4 h ttl).
+`Stop` asks the local model (Ollama on `127.0.0.1:11434` only, 3 s) whether the turn matches the task.
+Clearly different work blocks the stop **once** per prompt, telling the agent to switch, create a task or ask "log this as a ticket?".
+It never blocks when `stop_hook_active` is set, and it allows on any model failure.
+`DOTS_TASK_MODEL` and `DOTS_OLLAMA_URL` (loopback only) override the defaults.
+
+**Promote local tasks.** The daily brief lists open `local:` tasks under "Agent work logged as new local tasks" (company projects only) and counts exemptions.
+After you file the real ticket:
+
+```
+dots-task promote local:ab12cd HD-123
+```
+
+**Status line.** Set `statusLine.command` to `~/.local/bin/dots-statusline`.
+It runs `claude-powerline` (or `DOTS_STATUSLINE_BASE`) and adds a `task: <ref> <title>` line.
+`dots-overview task statusline` is the bare segment (status line JSON on stdin).
+
+**Agent instructions.** `~/.config/dots-work/task-discipline/SKILL.md` is shipped by chezmoi.
+To have Claude load it: `ln -s ~/.config/dots-work/task-discipline ~/.claude/skills/task-discipline`.
+The hook context already carries the rule; the skill is the longer form.
+Consider `Bash(dots-task:*)` in your permission allow-list.
 
 ---
 

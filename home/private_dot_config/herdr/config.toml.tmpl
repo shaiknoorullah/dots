@@ -419,6 +419,14 @@ window_title = "{workspace} · {tab} · {pane}"
 
 # Background notification popup delivery
 status_indicators = "dots"
+
+# The ticket each agent declared (dots-task), shown beside the agent name. dots-task and
+# dots-task-hook report it as the pane token $ticket (4 h ttl, refreshed every prompt);
+# a pane with no declaration shows "no-task". This table must stay below status_indicators:
+# a table header would otherwise swallow the [ui] keys that follow it.
+[ui.sidebar.agents]
+rows = [["state_icon", "machine", "workspace", "tab"], ["agent", "$ticket"]]
+
 [ui.toast]
 # off = disable pop-up notifications
 # herdr = show in-app toasts

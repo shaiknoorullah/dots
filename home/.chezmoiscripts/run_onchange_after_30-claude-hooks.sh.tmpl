@@ -4,7 +4,7 @@
 # That file is HAND-MAINTAINED and chezmoi does not manage it -- it holds the user's model
 # routing, permissions, plugins and output style, none of which belongs in a public repo.
 # So this script merges in its own entries (timetrack-ticket-hook on two events,
-# dots-track-hook on four) and leaves everything else byte-identical: it never writes a
+# dots-track-hook on four, dots-task-hook on four) and leaves everything else byte-identical: it never writes a
 # settings file it did not first parse, and it refuses to install a result that does not
 # parse back.
 #
@@ -30,10 +30,10 @@ BIN="$HOME/.local/bin"
 # ONE line, always: this output is pasted into a comment, and a second line would land in
 # the script as a bare command. `grep -c` prints 0 AND exits 1 on no match, so the old
 # `grep -c ... || echo absent` printed both and ran `absent` as a command.
-# live: {{ output "sh" "-c" "c=$(grep -c 'timetrack-ticket-hook\\|dots-track-hook' \"$HOME/.claude/settings.json\" 2>/dev/null); printf '%s' \"${c:-absent}\"" | trim }}
+# live: {{ output "sh" "-c" "c=$(grep -c 'timetrack-ticket-hook\\|dots-track-hook\\|dots-task-hook' \"$HOME/.claude/settings.json\" 2>/dev/null); printf '%s' \"${c:-absent}\"" | trim }}
 
 [ -f "$S" ] || { echo "claude-hooks: $S does not exist; skipping (re-run after first launch)" >&2; exit 0; }
-[ -x "$BIN/timetrack-ticket-hook" ] || [ -x "$BIN/dots-track-hook" ] || { echo "claude-hooks: no hook under $BIN is executable; skipping" >&2; exit 0; }
+[ -x "$BIN/timetrack-ticket-hook" ] || [ -x "$BIN/dots-track-hook" ] || [ -x "$BIN/dots-task-hook" ] || { echo "claude-hooks: no hook under $BIN is executable; skipping" >&2; exit 0; }
 command -v python3 >/dev/null || { echo "claude-hooks: no python3" >&2; exit 0; }
 
 CLAUDE_SETTINGS="$S" CLAUDE_BIN="$BIN" python3 - <<'PY'
@@ -51,13 +51,18 @@ except ValueError as e:
     # owner to look at, and rewriting one would destroy whatever they were mid-edit on.
     sys.exit(f"claude-hooks: {path} is not valid JSON ({e}); left untouched")
 
-# script name (also its marker in the settings file) -> {event: action}. Each hook finds
+# script name (also its marker in the settings file) -> {event: action | (action, matcher, timeout)}.
+# dots-task-hook is the task gate: its PreToolUse entry carries a matcher so it only sees the
+# tools it can refuse, and its Stop entry has 6 s because it may ask the local model. Each hook finds
 # ONLY its own entry by its own marker, so two hooks can share an event (UserPromptSubmit
 # carries both) and a re-run replaces each in place instead of one displacing the other.
 HOOKS = {
     "timetrack-ticket-hook": {"UserPromptSubmit": "prompt", "SessionStart": "session"},
     "dots-track-hook": {"UserPromptSubmit": "prompt", "SessionStart": "session",
                         "Stop": "stop", "SessionEnd": "end"},
+    "dots-task-hook": {"SessionStart": "session", "UserPromptSubmit": "prompt",
+                       "PreToolUse": ("pretool", "Edit|Write|MultiEdit|NotebookEdit|Bash", 5),
+                       "Stop": ("stop", None, 6)},
 }
 hooks = d.setdefault("hooks", {})
 changed = []
@@ -67,19 +72,26 @@ for marker, want in HOOKS.items():
         continue
     for event, action in want.items():
         entries = hooks.setdefault(event, [])
-        cmd = {"type": "command", "command": f"{hook} {action}", "timeout": 5}
+        matcher, timeout = None, 5
+        if isinstance(action, tuple):
+            action, matcher, timeout = action
+        cmd = {"type": "command", "command": f"{hook} {action}", "timeout": timeout}
         # Our own entry gets replaced in place; every other entry in the list -- herdr's
         # SessionStart reporter, the notification hook -- is preserved exactly as found.
         for entry in entries:
             inner = entry.get("hooks") or []
             mine = [h for h in inner if marker in str(h.get("command", ""))]
             if mine:
-                if mine[0] != cmd:
+                if mine[0] != cmd or entry.get("matcher") != matcher:
                     inner[inner.index(mine[0])] = cmd
+                    if matcher:
+                        entry["matcher"] = matcher
+                    else:
+                        entry.pop("matcher", None)
                     changed.append(f"{marker} {event} (updated)")
                 break
         else:
-            entries.append({"hooks": [cmd]})
+            entries.append(dict({"matcher": matcher} if matcher else {}, hooks=[cmd]))
             changed.append(f"{marker} {event} (added)")
 
 if not changed:
