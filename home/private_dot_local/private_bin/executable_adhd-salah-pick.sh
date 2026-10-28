@@ -28,4 +28,6 @@ choice="$(printf 'jamaah\nalone\nqaza\nmissed\n' | fzf --prompt=$'􀜌  '"$targe
     2>/dev/null || true)"
 [ -z "$choice" ] && exit 0
 printf '%s\t%s\t%s\t%s\n' "$today" "$target" "$choice" "$(date +%Y-%m-%dT%H:%M)" >> "$LOG"
+# mirror into timetrack (D8); best effort, the plain log above stays the record of last resort
+timetrack salah log "$target" "$choice" >/dev/null 2>&1 || true
 notify-send "🕌 $target" "logged: $choice" 2>/dev/null || true
