@@ -94,8 +94,8 @@ bound values and read its own `State.qml`; the properties stay for the contract.
 | `osd` | shell | `display <volume\|brightness>` (not `show`: the CLI treats `ipc call t show x` as its own subcommand) |
 | `overview` | overview | `toggle`, `panel <page>`, `focus <start\|stop\|break>` |
 
-`bar.lamp` forces every conditional chip visible for 1.2 s (amber and red
-included) and calls `OverviewHost.lamp(1200)` when the host is present.
+`bar.lamp` forces every conditional chip visible for 5 s (amber and red
+included) and calls `OverviewHost.lamp(5000)` when the host is present.
 
 ---
 

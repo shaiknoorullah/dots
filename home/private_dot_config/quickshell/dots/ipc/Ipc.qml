@@ -31,8 +31,8 @@ Scope {
 
     function reload(): void { Quickshell.reload(true); }
     function lamp(): void {
-      Lamp.fire(1200);
-      Overview.lamp(1200);
+      Lamp.fire(5000);
+      Overview.lamp(5000);
     }
     function calendar(): void { root.openPopout("calendar", 0.5); }
     function media(): void { root.openPopout("media", 0.5); }
@@ -55,6 +55,8 @@ Scope {
     function dnd(): void { if (root.notifs) root.notifs.dnd = !root.notifs.dnd; }
     // test hook: how many toasts are on screen right now
     function count(): int { return root.toasts ? root.toasts.visibleCount() : 0; }
+    // test hook: notifications held in the centre (-1: another daemon owns the bus)
+    function stored(): int { return !root.notifs ? 0 : root.notifs.held ? -1 : root.notifs.count; }
   }
 
   IpcHandler {

@@ -53,7 +53,7 @@ A zero-width chip has no click target, so each conditional one has a call.
 
 | surface | twin |
 |---|---|
-| lamp test (everything lit 1.2 s) | Super+Shift+T, `qs -c dots ipc call dots.bar lamp` |
+| lamp test (everything lit 5 s) | Super+Shift+T, `qs -c dots ipc call dots.bar lamp` |
 | calendar | `qs -c dots ipc call dots.bar calendar` |
 | media | `qs -c dots ipc call dots.bar media` |
 | caffeine | `qs -c dots ipc call dots.bar caffeine` |

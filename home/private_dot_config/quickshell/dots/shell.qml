@@ -17,28 +17,28 @@ import "services"
 ShellRoot {
   id: root
 
-  NotifServer { id: notifs }
+  NotifServer { id: notifServer }
 
   Variants {
     model: Quickshell.screens
 
     Bar {
-      notifs: notifs
+      notifs: notifServer
     }
   }
 
   ToastStack {
     id: toasts
-    notifs: notifs
+    notifs: notifServer
   }
-  NotifCenter { notifs: notifs }
-  QuickPanel { notifs: notifs }
+  NotifCenter { notifs: notifServer }
+  QuickPanel { notifs: notifServer }
   MediaPopout {}
   CalendarPopout {}
   Osd {}
 
   Ipc {
-    notifs: notifs
+    notifs: notifServer
     toasts: toasts
   }
 
