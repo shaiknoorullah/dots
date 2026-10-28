@@ -70,11 +70,11 @@ def build(day, cfg, now=None):
     lines = [f"# {day.isoformat()}", "",
              f"Worked {dur(worked) or '0m'} · {len(done)} items closed · {len(still)} still open", "", "---", ""]
     lines += section("Closed today", done) + section("Still open", still)
-    lines += ["## Time by item", "| ref | title | time |", "|---|---|---|"]
     titles = {t["ref"]: t.get("desc", "") for t in pend + done if t.get("ref")}
-    for ref, sec in sorted(times.items(), key=lambda kv: -kv[1])[:15]:
-        if dur(sec):
-            lines.append(f"| `{scrub(ref, cfg)}` | {scrub(titles.get(ref, ''), cfg)[:60]} | {dur(sec)} |")
+    rows = [f"| `{scrub(ref, cfg)}` | {scrub(titles.get(ref, ''), cfg)[:60]} | {dur(sec)} |"
+            for ref, sec in sorted(times.items(), key=lambda kv: -kv[1])[:15] if dur(sec)]
+    if rows:                              # an empty table is noise
+        lines += ["## Time by item", "| ref | title | time |", "|---|---|---|"] + rows
     return "\n".join(lines) + "\n"
 
 

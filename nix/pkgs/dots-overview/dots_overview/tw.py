@@ -114,11 +114,16 @@ def modify(uuid, **attrs):
     run([uuid, "modify"] + _attrs(attrs))
 
 
-def done(uuid, **attrs):
-    """Mark done, recording the source state and sync time first when given."""
+def done(uuid, end=None, **attrs):
+    """Mark done, recording the source state and sync time first when given.
+
+    `end` (epoch) back-dates the completion to when the source finished it.
+    """
     if attrs:
         modify(uuid, **attrs)
     run([uuid, "done"])
+    if end:
+        run([uuid, "modify", "end:" + time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(int(end)))])
 
 
 def start(uuid):

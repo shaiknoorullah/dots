@@ -22,18 +22,35 @@ def pr_done(v):
 
 
 def review_done(v, me, entry_ts):
-    """Done when I submitted a review after the task appeared, or I am no longer asked and it is open.
+    """Done when I submitted a review after the task appeared, or the PR is merged/closed.
 
-    A merged or closed PR is done too: nobody is waiting on a review of it any more.
+    "No longer asked" counts only when I was asked BY NAME. A request to a team carries no
+    login, and GitHub drops a personal request once anyone on the team reviews, so reading
+    "me not in the list" as done closed every team-requested PR on its first sync.
     """
     if pr_done(v):
         return True
     me = (me or "").lower()
-    for r in v.get("reviews") or []:
-        if str((r.get("author") or {}).get("login", "")).lower() == me and _iso(r.get("submittedAt")) > (entry_ts or 0):
-            return True
-    asked = {str(x.get("login", "")).lower() for x in v.get("reviewRequests") or [] if x.get("login")}
+    if my_review_ts(v, me) > (entry_ts or 0):
+        return True
+    reqs = v.get("reviewRequests") or []
+    if any(not x.get("login") for x in reqs):
+        return False                      # requested via a team: wait for my own review
+    asked = {str(x.get("login", "")).lower() for x in reqs}
     return me not in asked
+
+
+def my_review_ts(v, me):
+    return max((_iso(r.get("submittedAt")) for r in v.get("reviews") or []
+                if str((r.get("author") or {}).get("login", "")).lower() == me), default=0)
+
+
+def finished_at(kind, v, me, now):
+    """When the source says it finished, so a brief never reports an old close as today's."""
+    ts = _iso(v.get("mergedAt")) or _iso(v.get("closedAt"))
+    if not ts and kind == "review":
+        ts = my_review_ts(v, me)
+    return ts or now
 
 
 def erp_done(kind, status):
@@ -79,12 +96,14 @@ def run(cfg, now=None, gh=sources_gh, erp=sources_erp):
                 state = (v.get("state") or "open").lower()
                 if kind == "review" and fin and state == "open":
                     state = "reviewed"
+                end_ts = finished_at(kind, v, (me or "").lower(), now) if fin else now
                 status["gh"] = {"state": "ok", "ts": now, "detail": None}
             elif src == "erp" and kind in ("todo", "hd", "task") and cfg.erp_mode == "token":
                 st = erp.view_status(cfg, kind, ref)
                 if st is None:
                     continue
                 fin, state = erp_done(kind, st), st.lower()
+                end_ts = now
                 status["erp"] = {"state": "ok", "ts": now, "detail": None}
             else:
                 continue                      # claude-session tasks are never auto-done
@@ -93,7 +112,7 @@ def run(cfg, now=None, gh=sources_gh, erp=sources_erp):
             status[name] = {"state": "stale", "ts": now, "detail": str(e)[:80]}
             continue
         if fin:
-            tw.done(t["uuid"], srcstate=f"{kind}:{state}", srcsync=now)
+            tw.done(t["uuid"], end=end_ts, srcstate=f"{kind}:{state}", srcsync=now)
             closed.append(ref)
         elif t.get("srcstate") != f"{kind}:{state}":
             tw.modify(t["uuid"], srcstate=f"{kind}:{state}", srcsync=now)

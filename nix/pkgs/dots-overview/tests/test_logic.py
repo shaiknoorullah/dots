@@ -68,7 +68,8 @@ class Truth(unittest.TestCase):
         other = [{"author": {"login": "bob"}, "submittedAt": "2026-10-28T00:00:00Z"}]
         self.assertFalse(detect.review_done({"state": "OPEN", "reviewRequests": asked, "reviews": other}, "me", entry))
         # no longer asked (a team request lacks a login) and still open: done
-        self.assertTrue(detect.review_done({"state": "OPEN", "reviewRequests": [{"name": "team"}], "reviews": []}, "me", entry))
+        # a team request is not "me no longer asked": it closed every team PR on first sync
+        self.assertFalse(detect.review_done({"state": "OPEN", "reviewRequests": [{"name": "team"}], "reviews": []}, "me", entry))
         # merged or closed: nobody waits on a review of it
         self.assertTrue(detect.review_done({"state": "MERGED", "mergedAt": "2026-10-01T00:00:00Z", "reviewRequests": asked}, "me", entry))
 
@@ -569,3 +570,23 @@ class ReadOnly(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TeamReviewAndEndTime(unittest.TestCase):
+    def test_team_request_is_not_done(self):
+        from dots_overview import detect
+        v = {"state": "OPEN", "reviews": [], "reviewRequests": [{"name": "platform", "slug": "platform"}]}
+        self.assertFalse(detect.review_done(v, "me", 100))
+
+    def test_named_request_dropped_is_done(self):
+        from dots_overview import detect
+        v = {"state": "OPEN", "reviews": [], "reviewRequests": [{"login": "someone"}]}
+        self.assertTrue(detect.review_done(v, "me", 100))
+
+    def test_finished_at_uses_source_time(self):
+        from dots_overview import detect
+        self.assertEqual(detect.finished_at("pr", {"mergedAt": "2026-10-20T10:00:00Z"}, "me", 999),
+                         detect._iso("2026-10-20T10:00:00Z"))
+        v = {"reviews": [{"author": {"login": "Me"}, "submittedAt": "2026-10-21T09:00:00Z"}]}
+        self.assertEqual(detect.finished_at("review", v, "me", 999), detect._iso("2026-10-21T09:00:00Z"))
+        self.assertEqual(detect.finished_at("issue", {}, "me", 999), 999)
