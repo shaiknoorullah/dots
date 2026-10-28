@@ -15,6 +15,9 @@ CLAUDE_TTL = 24 * 3600
 MAX_ITEMS = 30
 
 KIND_OF = {"review": "review", "hd": "erp", "todo": "erp", "task": "erp", "issue": "task", "pr": "task"}
+# An open ERP item is assigned work, not somebody blocked on me. Only these states are:
+# a task past its due date, and a ticket the customer has replied on.
+ERP_WAITS = {"task:overdue", "hd:replied"}
 
 
 def _jump(t):
@@ -37,7 +40,8 @@ def from_tasks(tasks, now):
         else:
             sk = (t.get("srcstate") or "").partition(":")[0]
             kind = KIND_OF.get(sk, "task")
-            waiting = kind in ("review", "erp")
+            ss = (t.get("srcstate") or "").lower()
+            waiting = kind == "review" or (kind == "erp" and ss in ERP_WAITS)
             urgency = "active" if waiting else "passive"
         ref = t.get("ref")
         items.append({
@@ -68,7 +72,9 @@ def build(tasks, live, now=None):
     dm_items, dm_src = sources_notify.read(now)
     items = from_herdr(live, now) + from_tasks(tasks, now) + dm_items + ops_items
     items.sort(key=lambda i: (not i["waiting"], URGENCY_RANK[i["urgency"]], i["ageSec"]))
-    items = items[:MAX_ITEMS]
+    counts = {"waiting": sum(i["waiting"] for i in items),
+              "failed": sum(1 for i in items if i["kind"] == "alert" and not i["waiting"]), "total": len(items)}
+    items = items[:MAX_ITEMS]      # the list is capped; the counts above are not
     synced = sync.last_status()
     sources = {
         "gh": _aged(synced.get("gh"), now), "erp": _aged(synced.get("erp"), now) or {"state": "off", "ts": now, "detail": "ERP_MODE=off"},
@@ -78,8 +84,6 @@ def build(tasks, live, now=None):
         "mail": {"state": "unavailable", "ts": now, "detail": "no local mail store"},
     }
     sources["gh"] = sources["gh"] or {"state": "unavailable", "ts": now, "detail": "never synced"}
-    counts = {"waiting": sum(i["waiting"] for i in items),
-              "failed": sum(1 for i in items if i["kind"] == "alert" and not i["waiting"]), "total": len(items)}
     return {"v": 1, "ts": now, "items": items, "counts": counts, "sources": sources}
 
 
