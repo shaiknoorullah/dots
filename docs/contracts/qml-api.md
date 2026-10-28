@@ -84,7 +84,7 @@ bound values and read its own `State.qml`; the properties stay for the contract.
 
 ## 3. IPC
 
-`qs ipc call dots.<surface> <fn> [arg]`
+`qs -c dots ipc call dots.<surface> <fn> [arg]`
 
 | surface | registered by | functions |
 |---|---|---|

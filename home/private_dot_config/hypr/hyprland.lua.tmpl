@@ -378,11 +378,11 @@ hl.bind(mod .. " + I",         hl.dsp.exec_cmd("pkill -USR1 waybar"))  -- toggle
 
 -- Quickshell shell: overview, lamp test, jump, and the shell switch. Super+I stays the zen
 -- bar toggle above (the build spec listed it as free; it is not), so the overview toggle
--- is Super+Alt+I. Every conditional bar surface has a twin here or in `qs ipc call dots.*`.
-hl.bind(mod .. " + ALT + I",       hl.dsp.exec_cmd("qs ipc call dots.overview toggle"))
-hl.bind(mod .. " + SHIFT + I",     hl.dsp.exec_cmd("qs ipc call dots.overview panel today"))
-hl.bind(mod .. " + ALT + F",       hl.dsp.exec_cmd("qs ipc call dots.overview focus start"))
-hl.bind(mod .. " + SHIFT + T",     hl.dsp.exec_cmd("qs ipc call dots.bar lamp"))  -- lamp test: every conditional surface lit for 1.2 s
+-- is Super+Alt+I. Every conditional bar surface has a twin here or in `qs -c dots ipc call dots.*`.
+hl.bind(mod .. " + ALT + I",       hl.dsp.exec_cmd("qs -c dots ipc call dots.overview toggle"))
+hl.bind(mod .. " + SHIFT + I",     hl.dsp.exec_cmd("qs -c dots ipc call dots.overview panel today"))
+hl.bind(mod .. " + ALT + F",       hl.dsp.exec_cmd("qs -c dots ipc call dots.overview focus start"))
+hl.bind(mod .. " + SHIFT + T",     hl.dsp.exec_cmd("qs -c dots ipc call dots.bar lamp"))  -- lamp test: every conditional surface lit for 1.2 s
 hl.bind(mod .. " + ALT + J",       hl.dsp.exec_cmd("~/.local/bin/dots-jump --last"))
 hl.bind(mod .. " + ALT + Q",       hl.dsp.exec_cmd("~/.local/bin/dots-shell toggle"))  -- quickshell <-> waybar
 

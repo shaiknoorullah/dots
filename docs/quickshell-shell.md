@@ -53,14 +53,14 @@ A zero-width chip has no click target, so each conditional one has a call.
 
 | surface | twin |
 |---|---|
-| lamp test (everything lit 1.2 s) | Super+Shift+T, `qs ipc call dots.bar lamp` |
-| calendar | `qs ipc call dots.bar calendar` |
-| media | `qs ipc call dots.bar media` |
-| caffeine | `qs ipc call dots.bar caffeine` |
-| ctx | `qs ipc call dots.bar ctx` |
-| quick panel | `qs ipc call dots.quick toggle` |
-| notifications, DND | `qs ipc call dots.notif toggle` / `dnd` |
-| overview | Super+Alt+I, `qs ipc call dots.overview toggle` |
+| lamp test (everything lit 1.2 s) | Super+Shift+T, `qs -c dots ipc call dots.bar lamp` |
+| calendar | `qs -c dots ipc call dots.bar calendar` |
+| media | `qs -c dots ipc call dots.bar media` |
+| caffeine | `qs -c dots ipc call dots.bar caffeine` |
+| ctx | `qs -c dots ipc call dots.bar ctx` |
+| quick panel | `qs -c dots ipc call dots.quick toggle` |
+| notifications, DND | `qs -c dots ipc call dots.notif toggle` / `dnd` |
+| overview | Super+Alt+I, `qs -c dots ipc call dots.overview toggle` |
 | ops | `dots-ops status` |
 
 > Super+I is still the zen-bar toggle (waybar). The build spec called it free; it was not.
