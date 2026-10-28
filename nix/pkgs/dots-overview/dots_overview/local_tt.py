@@ -159,7 +159,10 @@ def project_intervals(t0, now):
         except (KeyError, ValueError):
             continue
         tags = r.get("tags") or []
-        out.append((s, e, tags[0] if len(tags) >= 2 else "unassigned"))
+        # the hook tags [project, description], but timew stores tags sorted, so "first" is not
+        # the project: a project name has no spaces, a task description almost always does
+        words = [t for t in tags if t and not any(c.isspace() for c in t)]
+        out.append((s, e, words[0] if len(tags) >= 2 and len(words) == 1 else "unassigned"))
     return out
 
 
@@ -188,11 +191,15 @@ def _aw(path, timeout=4):
         return json.loads(fh.read())
 
 
+def _aw_ts(e):
+    return datetime.fromisoformat(str(e.get("timestamp")).replace("Z", "+00:00")).timestamp()
+
+
 def app_seconds(t0, t1, now=None, cached_only=False):
     """[(app, seconds)] from the window watcher, cached for 10 min so the 60 s cycle stays cheap."""
     now = int(now or time.time())
     cache_path = config.STATE_DIR / "app-cache.json"
-    key = f"{t0}:{t1 // 3600}"
+    key = f"v2:{t0}:{t1 // 3600}"
     cache = atomic.read_json(cache_path, {}) or {}
     hit = cache.get(key)
     if hit and (cached_only or now - hit["at"] < APP_CACHE_SEC):
@@ -200,17 +207,31 @@ def app_seconds(t0, t1, now=None, cached_only=False):
     if cached_only:
         return []
     try:
-        bucket = next(n for n, m in _aw("/buckets/").items() if m.get("type") == "currentwindow")
+        buckets = _aw("/buckets/")
+        win = next(n for n, m in buckets.items() if m.get("type") == "currentwindow")
+        afk = next((n for n, m in buckets.items() if m.get("type") == "afkstatus"), None)
         q = urllib.parse.urlencode({"start": datetime.fromtimestamp(t0).astimezone().isoformat(),
                                     "end": datetime.fromtimestamp(t1).astimezone().isoformat(), "limit": 100000})
-        events = _aw(f"/buckets/{urllib.parse.quote(bucket)}/events?{q}", timeout=8)
+        events = _aw(f"/buckets/{urllib.parse.quote(win)}/events?{q}", timeout=8)
+        present = _aw(f"/buckets/{urllib.parse.quote(afk)}/events?{q}", timeout=8) if afk else None
     except (OSError, ValueError, StopIteration):
         return [tuple(x) for x in hit["apps"]] if hit else []
+    # a window that stays focused while I am away (locked overnight) is not time spent in it:
+    # count only the part inside [t0, t1] that overlaps "not-afk"
+    here = sorted((_aw_ts(e), _aw_ts(e) + float(e.get("duration") or 0)) for e in (present or [])
+                  if (e.get("data") or {}).get("status") == "not-afk")
     acc = {}
     for e in events:
         app = (e.get("data") or {}).get("app")
-        if app:
-            acc[app] = acc.get(app, 0) + int(e.get("duration") or 0)
+        if not app:
+            continue
+        s0 = max(_aw_ts(e), t0)
+        s1 = min(_aw_ts(e) + float(e.get("duration") or 0), t1)
+        if s1 <= s0:
+            continue
+        sec = sum(max(0.0, min(s1, b) - max(s0, a)) for a, b in here) if present is not None else s1 - s0
+        if sec > 0:
+            acc[app] = acc.get(app, 0) + int(sec)
     apps = sorted(acc.items(), key=lambda kv: -kv[1])[:8]
     cache = {k: v for k, v in cache.items() if now - v.get("at", 0) < 86400}
     cache[key] = {"at": now, "apps": apps}

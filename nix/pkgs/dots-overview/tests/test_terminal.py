@@ -3,7 +3,12 @@ terminal app line read as its breakdown. All of it comes from timetrack's privat
 import sqlite3
 import time
 import unittest
-from datetime import datetime
+import json
+import subprocess
+import tempfile
+from datetime import datetime, timezone
+from pathlib import Path
+from unittest import mock
 
 import helpers
 import schema
@@ -108,3 +113,40 @@ class TerminalAttention(helpers.Scratch):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AppSecondsAndProjects(unittest.TestCase):
+    """The per-app line counts only time at the desk inside the window; timew tags are sorted."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self._state = local_tt.config.STATE_DIR
+        local_tt.config.STATE_DIR = Path(self.tmp)
+        self._aw = local_tt._aw
+
+    def tearDown(self):
+        local_tt.config.STATE_DIR = self._state
+        local_tt._aw = self._aw
+
+    def test_window_time_is_clipped_and_gated_by_presence(self):
+        iso = lambda t: datetime.fromtimestamp(t, timezone.utc).isoformat()
+        t0, t1 = 1_000_000, 1_000_000 + 8 * 3600
+        win = [{"timestamp": iso(t0 - 3600), "duration": 10 * 3600, "data": {"app": "term", "title": "x"}}]
+        afk = [{"timestamp": iso(t0 + 600), "duration": 1200, "data": {"status": "not-afk"}},
+               {"timestamp": iso(t0 + 1800), "duration": 7 * 3600, "data": {"status": "afk"}}]
+
+        def fake(path, timeout=3):
+            if path == "/buckets/":
+                return {"w": {"type": "currentwindow"}, "a": {"type": "afkstatus"}}
+            return win if path.startswith("/buckets/w/") else afk
+        local_tt._aw = fake
+        self.assertEqual(local_tt.app_seconds(t0, t1, now=t1), [("term", 1200)])
+
+    def test_project_is_the_tag_without_spaces(self):
+        rows = [{"start": "20261028T100000Z", "end": "20261028T110000Z", "tags": ["Fix the thing", "dots"]},
+                {"start": "20261028T110000Z", "end": "20261028T120000Z", "tags": ["solo"]}]
+        p = subprocess.CompletedProcess([], 0, json.dumps(rows), "")
+        with mock.patch.object(local_tt.subprocess, "run", return_value=p), \
+                mock.patch.object(local_tt.Path, "is_dir", return_value=True):
+            got = local_tt.project_intervals(0, 2_000_000_000)
+        self.assertEqual([g[2] for g in got], ["dots", "unassigned"])

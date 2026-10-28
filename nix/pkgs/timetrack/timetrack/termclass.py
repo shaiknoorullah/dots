@@ -416,7 +416,14 @@ def classify(day, now=None, use_llm=True):
                 ws = parse_title(pc["title"])
                 ctx = {"ws_label": ws}
                 if today:           # the live workspace is evidence for today only
-                    ctx.update(workspace_context(ws, snap))
+                    live = workspace_context(ws, snap)
+                    # ...and only after its session began: the same workspace may have held
+                    # other work earlier today, which the live session must not absorb
+                    recs = sessions.get(live.get("agent_session")) or []
+                    if live.get("agent_session") and not (recs and int(recs[0].get("ts") or 0) <= pc["start"]):
+                        live.pop("agent_session", None)
+                        live.pop("ticket_token", None)
+                    ctx.update(live)
                 pc["ctx"] = ctx
             else:
                 pc["ctx"] = sp
