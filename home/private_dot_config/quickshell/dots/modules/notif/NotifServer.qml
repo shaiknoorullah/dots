@@ -15,6 +15,49 @@ Scope {
   property bool checked: false
   property bool held: false          // another daemon owns the name
   property bool dnd: false
+  // A running focus block (dots-overview, now.json) quiets toasts: only critical ones and
+  // Claude Code agents asking for me pop up. Everything still lands in the centre.
+  readonly property bool focusQuiet: focusState.running && focusState.endsAt > focusState.clock
+  readonly property bool quiet: dnd || focusQuiet
+
+  // may this notification pop up as a toast right now?
+  function lets(n) {
+    if (!n) return false;
+    if (n.urgency === NotificationUrgency.Critical) return true;
+    if (dnd) return false;
+    return !focusQuiet || n.appName === "Claude Code";
+  }
+
+  QtObject {
+    id: focusState
+    property bool running: false
+    property real endsAt: 0
+    property real clock: Date.now() / 1000
+  }
+
+  FileView {
+    id: nowFile
+    path: Quickshell.env("HOME") + "/.local/state/dots-overview/now.json"
+    watchChanges: true
+    onFileChanged: reload()
+    onLoaded: {
+      try {
+        var f = JSON.parse(text()).focus || {};
+        focusState.running = f.state === "running";
+        focusState.endsAt = +f.endsAt || 0;
+      } catch (e) {
+        focusState.running = false;
+      }
+    }
+    onLoadFailed: focusState.running = false
+  }
+
+  Timer {
+    interval: 30000
+    running: focusState.running
+    repeat: true
+    onTriggered: focusState.clock = Date.now() / 1000
+  }
   readonly property var model: lazy.item ? (lazy.item as NotificationServer).trackedNotifications : null
   // counted by an Instantiator: `model.values.length` is not re-notified on every
   // insert/remove, so the bell read 0 while the centre listed a dozen
