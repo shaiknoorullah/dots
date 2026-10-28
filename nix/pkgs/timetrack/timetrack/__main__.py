@@ -95,6 +95,41 @@ def cmd_web(a):
     return 0
 
 
+def cmd_term(a):
+    from . import termclass
+    if a.all:
+        start = termclass.first_day()
+        days = list(web_days(start)) if start else []
+    else:
+        days = [date.fromisoformat(a.day) if a.day else date.today()]
+    for d in days:
+        rows = termclass.classify(d, use_llm=not a.no_llm)
+        total = sum(r[3] for r in rows)
+        if not total and a.all:
+            continue
+        split, by = {}, {}
+        for r in rows:
+            split[r[12]] = split.get(r[12], 0) + r[3]
+            by[r[13]] = by.get(r[13], 0) + r[3]
+        print(f"{d}  terminal {derive.hhmm(round(total / 60))} focused and present  "
+              + "  ".join(f"{k} {derive.hhmm(round(v / 60))}" for k, v in sorted(split.items())))
+        if rows:
+            print("  by evidence  " + "  ".join(f"{k} {derive.hhmm(round(v / 60))}"
+                                               for k, v in sorted(by.items(), key=lambda kv: -kv[1])))
+        groups = {}
+        for r in rows:
+            key = (r[9] or r[10] or "-", r[7] or "-", r[12])
+            groups[key] = groups.get(key, 0) + r[3]
+        for (what, agent, verdict), sec in sorted(groups.items(), key=lambda kv: -kv[1])[:a.top]:
+            print(f"  {derive.hhmm(round(sec / 60)):>6}  {verdict:<12} {what[:40]:<40} {agent}")
+    return 0
+
+
+def web_days(start):
+    from . import web
+    return web.days_since(start)
+
+
 def cmd_away(a):
     from . import away
     if a.prayer:
@@ -487,6 +522,13 @@ def main(argv=None):
     s.add_argument("--top", type=int, default=12, help="visits to print per day")
     s.add_argument("--no-llm", action="store_true", help="rules only; skip the local model")
     s.set_defaults(fn=cmd_web)
+
+    s = sub.add_parser("term", help="what terminal time went on, by pane (local, private.db)")
+    s.add_argument("--day", help="YYYY-MM-DD (default: today)")
+    s.add_argument("--all", action="store_true", help="every day the focus log or window bucket covers")
+    s.add_argument("--top", type=int, default=12, help="groups to print per day")
+    s.add_argument("--no-llm", action="store_true", help="rules and cache only; skip the local model")
+    s.set_defaults(fn=cmd_term)
 
     s = sub.add_parser("away", help="D7: declare or ask what an away gap was (watcher)")
     s.add_argument("--declare", metavar="REASON", help="Super+Esc: record why you are leaving")
