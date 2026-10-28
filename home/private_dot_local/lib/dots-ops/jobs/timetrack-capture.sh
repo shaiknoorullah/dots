@@ -28,6 +28,8 @@ job_main() {
     return 0
   }
   "$tt" seed >/dev/null 2>&1 || true
+  # a prayer from inside a session still unmarked when its time ends becomes qaza (D8)
+  "$tt" salah sweep >/dev/null 2>&1 || true
 
   out=$("$tt" ingest-aw 2>&1); rc=$?
   if [ "$rc" -ne 0 ]; then

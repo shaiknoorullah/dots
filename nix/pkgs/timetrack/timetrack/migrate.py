@@ -467,8 +467,98 @@ CREATE TABLE term_label_cache (
 COMMIT;
 """
 
+# --- private v5 -------------------------------------------------------------
+# Phase 3, all personal and all local: salah (D8), the dose and its checkpoints (D18), the
+# login habit (D15) and the blocking-prompt budget (D21). Every reason is an enum code,
+# never prose. `day` is the attendance day of the session it happened in, never midnight.
+PRIVATE_V5 = """
+BEGIN;
+-- One row per prayer per day. `enforcement` is what the enforcer did; `status` is how the
+-- user says it was prayed (the Super+Shift+; picker), NULL until they say.
+CREATE TABLE salah_log (
+  id            INTEGER PRIMARY KEY,
+  day           TEXT    NOT NULL,
+  prayer        TEXT    NOT NULL,
+  iqamah_unix   INTEGER,
+  nudged_unix   INTEGER,
+  snoozed       INTEGER NOT NULL DEFAULT 0,
+  locked_unix   INTEGER,
+  unlocked_unix INTEGER,
+  enforcement   TEXT    NOT NULL CHECK (enforcement IN
+                  ('pending','locked','declared','logged','qaza','vetoed','away','spaced',
+                   'disabled','panic','no_session')),
+  status        TEXT    CHECK (status IN ('jamaah','alone','qaza','missed')),
+  qaza_reason   TEXT    CHECK (qaza_reason IN
+                  ('meeting','incident','call','travel','long_command','other')),
+  veto_reason   TEXT,
+  strike        INTEGER NOT NULL DEFAULT 0,
+  logged_unix   INTEGER,
+  UNIQUE (day, prayer)
+);
+-- Three strikes pause locking for a week. A row per pause, so the history stays.
+CREATE TABLE salah_pause (
+  start_unix INTEGER PRIMARY KEY,
+  until_unix INTEGER NOT NULL,
+  reason     TEXT    NOT NULL
+);
+CREATE TABLE med_dose (
+  ts_unix    INTEGER PRIMARY KEY,
+  day        TEXT    NOT NULL,
+  provenance TEXT    NOT NULL
+);
+CREATE TABLE health_checkpoint (
+  id            INTEGER PRIMARY KEY,
+  day           TEXT    NOT NULL,
+  slot          TEXT    NOT NULL CHECK (slot IN ('dose','h1','h3','h6','wrap')),
+  due_unix      INTEGER NOT NULL,
+  asked_unix    INTEGER,
+  answered_unix INTEGER,
+  score         INTEGER CHECK (score BETWEEN 1 AND 5),
+  outcome       TEXT    NOT NULL CHECK (outcome IN
+                  ('pending','answered','dismissed','timeout','skipped')),
+  UNIQUE (day, slot)
+);
+CREATE TABLE login_log (
+  ts_unix      INTEGER PRIMARY KEY,
+  day          TEXT    NOT NULL,
+  first_of_day INTEGER NOT NULL,
+  late_minutes INTEGER,
+  phase        TEXT    CHECK (phase IN ('nudge','enforce','off')),
+  prompt       TEXT    CHECK (prompt IN ('none','toast','panel','deferred','timeout')),
+  reason       TEXT    CHECK (reason IN
+                  ('slept_late','worked_late','appointment','unwell','other'))
+);
+-- D21: every blocking prompt, shown or deferred. Salah and away gaps are exempt and
+-- never written here.
+CREATE TABLE prompt_log (
+  ts_unix INTEGER NOT NULL,
+  kind    TEXT    NOT NULL,
+  outcome TEXT    NOT NULL CHECK (outcome IN ('shown','deferred')),
+  PRIMARY KEY (ts_unix, kind)
+);
+COMMIT;
+"""
+
+# --- private v6 -------------------------------------------------------------
+# Who set a prayer's status: the user (the picker), or the hourly sweep that marks a prayer
+# from inside a session qaza once its time is over.
+PRIVATE_V6 = """
+BEGIN;
+ALTER TABLE salah_log ADD COLUMN status_by TEXT CHECK (status_by IN ('user','auto'));
+COMMIT;
+"""
+
+# --- private v7 -------------------------------------------------------------
+# When the user was last asked, on coming back, whether a prayer was prayed.
+PRIVATE_V7 = """
+BEGIN;
+ALTER TABLE salah_log ADD COLUMN asked_unix INTEGER;
+COMMIT;
+"""
+
 MIGRATIONS = {"work": [(1, WORK_V1), (2, WORK_V2), (3, WORK_V3), (4, WORK_V4), (5, WORK_V5)],
-              "private": [(1, PRIVATE_V1), (2, PRIVATE_V2), (3, PRIVATE_V3), (4, PRIVATE_V4)]}
+              "private": [(1, PRIVATE_V1), (2, PRIVATE_V2), (3, PRIVATE_V3), (4, PRIVATE_V4),
+                          (5, PRIVATE_V5), (6, PRIVATE_V6), (7, PRIVATE_V7)]}
 
 
 def live_counts(conn):

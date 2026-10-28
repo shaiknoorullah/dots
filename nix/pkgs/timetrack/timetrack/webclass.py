@@ -17,11 +17,22 @@ anything remote) then names the activity, picks the category and may match the v
 one of the open Taskwarrior tasks -- a match is accepted only if it names a task that was
 actually offered. Labels are cached per page, so a page is asked about once.
 
-The verdict rule is the user's: a visit is WORK if it is attached to a task or is part of
-the job. Otherwise it is UNPRODUCTIVE -- unless an agent was running for at least half of
-it, which makes it DELEGATED: wandering off is fine while the agents carry the work. Mail
-on its own is not task work. Everything here lives in private.db and is shown only on the
-user's own dashboards; nothing of it reaches a submission.
+The verdict is RULES ONLY, default deny (the user's call, 2026-10-29): a visit is WORK
+when the code can show it -- a ticket id in the URL, a URL that is one of a task's
+references, a work domain or GitHub org, a reference (docs) domain or org from web.toml,
+or a private-network console. Anything no rule matches is NOT work: UNPRODUCTIVE, or
+DELEGATED when an agent was running for at least half of it (wandering off is fine while
+the agents carry the work). The model never decides the verdict: it writes the activity
+and the category, and may link a visit that is already work to a task. It used to decide,
+and called a colleague-requested Slack app setup "admin, not work" and someone else's
+dotfiles "code review, work". Everything here lives in private.db and is shown only on
+the user's own dashboards; nothing of it reaches a submission.
+
+web.toml lists (all optional, all exact-or-subdomain):
+    work_domains, work_github_orgs           the job itself
+    reference_domains, reference_github_orgs docs and upstream projects the job uses
+    nonwork_domains                          never work, even if another list matches
+    private_network_is_work = true           10/8, 172.16/12, 192.168/16, loopback
 
 URLs are stored without query string or fragment (those carry tokens and search terms);
 titles are passed through the same token redaction as everything else.
@@ -51,6 +62,7 @@ WORK_CATS = {"code-review", "coding", "ticket-work", "infra-ops", "docs-referenc
 NONWORK_CATS = {"email", "communication", "entertainment", "social", "shopping", "news"}
 CATS = WORK_CATS | NONWORK_CATS | {"learning", "reading-blog", "admin", "other"}
 GH_ITEM = re.compile(r"^/([^/]+)/([^/]+)/(pull|issues)/(\d+)")
+PRIVATE_NET = re.compile(r"^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)")
 SECRET = re.compile(r"(ghp_|gho_|ghs_|github_pat_|xox[abprs]-|sk-|AKIA)[\w-]{6,}|Bearer\s+\S+")
 
 
@@ -87,7 +99,8 @@ def visits(day, now=None):
 
 
 def rules(v, conf):
-    """Exact, cheap facts from the URL alone."""
+    """Exact, cheap facts from the URL alone. `work` stays None when no rule says either way,
+    and None means NOT work: the default is deny."""
     r = {"ticket": web.ticket(v["url"]), "link": None, "work": None, "activity": None}
     if r["ticket"]:
         r["link"], r["work"] = v["url"], True
@@ -96,7 +109,8 @@ def rules(v, conf):
         segs = path.strip("/").split("/")
         # repo pages are /<owner>/...; org and enterprise settings are /organizations/<org>/...
         owner = segs[1] if len(segs) > 1 and segs[0] in ("organizations", "enterprises", "orgs") else segs[0]
-        if owner.lower() in {o.lower() for o in conf.get("work_github_orgs", [])}:
+        orgs = {o.lower() for o in conf.get("work_github_orgs", []) + conf.get("reference_github_orgs", [])}
+        if owner.lower() in orgs:
             r["work"] = True
         m = GH_ITEM.match(path)
         if m:
@@ -105,7 +119,11 @@ def rules(v, conf):
             r["activity"] = f"{'PR' if kind == 'pull' else 'Issue'} #{num} in {repo}"
     if _in(v["domain"], conf.get("nonwork_domains", [])):
         r["work"] = False if r["work"] is None else r["work"]
-    elif _in(v["domain"], conf.get("work_domains", [])) and r["work"] is None:
+    elif r["work"] is None and (_in(v["domain"], conf.get("work_domains", []))
+                                or _in(v["domain"], conf.get("reference_domains", []))):
+        r["work"] = True
+    elif (r["work"] is None and conf.get("private_network_is_work", True)
+          and PRIVATE_NET.match(v["domain"] or "")):
         r["work"] = True
     return r
 
@@ -255,18 +273,12 @@ def classify(day, now=None, use_llm=True):
         by_id = {t["id"]: t for t in tasks}
         for v in vs:
             r, lab = v["r"], cache.get(v["k"], {})
-            task = match_task(v, r, tasks) or by_id.get(lab.get("task"))
+            task = match_task(v, r, tasks)          # code evidence only
             cat = lab.get("category") or ("ticket-work" if r["ticket"] else "other")
-            if r["work"] is not None:
-                work = r["work"]
-            elif task:
-                work = True
-            elif cat in NONWORK_CATS:
-                work = False
-            else:
-                work = bool(lab.get("work")) and cat in WORK_CATS
-            if task:                       # attached to a task always counts as work
-                work = True
+            # rules decide; no rule is no: the model's opinion is never the verdict
+            work = bool(r["work"]) or (task is not None and r["work"] is not False)
+            if work and task is None:
+                task = by_id.get(lab.get("task"))   # the model may LINK work, never make it
             a0, a1 = int(v["start"].timestamp()), int(v["end"].timestamp())
             share = _overlap(a0, a1, agents) / max(1, a1 - a0)
             rows.append((day.isoformat(), a0, a1, round(v["seconds"]), v["domain"], v["url"],

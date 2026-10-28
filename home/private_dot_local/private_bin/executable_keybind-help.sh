@@ -58,6 +58,7 @@ read -r -d '' ROWS <<'EOF'
   Super + Shift + Return  taskwarrior-tui (daily driver)
   Super + Shift + P       Break — pause task + lock
   Super + Shift + ;       Salah logger (one-key)
+  Super + Alt + D         Dose taken — start the health check-ins
 ━━━━━━━  MEDIA  /  HARDWARE  ━━━━━━━
   Vol Up / Down / Mute    Volume (OSD)
   Mic Mute                Toggle microphone

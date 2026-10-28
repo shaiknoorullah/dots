@@ -24,6 +24,7 @@ away.STATE = tmp / "state" / "away-state.json"
 away.INTENT = tmp / "state" / "away-intent.json"
 config.PANIC = tmp / "config" / "timetrack" / "PANIC"
 away._toast = lambda body: None
+away._brief = away._wrap = lambda *a: None
 aw.write = lambda conn, **kw: None      # the refresh is tests/refresh.sh's subject
 
 T = int(datetime(2026, 10, 27, 17, 0).timestamp())
@@ -138,9 +139,30 @@ check("00:30 logout does not black out the next day", [x["day"] for x in days], 
 check("no logout: one cluster", len(aw.workdays([(d(13), d(18)), (d(19), d(20))])), 1)
 check("away after logout: nothing to answer", away.handle(T + 60, T + 3600, T + 60000), "declared:logout")
 
+# 8. login: the first presence after 150 min quiet or after a logout, never the first look
+evn = lambda t, dur, status="not-afk": [{"timestamp": iso(t), "duration": dur, "data": {"status": status}}]
+st = {}
+check("first look records, never fires", away.login_due(st, evn(T, 30), T + 30), False)
+check("first look stamped", st["last_active"], T + 30)
+check("present again soon: no login", away.login_due(st, evn(T, 600), T + 600), False)
+check("afk now: no login", away.login_due(st, evn(T + 700, 300, "afk"), T + 9000), False)
+check("stamp kept while afk", st["last_active"], T + 600)
+check("back after 150 min: login", away.login_due(st, evn(T + 600 + 9000, 20), T + 600 + 9010), True)
+check("stale not-afk event is not presence", away.present(evn(T, 60), T + 3600), False)
+st = {"last_active": T + 59000}
+check("100 s gap, no logout since: no login", away.login_due(st, evn(T + 59100, 10), T + 59110), False)
+st = {"last_active": T - 100}
+check("logout since last presence: login", away.login_due(st, evn(T + 120, 10), T + 130), True)
+hooks = []
+import timetrack.login as lg, timetrack.health as hl
+lg.on_login = lambda now: hooks.append("login")
+hl.on_login = lambda now: (_ for _ in ()).throw(RuntimeError("boom"))
+away.on_login(T)
+check("a failing hook does not stop the others", hooks, ["login"])
+
 if fails:
     print("away FAILED:")
     for f in fails: print("  " + f)
     raise SystemExit(1)
-print("away ok (7 scenarios, 33 assertions)")
+print("away ok (8 scenarios, 43 assertions)")
 PY

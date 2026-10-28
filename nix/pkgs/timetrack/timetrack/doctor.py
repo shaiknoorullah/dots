@@ -21,7 +21,7 @@ import urllib.error
 import urllib.request
 from datetime import date
 
-from . import attest, config, dbs, derive, herdr_proto, presence
+from . import attest, config, dbs, derive, herdr_proto, migrate, presence
 
 OK, WARN, FAIL = "ok", "warn", "fail"
 
@@ -31,7 +31,10 @@ def _r(name, status, detail, fix=""):
 
 
 def _schema(results):
-    for which, path, want in (("work", config.WORK_DB, 5), ("private", config.PRIVATE_DB, 4)):
+    # the latest migration, never a number kept here: a hand-copied one went stale at v4
+    latest = {k: max(v for v, _ in m) for k, m in migrate.MIGRATIONS.items()}
+    for which, path in (("work", config.WORK_DB), ("private", config.PRIVATE_DB)):
+        want = latest[which]
         if not path.exists():
             results.append(_r(f"db:{which}", FAIL, "database file does not exist",
                               "timetrack migrate"))

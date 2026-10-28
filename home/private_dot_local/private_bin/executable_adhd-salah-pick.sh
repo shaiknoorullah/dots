@@ -20,6 +20,12 @@ while read -r name t _rest; do
     if (( 10#${t/:/} <= 10#$now )); then target="$name"; break; fi
     [ -z "$upcoming" ] && upcoming="$name"
 done < "$CONF"
+# after midnight and before Fajr's iqamah, last night's Isha is still open: offer it first
+fajr="$(awk '$1=="Fajr"{print $2}' "$CONF")"
+if [ -z "$want" ] && [ -n "$fajr" ] && (( 10#$now < 10#${fajr/:/} )); then
+    yday="$(date -d yesterday +%Y-%m-%d)"
+    grep -q "^${yday}	Isha	" "$LOG" || { target="Isha"; today="$yday"; }
+fi
 target="${target:-$upcoming}"
 [ -z "$target" ] && { notify-send "🕌 Salah" "All of today's prayers are logged." 2>/dev/null; exit 0; }
 
@@ -28,4 +34,6 @@ choice="$(printf 'jamaah\nalone\nqaza\nmissed\n' | fzf --prompt=$'􀜌  '"$targe
     2>/dev/null || true)"
 [ -z "$choice" ] && exit 0
 printf '%s\t%s\t%s\t%s\n' "$today" "$target" "$choice" "$(date +%Y-%m-%dT%H:%M)" >> "$LOG"
+# mirror into timetrack (D8); best effort, the plain log above stays the record of last resort
+timetrack salah log "$target" "$choice" >/dev/null 2>&1 || true
 notify-send "🕌 $target" "logged: $choice" 2>/dev/null || true

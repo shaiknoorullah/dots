@@ -39,6 +39,11 @@ params.madhab = getattr(Madhab, madhab)
 pt = PrayerTimes((lat, lon), now, calculation_parameters=params, time_zone=tz)
 adhan = {"Fajr": pt.fajr, "Dhuhr": pt.dhuhr, "Asr": pt.asr,
          "Maghrib": pt.maghrib, "Isha": pt.isha}
+# When each prayer's time is over: Fajr at sunrise, Isha at the next Fajr, the rest at the
+# next adhan. timetrack marks a prayer still unmarked at its end as qaza.
+nxt = PrayerTimes((lat, lon), now + timedelta(days=1), calculation_parameters=params, time_zone=tz)
+ends = {"Fajr": pt.sunrise, "Dhuhr": pt.asr, "Asr": pt.maghrib,
+        "Maghrib": pt.isha, "Isha": nxt.fajr}
 
 # Parse iqamah.conf: "<Prayer> HH:MM" (absolute) or "<Prayer> +N"/"N" (offset min).
 iq_cfg = {}
@@ -73,7 +78,7 @@ hdr = [
 rows = []
 for n in ("Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"):
     iq, how = resolve(n, adhan[n])
-    rows.append(f"{n} {iq:%H:%M}    # adhan {adhan[n]:%H:%M} · {how}")
+    rows.append(f"{n} {iq:%H:%M}    # adhan {adhan[n]:%H:%M} · {how} · ends {ends[n]:%H:%M}")
 open(conf, "w").write("\n".join(hdr + rows) + "\n")
 print("wrote", conf)
 PY

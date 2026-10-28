@@ -26,6 +26,7 @@ PAYROLL_TOML = CONF_DIR / "payroll.toml"
 HOLIDAYS_TOML = CONF_DIR / "holidays.toml"
 CATEGORIES_TOML = CONF_DIR / "categories.toml"
 WEB_TOML = CONF_DIR / "web.toml"
+HABITS_TOML = CONF_DIR / "habits.toml"
 
 STATE_DIR = Path(os.environ.get("TIMETRACK_STATE_DIR") or XDG_DATA / "timetrack")
 # dots-overview's record of which Claude session ran where (written by dots-track-hook).
@@ -163,3 +164,10 @@ def holidays():
             except ValueError:
                 raise SystemExit(f"timetrack: {HOLIDAYS_TOML}: '{key}' is not an ISO date")
     return out
+
+
+def habits(section):
+    """Phase 3 settings (salah, health, login), each a table in habits.toml. Unmanaged:
+    an empty dict means every default in the module that asks."""
+    v = _load(HABITS_TOML).get(section, {})
+    return v if isinstance(v, dict) else {}
