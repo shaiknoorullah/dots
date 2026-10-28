@@ -5,8 +5,10 @@ import QtQuick
 import "../theme"
 
 // Toasts, top right, offset 8,38 from the screen corner (just under the bar), stacked
-// with an 8 px gap. The window is exactly as tall as what is showing and is unmapped
-// when nothing is, so it never swallows a click it has no business with.
+// with an 8 px gap. The window keeps ONE size while mapped: resizing a layer surface on
+// every arrival let Hyprland stretch the old frame to the new height for a frame or two
+// (tall, blurry toasts). Clicks reach only the toasts (input mask); it is unmapped when
+// nothing shows, so it never swallows a click it has no business with.
 //
 // Layout is done by hand (reflow) rather than by a Column: an unmapped window is never
 // polished, so a Column inside it would never learn its height and the window would
@@ -44,7 +46,8 @@ PanelWindow {
   margins.top: 38
   margins.right: 8
   implicitWidth: 380
-  implicitHeight: Math.max(1, stackHeight)
+  implicitHeight: screen ? Math.max(1, screen.height - 46) : 1000
+  mask: Region { item: stack }
   visible: stackHeight > 0
   color: "transparent"
   exclusionMode: ExclusionMode.Ignore
