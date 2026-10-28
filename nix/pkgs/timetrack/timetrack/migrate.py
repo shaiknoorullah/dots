@@ -403,8 +403,72 @@ CREATE TABLE web_label_cache (
 COMMIT;
 """
 
+# --- private v4 -------------------------------------------------------------
+# Which terminal pane had focus, and what that time was (focuslog.py, termclass.py).
+# Pane titles, cwds and labels name the employer and its hosts, so ALL of it lives here and
+# never in work.db. focus_span is the raw log (one row per uninterrupted focus on one pane
+# with one context; end_unix NULL while open, seen_unix is a heartbeat so a crash can be
+# closed where the previous life last looked). term_segment is derived and replaced per day.
+PRIVATE_V4 = """
+BEGIN;
+CREATE TABLE focus_span (
+  id            INTEGER PRIMARY KEY,
+  start_unix    INTEGER NOT NULL,
+  end_unix      INTEGER,
+  seen_unix     INTEGER,
+  pane_id       TEXT    NOT NULL,
+  tab_id        TEXT,
+  workspace_id  TEXT,
+  terminal_id   TEXT,
+  agent_session TEXT,
+  ticket_token  TEXT,
+  cwd           TEXT,
+  ws_label      TEXT,
+  tab_label     TEXT,
+  pane_label    TEXT
+);
+CREATE INDEX ix_fs_start ON focus_span(start_unix);
+CREATE TABLE term_segment (
+  id            INTEGER PRIMARY KEY,
+  day           TEXT    NOT NULL,
+  start_unix    INTEGER NOT NULL,
+  end_unix      INTEGER NOT NULL,
+  seconds       INTEGER NOT NULL,
+  pane_id       TEXT,
+  terminal_id   TEXT,
+  agent_session TEXT,
+  agent_name    TEXT,
+  task_uuid     TEXT,
+  ref           TEXT,
+  project       TEXT,
+  activity      TEXT    NOT NULL,
+  verdict       TEXT    NOT NULL CHECK (verdict IN ('work','delegated','unproductive')),
+  labelled_by   TEXT    NOT NULL CHECK (labelled_by IN
+                  ('session','token','branch','repo','llm','title','none')),
+  model         TEXT
+);
+CREATE INDEX ix_ts_day ON term_segment(day, start_unix);
+CREATE TABLE term_day (
+  day        TEXT    NOT NULL,
+  task_uuid  TEXT    NOT NULL DEFAULT '',
+  ref        TEXT    NOT NULL DEFAULT '',
+  project    TEXT    NOT NULL DEFAULT '',
+  agent_name TEXT    NOT NULL DEFAULT '',
+  verdict    TEXT    NOT NULL,
+  seconds    INTEGER NOT NULL,
+  PRIMARY KEY (day, task_uuid, ref, project, agent_name, verdict)
+);
+-- one label per (cwd, labels, session summary, prompts), so the model is asked once
+CREATE TABLE term_label_cache (
+  key          TEXT PRIMARY KEY,
+  label        TEXT    NOT NULL,
+  created_unix INTEGER NOT NULL
+);
+COMMIT;
+"""
+
 MIGRATIONS = {"work": [(1, WORK_V1), (2, WORK_V2), (3, WORK_V3), (4, WORK_V4), (5, WORK_V5)],
-              "private": [(1, PRIVATE_V1), (2, PRIVATE_V2), (3, PRIVATE_V3)]}
+              "private": [(1, PRIVATE_V1), (2, PRIVATE_V2), (3, PRIVATE_V3), (4, PRIVATE_V4)]}
 
 
 def live_counts(conn):
