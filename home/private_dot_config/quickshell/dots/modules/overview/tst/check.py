@@ -91,6 +91,24 @@ class Img:
             return 255
         return self.rows[y][x * 4 + 3]
 
+    def count_tone(self, tone, box=None):
+        """Pixels that read as the status tone, by hue: wash plates are dark, and text on
+        its own wash is the tone lifted toward fg (Look.legible), so a fixed RGB would miss it."""
+        import colorsys
+        lo, hi = {"red": (-15, 15), "amber": (22, 50)}[tone]
+        x0, y0, x1, y1 = box or (0, 0, self.w, self.h)
+        n = 0
+        for y in range(max(0, y0), min(self.h, y1)):
+            r = self.rows[y]
+            for x in range(max(0, x0), min(self.w, x1)):
+                i = x * self.bpp
+                h, sat, v = colorsys.rgb_to_hsv(r[i] / 255, r[i + 1] / 255, r[i + 2] / 255)
+                deg = h * 360
+                if deg > 180: deg -= 360
+                if lo <= deg <= hi and sat >= 0.30 and v >= 0.70:
+                    n += 1
+        return n
+
     def count_near(self, rgb, tol, box=None):
         x0, y0, x1, y1 = box or (0, 0, self.w, self.h)
         n = 0
@@ -125,7 +143,7 @@ def t1_nominal(out):
     p = m["pill"]
     report(p["w"] == 0 and p["implicitWidth"] == 0 and p["implicitHeight"] == 0,
            "1 nominal pill has zero width and height", "w=%s iw=%s ih=%s" % (p["w"], p["implicitWidth"], p["implicitHeight"]))
-    a, r = im.count_near(AMBER, 40), im.count_near(RED, 40)
+    a, r = im.count_tone("amber"), im.count_tone("red")
     report(a == 0 and r == 0, "1 nominal screenshot has no amber or red pixel", "amber=%d red=%d" % (a, r))
     # mock slab = 10 + 40 + 6 + 40 + 10: a nominal pill adds no width and no chip gap
     report(m["slabW"] == 106, "1 nominal pill adds no width and no gap to the slab", "slab=%s" % m["slabW"])
@@ -142,7 +160,7 @@ def t2_waiting(out):
     report(near(m["leftX"], n["leftX"], 0.5), "2 nothing left of the badge moves", "%s -> %s" % (n["leftX"], m["leftX"]))
     report(near(m["rightX"] - n["rightX"], pw + gap, 1), "2 the right neighbour moves by the badge width and the gap only",
            "dx=%s pill=%s" % (m["rightX"] - n["rightX"], pw))
-    a, r = im.count_near(AMBER, 40), im.count_near(RED, 40)
+    a, r = im.count_tone("amber"), im.count_tone("red")
     report(a >= 4 and r == 0, "2 amber present, red absent", "amber=%d red=%d" % (a, r))
     c = m["chips"]
     report(c["waitingChip"]["visible"] and not c["failedChip"]["visible"], "2 only the waiting chip is visible")
@@ -150,7 +168,7 @@ def t2_waiting(out):
 
 def t3_failed(out):
     m, im = load(out, "pill", "failed")
-    a, r = im.count_near(AMBER, 40), im.count_near(RED, 40)
+    a, r = im.count_tone("amber"), im.count_tone("red")
     report(r >= 4 and a == 0, "3 red present, amber absent", "amber=%d red=%d" % (a, r))
     c = m["chips"]
     report(c["failedChip"]["visible"] and not c["waitingChip"]["visible"], "3 only the failed chip is visible")
@@ -159,7 +177,7 @@ def t3_failed(out):
 def t4_stale(out):
     m, im = load(out, "pill", "stale")
     report(m["stale"] >= 1 and m["chips"]["staleChip"]["visible"], "4 hollow ? renders", "marks=%s" % m["stale"])
-    a, r = im.count_near(AMBER, 40), im.count_near(RED, 40)
+    a, r = im.count_tone("amber"), im.count_tone("red")
     report(a == 0 and r == 0, "4 numbers are not amber or red when stale", "amber=%d red=%d" % (a, r))
     f = im.count_near(FGFAINT, 30)
     report(f >= 8, "4 fgFaint pixels present", "fgFaint=%d" % f)
@@ -304,7 +322,7 @@ def t7_focus(out):
 def t8_v2(out):
     m, im = load(out, "pill", "v2")
     report(m["stale"] >= 1 and m["chips"]["staleChip"]["visible"], "8 v=2 degrades to a hollow ?")
-    a, r = im.count_near(AMBER, 40), im.count_near(RED, 40)
+    a, r = im.count_tone("amber"), im.count_tone("red")
     report(a == 0 and r == 0, "8 v=2 data is not drawn as amber or red", "amber=%d red=%d" % (a, r))
     with open(os.path.join(out, "pill-v2.log")) as f:
         lines = [l for l in f if "overview:" in l and "expected 1" in l]
@@ -322,14 +340,14 @@ def t_live(out):
 def t_dim_card(out):
     m, im = load(out, "card", "stale")
     report(m["dim"] is True and m["stale"] >= 1, "dim: stale card shows ? and dims")
-    report(im.count_near(AMBER, 40) == 0 and im.count_near(RED, 40) == 0, "dim: stale card has no amber or red")
+    report(im.count_tone("amber") == 0 and im.count_tone("red") == 0, "dim: stale card has no amber or red")
 
 
 def t_full(out):
     m, im = load(out, "card", "full")
     report(m["rows"] <= 8, "full: card row count is bounded", "rows=%s" % m["rows"])
     report(m["card"]["h"] <= 520, "full: card is capped at 520", "h=%s" % m["card"]["h"])
-    a, r = im.count_near(AMBER, 40), im.count_near(RED, 40)
+    a, r = im.count_tone("amber"), im.count_tone("red")
     report(a > 0 and r > 0, "full: amber and red both present when both are true", "amber=%d red=%d" % (a, r))
 
 
@@ -360,7 +378,7 @@ def t_pressed(out):
 
 def t_lamp(out):
     m, im = load(out, "pill", "lamp")
-    a, r = im.count_near(AMBER, 40), im.count_near(RED, 40)
+    a, r = im.count_tone("amber"), im.count_tone("red")
     report(a >= 4 and r >= 4, "lamp: amber and red both present under the lamp test", "amber=%d red=%d" % (a, r))
     report(m["chips"]["focusChip"]["visible"], "lamp: the focus ring is forced visible")
 

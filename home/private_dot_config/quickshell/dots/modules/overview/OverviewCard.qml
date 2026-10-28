@@ -98,38 +98,47 @@ Item {
                 width: parent.width
                 spacing: Look.sXl
 
-                // today
+                // today: the three texts share one baseline (Lato, JetBrains Mono and the
+                // caption have different metrics, so centring boxes would stagger them)
                 Item {
                     width: parent.width
-                    height: Math.max(hd.implicitHeight, tot.implicitHeight)
-                    Txt { id: hd; text: "Today"; role: "title"; dim: card.dim; anchors.verticalCenter: parent.verticalCenter }
+                    height: Math.max(hd.implicitHeight, worked.implicitHeight)
+                    Txt {
+                        id: worked
+                        objectName: "workedToday"
+                        anchors.right: doneTxt.visible ? doneTxt.left : parent.right
+                        anchors.rightMargin: doneTxt.visible ? Look.sL : 0
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: Fmt.hm(Feed.today ? Feed.today.workedSec : 0)
+                        role: "title"
+                        dim: card.dim
+                        elide: Text.ElideNone
+                        font.family: Look.mono
+                    }
+                    Txt {
+                        id: doneTxt
+                        visible: !!Feed.today && Feed.today.tasksDone > 0
+                        anchors.right: parent.right
+                        anchors.baseline: worked.baseline
+                        text: (Feed.today ? Feed.today.tasksDone : 0) + " done"
+                        role: "caption"
+                        faint: true
+                        dim: card.dim
+                        elide: Text.ElideNone
+                    }
+                    Txt {
+                        id: hd
+                        text: "Today"
+                        role: "title"
+                        dim: card.dim
+                        anchors.left: parent.left
+                        anchors.baseline: worked.baseline
+                    }
                     StaleMark {
                         visible: card.dim
                         anchors.left: hd.right
                         anchors.leftMargin: Look.sL
                         anchors.verticalCenter: parent.verticalCenter
-                    }
-                    Row {
-                        id: tot
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-                        spacing: Look.sL
-                        Txt {
-                            objectName: "workedToday"
-                            text: Fmt.hm(Feed.today ? Feed.today.workedSec : 0)
-                            role: "title"
-                            dim: card.dim
-                            elide: Text.ElideNone
-                            font.family: Look.mono
-                        }
-                        Txt {
-                            visible: !!Feed.today && Feed.today.tasksDone > 0
-                            text: (Feed.today ? Feed.today.tasksDone : 0) + " done"
-                            role: "caption"
-                            faint: true
-                            dim: card.dim
-                            elide: Text.ElideNone
-                        }
                     }
                 }
 

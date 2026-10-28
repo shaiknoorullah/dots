@@ -96,14 +96,14 @@ Item {
                             visible: Feed.failed > 0
                             text: Feed.failed
                             role: "monoS"
-                            color: Feed.dim ? Look.fgFaint : Look.red
+                            color: Feed.dim ? Look.fgFaint : Look.legible(Look.red)
                             elide: Text.ElideNone
                         }
                         Txt {
                             visible: Feed.waiting > 0
                             text: Feed.waiting
                             role: "monoS"
-                            color: Feed.dim ? Look.fgFaint : Look.amber
+                            color: Feed.dim ? Look.fgFaint : Look.legible(Look.amber)
                             elide: Text.ElideNone
                         }
                     }

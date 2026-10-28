@@ -111,7 +111,7 @@ want = {
     "bg": pal["bg"], "surface": mix(pal["bg"], "#ffffff", .04), "surfaceDim": mix(pal["bg"], "#000000", .20),
     "surfaceContainer": pal["sel"], "surfaceContainerHigh": mix(pal["sel"], "#ffffff", .06),
     "outline": pal["comment"], "outlineVariant": mix(pal["comment"], pal["bg"], .5),
-    "fg": pal["fg"], "fgDim": pal["comment"], "fgFaint": mix(pal["bg"], pal["comment"], .55),
+    "fg": pal["fg"], "fgDim": mix(pal["comment"], pal["fg"], .40), "fgFaint": mix(pal["bg"], mix(pal["comment"], pal["fg"], .40), .70),
     "accent": pal["purple"], "accentFg": pal["bg"], "amber": pal["orange"], "red": pal["red"],
 }
 for k, v in want.items(): check(f"preset derivation {k}", c[k] == v, f"got {c[k]} want {v}")

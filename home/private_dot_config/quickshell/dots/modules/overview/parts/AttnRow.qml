@@ -78,7 +78,7 @@ Item {
                     anchors.centerIn: parent
                     text: r.item.waiting ? "waiting" : "failed"
                     role: "caption"
-                    color: r.dim ? Look.fgFaint : r.tone
+                    color: r.dim ? Look.fgFaint : Look.legible(r.tone)
                     elide: Text.ElideNone
                 }
             }

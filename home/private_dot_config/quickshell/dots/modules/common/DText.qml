@@ -22,6 +22,11 @@ Text {
   font.weight: heavy ? Font.DemiBold : Font.Normal
   color: dim ? Theme.color.fgDim : Theme.color.fg
   verticalAlignment: Text.AlignVCenter
-  lineHeight: 1.35
+  // 1.35 leading, but a single line gets it as padding above AND below: Qt adds the
+  // leading under the glyphs, which sits every boxed label (chip, button, nav row) ~2 px high
+  readonly property bool multiLine: wrapMode !== Text.NoWrap
+  lineHeight: multiLine ? 1.35 : 1.0
+  topPadding: multiLine ? 0 : Math.round(font.pixelSize * 0.175)
+  bottomPadding: multiLine ? 0 : Math.round(font.pixelSize * 0.175)
   renderType: Text.NativeRendering
 }

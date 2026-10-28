@@ -59,6 +59,28 @@ def mix(a, b, t):
     return hexc(tuple(x + (y - x) * t for x, y in zip(ra, rb)))
 
 
+def luminance(h):
+    def lin(v):
+        v /= 255
+        return v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4
+    r, g, b = (lin(v) for v in rgb(h))
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
+def contrast(a, b):
+    la, lb = sorted((luminance(a), luminance(b)), reverse=True)
+    return (la + 0.05) / (lb + 0.05)
+
+
+def readable(c, toward, on, minimum=4.8):
+    """c, lifted toward `toward` in 5 % steps until it reads `minimum`:1 on `on`."""
+    for i in range(21):
+        out = mix(c, toward, i / 20)
+        if contrast(out, on) >= minimum:
+            return out
+    return norm(toward)
+
+
 def lighten(h, t):
     return mix(h, "#ffffff", t)
 
@@ -99,6 +121,9 @@ def static_tokens():
 def preset_tokens():
     p = PALETTE
     bg = norm(p["bg"])
+    # secondary text: the palette's comment tone lifted 40 % toward fg, so it clears
+    # WCAG AA (4.5:1) on the panel surface (the bare comment tone reads 2.8:1)
+    dim = mix(p["comment"], p["fg"], 0.40)
     color = {
         "bg": bg,
         "surface": lighten(bg, 0.04),
@@ -108,8 +133,8 @@ def preset_tokens():
         "outline": norm(p["comment"]),
         "outlineVariant": mix(p["comment"], bg, 0.50),
         "fg": norm(p["fg"]),
-        "fgDim": norm(p["comment"]),
-        "fgFaint": mix(bg, p["comment"], 0.55),
+        "fgDim": dim,
+        "fgFaint": mix(bg, dim, 0.70),
         "accent": norm(p["purple"]),
         "accentFg": bg,
     }
@@ -129,7 +154,8 @@ def wallpaper_tokens(roles, wallpaper):
     if miss:
         raise ThemeError(f"matugen output lacks roles: {', '.join(miss)}")
     color = {k: norm(roles[r]) for k, r in M3.items()}
-    color["fgFaint"] = mix(color["bg"], color["fgDim"], 0.55)
+    color["fgDim"] = readable(color["fgDim"], color["fg"], color["surface"])
+    color["fgFaint"] = mix(color["bg"], color["fgDim"], 0.70)
     color.update(status_colours())
     return finish("wallpaper", wallpaper, color)
 

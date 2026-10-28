@@ -44,6 +44,7 @@ Item {
   Surface {
     id: box
     corner: Theme.radius.card
+    border.color: toast.critical ? Qt.alpha(Theme.color.red, 0.8) : Qt.alpha(Theme.color.outline, Theme.alpha.divider)
     width: parent.width
     height: col.implicitHeight + 2 * 14
 

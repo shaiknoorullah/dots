@@ -112,7 +112,7 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 text: c.label
                 role: "monoS"
-                color: Feed.dim ? Look.fgFaint : c.tone
+                color: Feed.dim ? Look.fgFaint : Look.legible(c.tone)
                 elide: Text.ElideNone
             }
         }

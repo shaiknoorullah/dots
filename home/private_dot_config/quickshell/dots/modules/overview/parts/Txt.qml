@@ -19,7 +19,12 @@ Text {
         : role === "display" ? Look.fDisplay
         : Look.fBody
     font.weight: role === "title" || role === "headline" || role === "display" ? Font.DemiBold : Font.Normal
-    lineHeight: 1.35
+    // 1.35 leading, but a single line gets it as padding above AND below: Qt adds the
+    // leading under the glyphs, which sits every boxed label (chip, button, nav row) ~2 px high
+    readonly property bool multiLine: wrapMode !== Text.NoWrap
+    lineHeight: multiLine ? 1.35 : 1.0
+    topPadding: multiLine ? 0 : Math.round(font.pixelSize * 0.175)
+    bottomPadding: multiLine ? 0 : Math.round(font.pixelSize * 0.175)
     elide: Text.ElideRight
     renderType: Text.NativeRendering
 }
