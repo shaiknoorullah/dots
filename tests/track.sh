@@ -29,6 +29,8 @@ PYTHONPATH="$pkg" exec python3 -m dots_overview "\$@"
 EOF
 cp "$root/home/private_dot_local/private_bin/executable_dots-jump" "$tmp/bin/dots-jump"
 cp "$stubs"/gh "$stubs"/herdr "$stubs"/timew "$tmp/bin/"
+# never the real desktop: a test run once put fake tickets in the notification centre
+printf '#!/bin/sh\nprintf "%%s\\n" "$*" >> "%s/notify.log"\n' "$tmp" > "$tmp/bin/notify-send"; chmod +x "$tmp/bin/notify-send"
 chmod +x "$tmp/bin/"*
 
 echo "1. taskrc carries every UDA"
@@ -300,6 +302,7 @@ assert all(x["parentref"] == "HD-50" and x["project"] == "work" and "mirror" in 
 assert [bool(x.get("start")) for x in sorted(t, key=lambda x: x["description"])].count(True) == 1
 EOF
 grep -qx 'https://erp.example.com/app/hd-ticket/HD-50' "$tmp/open.log" && ok "opened the ticket url" || bad "xdg-open not called: $(cat "$tmp/open.log" 2>/dev/null)"
+grep -q '^-a Overview -i view-list-tree HD-50: 3 step' "$tmp/notify.log" && ok "the result is announced (to the stub, never the desktop)" || bad "no breakdown notification: $(cat "$tmp/notify.log" 2>/dev/null)"
 tw add +mirror ref:HD-51 src:erp -- "Second parent ticket" >/dev/null 2>&1
 printf '$(touch %s/PWNED) `touch %s/PWNED2`; [' "$tmp" "$tmp" > "$LLM_OUT"
 dots-overview breakdown HD-51 >/dev/null 2>&1 && ok "hostile model output still succeeds (fallback)" || bad "hostile output broke breakdown"

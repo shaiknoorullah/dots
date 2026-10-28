@@ -11,11 +11,13 @@ The model is a drafting aid, not an authority. Its output is untrusted text:
 The fallback is one subtask named after the parent, so the feature always produces
 something usable even when the model is down, slow or hostile.
 """
+import fcntl
 import json
 import os
 import re
 import subprocess
 
+from . import config
 from . import tw
 
 ALLOWED = re.compile(r"[^A-Za-z0-9 ,.:/_#()-]")
@@ -58,25 +60,64 @@ def ask_model(title, runner=subprocess.run):
         return ""
 
 
-def run(ref, start=False, model=ask_model, opener=subprocess.Popen):
-    """Create the subtasks. Returns {'steps': [...], 'fallback': bool, 'started': uuid|None}."""
+def notify(summary, body=""):
+    """A desktop notification; the button runs for ~20 s of model time and must say so."""
+    try:
+        subprocess.Popen(["notify-send", "-a", "Overview", "-i", "view-list-tree", summary, body],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL,
+                         start_new_session=True)
+    except OSError:
+        pass
+
+
+def existing(ref):
+    """Pending subtasks already made for this ref, oldest first."""
+    subs = [t for t in tw.pending() if t.get("parentref") == ref and "sub" in (t.get("tags") or [])]
+    return sorted(subs, key=lambda t: t.get("entry_ts") or 0)
+
+
+def run(ref, start=False, model=ask_model, opener=subprocess.Popen, say=notify):
+    """Create the subtasks, or reuse the ones a previous click made.
+
+    Returns {'steps': [...], 'fallback': bool, 'started': uuid|None, 'reused': bool}.
+    One run per ref at a time (a second click while the model thinks waits, then reuses)."""
+    lock_path = config.STATE_DIR / f"breakdown-{re.sub(r'[^A-Za-z0-9_-]', '_', ref)[:80]}.lock"
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(lock_path, "w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        return _run(ref, start, model, opener, say)
+
+
+def _run(ref, start, model, opener, say):
     parent = tw.by_ref(ref)
     if parent is None:
+        say(f"Break down {ref}: not found", "No task carries that ref.")
         raise tw.TwError(f"no task carries ref {ref}")
-    steps = validate(model(parent.get("desc", "")))
-    used_fallback = steps is None
-    if used_fallback:
-        steps = fallback(parent.get("desc", ""), ref)
-    attrs = {"parentref": ref}
-    if PROJECT.match(parent.get("project") or ""):
-        attrs["project"] = parent["project"]
-    uuids = [tw.add(s, tags=("sub", "mirror"), **attrs) for s in steps]
+    have = existing(ref)
+    reused = bool(have)
+    used_fallback = False
+    if reused:
+        steps, uuids = [t.get("desc", "") for t in have], [t["uuid"] for t in have]
+    else:
+        say(f"Breaking down {ref}", "Asking the local model for steps...")
+        steps = validate(model(parent.get("desc", "")))
+        used_fallback = steps is None
+        if used_fallback:
+            steps = fallback(parent.get("desc", ""), ref)
+        attrs = {"parentref": ref}
+        if PROJECT.match(parent.get("project") or ""):
+            attrs["project"] = parent["project"]
+        uuids = [tw.add(s, tags=("sub", "mirror"), **attrs) for s in steps]
     started = None
     if start and uuids:
-        tw.start(uuids[0])
+        if not any(t.get("start_ts") for t in have):
+            tw.start(uuids[0])
         started = uuids[0]
         url = parent.get("url")
         if url and URL.match(url):
             opener(["xdg-open", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL,
                    start_new_session=True)
-    return {"steps": steps, "fallback": used_fallback, "started": started}
+    head = f"{ref}: {len(steps)} step(s)" + (" (already broken down)" if reused else "") + \
+        (" (model unavailable: one step)" if used_fallback else "")
+    say(head, "\n".join(f"{'▶' if i == 0 and started else '•'} {s}" for i, s in enumerate(steps)))
+    return {"steps": steps, "fallback": used_fallback, "started": started, "reused": reused}
