@@ -32,12 +32,14 @@ Item {
 
     function toggleCard() {
         if (cardOpen && cardShown) { close(); return }
+        Feed.anchorWanted()
         closePanel()
         cardOpen = true
         cardShown = true
     }
 
     function openPanel(page) {
+        Feed.anchorWanted()
         var p = page || "today"
         closeCard()
         panelPage = p
