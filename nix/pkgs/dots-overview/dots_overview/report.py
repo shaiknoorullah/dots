@@ -11,7 +11,7 @@ import re
 import time
 from datetime import date, datetime, timedelta
 
-from . import atomic, local_tt, tw
+from . import atomic, local_tt, task, tw
 
 EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
 MAX_OPEN = 10
@@ -70,6 +70,19 @@ def build(day, cfg, now=None):
     lines = [f"# {day.isoformat()}", "",
              f"Worked {dur(worked) or '0m'} · {len(done)} items closed · {len(still)} still open", "", "---", ""]
     lines += section("Closed today", done) + section("Still open", still)
+    # Work an agent started with no ticket (dots-task new): local tasks the user promotes later.
+    # Only company-project tasks, like every other section; the exemption count is a bare number.
+    logged = [t for t in pend if cfg.is_work_task(t) and t.get("src") == "claude" and "claude" in (t.get("tags") or [])
+              and (t.get("ref") or "").startswith("local:")][:MAX_OPEN]
+    exempt = sum(1 for r in task.read_log(t0, t1) if r.get("kind") == "none")
+    if logged or exempt:
+        lines += ["## Agent work logged as new local tasks"]
+        lines += [f"{i}. `{t['ref']}` {scrub(t.get('desc', ''), cfg)[:100]}" for i, t in enumerate(logged, 1)] or ["Nothing."]
+        if logged:
+            lines += ["Promote with `dots-task promote <local-ref> <ref>`."]
+        if exempt:
+            lines += [f"Exemptions: {exempt} session(s) declared no task."]
+        lines += [""]
     titles = {t["ref"]: t.get("desc", "") for t in pend + done if t.get("ref")}
     rows = [f"| `{scrub(ref, cfg)}` | {scrub(titles.get(ref, ''), cfg)[:60]} | {dur(sec)} |"
             for ref, sec in sorted(times.items(), key=lambda kv: -kv[1])[:15] if dur(sec)]

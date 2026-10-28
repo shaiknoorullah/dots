@@ -10,8 +10,8 @@ import argparse
 import sys
 import time
 
-from . import (activity, atomic, attention, breakdown, config, detect, doctor, heatmap, herdr, ingest, jump,
-               local_tt, names, nowstate, report, sync, tw)
+from . import (activity, atomic, attention, breakdown, config, detect, doctor, gate, heatmap, herdr, ingest, jump,
+               local_tt, names, nowstate, report, sync, task, tw)
 
 OUT = {"now": "now.json", "activity": "activity.json", "attention": "attention.json",
        "heatmap": "heatmap.json", "mirror": "mirror.json", "meta": "meta.json"}
@@ -134,6 +134,9 @@ def cmd_notifylog(args):
 
 
 def main(argv=None):
+    argv = sys.argv[1:] if argv is None else list(argv)
+    if argv[:1] == ["task"]:             # dots-task has its own parser; keep --help and flags out of this one
+        return task.main(argv[1:])
     ap = argparse.ArgumentParser(prog="dots-overview", description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
 
@@ -168,6 +171,10 @@ def main(argv=None):
     p.add_argument("--minutes", type=int)
     p.add_argument("--zone")
     add("notifylog", cmd_notifylog, "eavesdrop on notifications into notifications.jsonl (foreground)")
+    p = add("task", lambda a: task.main(a.rest), "dots-task: declare the task this Claude session works on")
+    p.add_argument("rest", nargs=argparse.REMAINDER)
+    p = add("task-hook", lambda a: gate.main(a.event), "Claude Code hook: the task gate (see dots-task-hook)")
+    p.add_argument("event", choices=["session", "prompt", "pretool", "stop"])
     p = add("name", lambda a: print(names.for_session(a.sess)) or 0, "the agent name for a session id")
     p.add_argument("sess")
 
