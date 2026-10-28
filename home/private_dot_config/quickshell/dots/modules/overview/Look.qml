@@ -87,7 +87,7 @@ QtObject {
 
     function withAlpha(c, a) { return Qt.rgba(c.r, c.g, c.b, a) }
     function wash(c) { return look.withAlpha(c, look.aWash) }
-    // text that sits on a wash of its own tone: the tone lifted 40 % toward fg, so red
+    // text that sits on a wash of its own tone: the tone lifted 45 % toward fg, so red
     // and amber labels clear WCAG AA (4.5:1) on their chip (plain red reads 3.2:1)
-    function legible(c) { return Qt.tint(c, look.withAlpha(look.fg, 0.4)) }
+    function legible(c) { return Qt.tint(c, look.withAlpha(look.fg, 0.45)) }
 }

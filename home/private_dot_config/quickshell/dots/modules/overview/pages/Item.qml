@@ -18,7 +18,7 @@ FocusScope {
         Txt { text: pg.it ? pg.it.title : "This item is gone"; role: "headline"; wrapMode: Text.Wrap; width: parent.width; maximumLineCount: 3; dim: pg.dim || !pg.it }
         Column {
             visible: !!pg.it
-            width: parent.width
+            width: Math.min(parent.width, 420)   // label and value stay within one glance
             spacing: Look.sS
             StatRow { width: parent.width; label: "Ref"; value: pg.it && pg.it.ref ? pg.it.ref : "-"; valueRole: "monoS"; dim: pg.dim }
             StatRow { width: parent.width; label: "Source"; value: pg.it && pg.it.src ? pg.it.src : "-"; valueRole: "monoS"; dim: pg.dim }

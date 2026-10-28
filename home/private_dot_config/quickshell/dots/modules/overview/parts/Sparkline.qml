@@ -2,7 +2,9 @@ import QtQuick
 import QtQuick.Shapes
 import qs.modules.overview
 
-// Polyline of n values scaled to the largest. Used for the 7-day strip.
+// Polyline of n values scaled to the largest. Used for the 7-day strip. Point i sits at
+// the centre of the i-th of n equal columns, so a row of n labels (width / n each, centred)
+// lines up under its point.
 Item {
     id: s
     property var values: []
@@ -19,7 +21,7 @@ Item {
         var out = []
         var n = values.length
         for (var i = 0; i < n; i++) {
-            var x = n > 1 ? i * (width - 2) / (n - 1) + 1 : width / 2
+            var x = (i + 0.5) * width / n
             var y = peak > 0 ? height - 2 - (height - 4) * values[i] / peak : height - 2
             out.push(Qt.point(x, y))
         }

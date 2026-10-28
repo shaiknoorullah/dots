@@ -32,11 +32,19 @@ FocusScope {
             width: parent.width
             spacing: Look.sXl
 
-            Row {
-                spacing: Look.sL
-                Txt { text: Fmt.hm(pg.wk ? pg.wk.workedSec : 0); role: "display"; font.family: Look.mono; dim: pg.dim; elide: Text.ElideNone }
-                Txt { text: "this week"; role: "bodyS"; faint: true; dim: pg.dim; anchors.verticalCenter: parent.verticalCenter }
-                StaleMark { visible: pg.dim; anchors.verticalCenter: parent.verticalCenter }
+            // the caption shares the display number's baseline (different faces and sizes)
+            Item {
+                width: parent.width
+                height: big.implicitHeight
+                Txt { id: big; text: Fmt.hm(pg.wk ? pg.wk.workedSec : 0); role: "display"; font.family: Look.mono; dim: pg.dim; elide: Text.ElideNone }
+                Txt {
+                    id: cap
+                    anchors.left: big.right
+                    anchors.leftMargin: Look.sL
+                    anchors.baseline: big.baseline
+                    text: "this week"; role: "bodyS"; faint: true; dim: pg.dim
+                }
+                StaleMark { visible: pg.dim; anchors.left: cap.right; anchors.leftMargin: Look.sL; anchors.verticalCenter: parent.verticalCenter }
             }
             Sparkline {
                 width: parent.width
@@ -51,7 +59,7 @@ FocusScope {
                     model: pg.strip
                     delegate: Txt {
                         required property var modelData
-                        width: col.width / 7
+                        width: col.width / pg.strip.length
                         text: Fmt.dayLabel(modelData.d).split(" ")[0]
                         role: "caption"
                         faint: true

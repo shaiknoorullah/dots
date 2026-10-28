@@ -33,7 +33,7 @@ Chip {
       mono: true
       visible: !OpsState.stale
       text: OpsState.text !== "" ? OpsState.text : "ops"
-      color: Qt.tint(chip.tint, Qt.alpha(Theme.color.fg, 0.4))   // AA on its own wash
+      color: Qt.tint(chip.tint, Qt.alpha(Theme.color.fg, 0.45))   // AA on its own wash
     }
     Stale {
       anchors.verticalCenter: parent.verticalCenter
