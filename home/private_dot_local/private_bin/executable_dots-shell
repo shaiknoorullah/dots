@@ -14,6 +14,14 @@
 # org.freedesktop.Notifications. So switching stops the old one BEFORE starting the new,
 # and nothing here touches systemd or `chezmoi apply`. Reversible with one command.
 set -u
+# Run from a terminal that predates the compositor (herdr panes, ssh, an agent), there is no
+# WAYLAND_DISPLAY: Qt falls back to xcb, Quickshell dies on start, and the waybar fallback
+# dies the same way -- leaving no bar and no notification daemon. Borrow the session's.
+if [ -z "${WAYLAND_DISPLAY:-}" ] && command -v systemctl >/dev/null; then
+  while IFS='=' read -r k v; do
+    case "$k" in WAYLAND_DISPLAY|DISPLAY|HYPRLAND_INSTANCE_SIGNATURE|XDG_CURRENT_DESKTOP) export "$k=$v" ;; esac
+  done < <(systemctl --user show-environment 2>/dev/null)
+fi
 STATE="${XDG_STATE_HOME:-$HOME/.local/state}/dots-shell"
 QS_DIR="${DOTS_QS_DIR:-$HOME/.config/quickshell/dots}"
 
