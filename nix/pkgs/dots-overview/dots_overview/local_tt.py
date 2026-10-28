@@ -32,9 +32,24 @@ def day_start(d):
     return int(datetime(d.year, d.month, d.day).timestamp())
 
 
+# A workday runs 06:00 -> 06:00, as timetrack's does (a logout ends the day until 06:00): an
+# evening that runs past midnight is still that day's work, not the next day's first minutes.
+ROLLOVER_HOUR = 6
+
+
+def workday(now):
+    """The date whose workday contains epoch `now`."""
+    return (datetime.fromtimestamp(now) - timedelta(hours=ROLLOVER_HOUR)).date()
+
+
+def workday_start(d):
+    """06:00 local on date d, as epoch seconds."""
+    return int(datetime(d.year, d.month, d.day, ROLLOVER_HOUR).timestamp())
+
+
 def day_bounds(d):
-    """[start, end) of a local day. Built from dates, not 86400 s, so a DST day is 23/25 h."""
-    return day_start(d), day_start(d + timedelta(days=1))
+    """[start, end) of workday d, 06:00 -> 06:00. Built from dates, not 86400 s, so a DST day is 23/25 h."""
+    return workday_start(d), workday_start(d + timedelta(days=1))
 
 
 def _clip(a, b, t0, t1):
@@ -72,7 +87,7 @@ def worked_by_day(first, last, now=None):
     conn = _ro(config.TT_DIR / "work.db")
     if conn is None:
         return out
-    t0, t1 = day_start(first), day_start(last + timedelta(days=1))
+    t0, t1 = workday_start(first), workday_start(last + timedelta(days=1))
     try:
         sess = [(r["opened_unix"], _end(r, now), r["id"]) for r in conn.execute(
             "SELECT id, opened_unix, closed_unix FROM work_session"
