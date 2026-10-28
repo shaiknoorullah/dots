@@ -47,6 +47,7 @@ jobs:
       - run: bash tests/shadow.sh
       - run: bash tests/web.sh
       - run: bash tests/webclass.sh
+      - run: bash tests/term.sh
       - run: bash tests/away.sh
       - run: bash tests/locality.sh
       # Work tracking (dots-overview) and the daily brief. Stub gh/herdr/timew, scratch Taskwarrior,

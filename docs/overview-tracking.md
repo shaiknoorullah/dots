@@ -104,6 +104,35 @@ A session becomes a task on its **first prompt**, not at `SessionStart`. A sessi
 
 ---
 
+## 6b. Terminal time (which task was the terminal on)
+
+About 90% of a day is one app, so "by app" says nothing. Terminal time is attributed per herdr pane.
+
+1. **Gate.** Terminal window focused and AW not-afk, the same gate browser time uses (`web.py`).
+2. **Focus log.** `clockd` subscribes to `pane.focused`, `tab.focused`, `workspace.focused` and writes `focus_span` rows (one per uninterrupted focus on one pane and context).
+   Spans close on the next focus, when you go idle, on a herdr disconnect (back-dated to the last moment the daemon was alive) and on suspend.
+3. **Join ladder** (`timetrack term`, strongest first, the rung is kept as `labelled_by`):
+   ```
+   session → the Claude session in the pane owns a Taskwarrior task (sess UDA) or a ticket in sessions.jsonl
+   token   → ticket token reported on the pane
+   branch  → ticket in the branch checked out in the pane's directory (HEAD at run time)
+   repo    → project the repo maps to (repos.json); a project, no ticket
+   llm     → local model, open tasks and known projects only
+   title   → before the focus log: workspace name from the window title
+   ```
+   Pane ids are recycled when herdr restarts, so joins also carry `terminal_id` and the session, and a session record is only matched inside a time window.
+4. **The model** (Ollama on loopback) sees a directory name, workspace/tab/pane labels, the session summary and recent prompt heads, with secrets redacted.
+   It may name only a task it was offered or a project already known; anything else is dropped.
+   Answers are cached per context in `term_label_cache`.
+5. **Where it lives.** `private.db` only: `focus_span`, `term_segment`, `term_day`, `term_label_cache` (schema v4). Pane titles, directories and prompts never reach `work.db`.
+   `dots-overview` reads only task, project and agent labels from it, to fill `byRef`, `byProject`, `byAgent` and the terminal line of `byApp`.
+6. **Honesty.** Time with no evidence behind it shows as `unattributed`, not as a verdict.
+   Clock run time and attention are merged per ref with `max`, never summed.
+7. **Run it.** `timetrack term [--day D] [--all] [--no-llm]`. `timetrack doctor` warns when herdr is up and you are present but no focus span is being written.
+   herdr's `window_title` is set to `{workspace} · {tab} · {pane}` so even unlogged history names the workspace.
+
+---
+
 ## 7. Known gaps
 
 1. **Hook fixtures are documented shapes, not live captures.** A live capture needs a real model call, which this build's rules forbid. Capture one per event and replace `tests/fixtures/hooks/*.json`.
