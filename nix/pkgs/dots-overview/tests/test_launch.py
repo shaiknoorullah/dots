@@ -45,6 +45,7 @@ class Launch(unittest.TestCase):
         self.assertIn(["tab", "rename", "w5:t1", "widgets#12"], h.calls)
         start = next(c for c in h.calls if c[:2] == ["agent", "start"])
         self.assertEqual(start[3:7], ["--kind", "claude", "--pane", "w5:p1"])
+        self.assertRegex(start[2], r"^[a-z][a-z0-9_-]{0,31}$")          # herdr rejects anything else
 
     def test_later_dispatches_add_a_tab_to_the_existing_hangar(self):
         h = FakeHerdr([{"workspace_id": "w5", "label": "Hangar"}])

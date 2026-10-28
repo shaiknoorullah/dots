@@ -106,7 +106,9 @@ def launch(parent, steps, current, step_task, cfg=None, run=None, sleep=time.sle
     tab = ((made or {}).get("tab") or {}).get("tab_id") or ((made or {}).get("root_pane") or {}).get("tab_id")
     if not ws and tab:
         run(["tab", "rename", tab, label])
-    name = names.for_session(step_task["uuid"])
+    # herdr agent names: lowercase letter first, then [a-z0-9_-], at most 32
+    name = re.sub(r"[^a-z0-9_-]", "-", names.for_session(step_task["uuid"]).lower())[:32]
+    name = name if re.match(r"[a-z]", name) else "agent-" + name[:26]
     # a fresh tab's shell takes a moment to reach its prompt, and herdr refuses to start an
     # agent before that: retry for up to ~15 s
     for attempt in range(8):
