@@ -332,7 +332,8 @@ class Hostile(helpers.Scratch):
         t.seed(desc="Parent ticket", ref="HD-5", src="erp", url="https://erp.example.com/app/hd-ticket/HD-5", project="work")
         opened = []
         model = lambda title: json.dumps(["Read the ticket body", "Reproduce the problem", "Ship a fix"])  # noqa: E731
-        r = breakdown.run("HD-5", start=True, model=model, opener=lambda argv, **k: opened.append(argv), say=lambda *a: None)
+        r = breakdown.run("HD-5", start=True, model=model, opener=lambda argv, **k: opened.append(argv), say=lambda *a: None,
+                           dispatch=lambda *a: {"pane": "w9:p1"})
         self.assertFalse(r["fallback"])
         subs = [x for x in t.tasks if "sub" in x["tags"]]
         self.assertEqual(len(subs), 3)
@@ -346,9 +347,14 @@ class Hostile(helpers.Scratch):
         t.seed(desc="Parent ticket", ref="HD-9", src="erp", project="work")
         model = lambda title: json.dumps(["Read the ticket body", "Reproduce the problem"])  # noqa: E731
         said = []
-        r1 = breakdown.run("HD-9", start=True, model=model, opener=lambda *a, **k: None, say=lambda *a: said.append(a))
+        launched = []
+        d = lambda *a: launched.append(a[3]) or {"pane": "w9:p1", "reused": len(launched) > 1}  # noqa: E731
+        r1 = breakdown.run("HD-9", start=True, model=model, opener=lambda *a, **k: None, say=lambda *a: said.append(a),
+                           dispatch=d)
         r2 = breakdown.run("HD-9", start=True, model=lambda title: self.fail("model asked twice"),
-                           opener=lambda *a, **k: None, say=lambda *a: said.append(a))
+                           opener=lambda *a, **k: None, say=lambda *a: said.append(a), dispatch=d)
+        self.assertEqual(launched, [r1["started"], r1["started"]])
+        self.assertIn("Agent already on it", said[-1][1])
         self.assertEqual(len([x for x in t.tasks if "sub" in x["tags"]]), 2)
         self.assertEqual((r1["reused"], r2["reused"]), (False, True))
         self.assertEqual(r2["started"], r1["started"])

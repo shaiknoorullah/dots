@@ -172,6 +172,16 @@ def on_context(event, hook, env):
         return None
     pane = env.get("HERDR_PANE_ID") or None
     task.touch_live(sess, hook.get("cwd"), pane if pane and task.PANE_RE.match(pane) else None)
+    # an agent dispatched by Break down & start (launch.py) arrives with its step named
+    if event == "SessionStart" and not task.declared_ok(task.read_decl(sess)):
+        want = (env.get("DOTS_TASK_DECLARE") or "").strip()
+        if re.fullmatch(r"[0-9a-f-]{36}", want):
+            try:
+                t = task.find(want)
+                if t:
+                    task.declare(sess, t, env=env)
+            except Exception:
+                pass
     if event == "UserPromptSubmit":
         p = str(hook.get("prompt") or "")
         atomic.write_json(task._p(TURN, sess), {"v": 1, "ts": int(time.time()), "prompt": p[:600],

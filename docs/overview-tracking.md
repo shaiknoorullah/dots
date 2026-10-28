@@ -146,6 +146,27 @@ Consider `Bash(dots-task:*)` in your permission allow-list.
 
 ---
 
+## 5c. Break down & start: the Hangar
+
+The overview button (`dots-overview breakdown <ref> --start`):
+
+1. Splits the ticket into 2-5 steps with the local model, or reuses the steps a previous
+   click made. One run per ref at a time.
+2. Starts the first step and opens the ticket URL.
+3. Dispatches an agent into the **Hangar**, a herdr workspace for dispatched agents:
+   ```
+   Hangar (created on first use)
+   ├─ tab per ticket, labelled with the ref, in the repo checkout if there is one
+   └─ claude, started with DOTS_TASK_DECLARE=<step uuid>
+        → SessionStart hook declares the step (the task gate never stops it)
+        → first prompt: gather everything READ ONLY, brief me, stop and wait
+   ```
+   A second click focuses the live agent on that step instead of starting another.
+4. Notifies on start and with the steps and the agent's pane when done.
+
+work.conf may set `DISPATCH_WS` (default `Hangar`), `WORK_CHECKOUTS` (default `~/work`)
+and `AGENT_CWD` (default home).
+
 ## 6. Apply it live (orchestrator)
 
 1. Merge the branch, then `chezmoi apply` (installs the hook, the job, the example conf, the new taskrc for fresh machines).

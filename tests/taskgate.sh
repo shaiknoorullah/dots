@@ -185,6 +185,15 @@ for bad_in in '' 'not json' '[]' '{"session_id":"../x","tool_name":"Edit"}' '{"t
 done
 [ -z "$(printf '{}' | PATH=/usr/bin:/bin sh "$hook" pretool 2>/dev/null)" ] && ok "dots-overview missing: fails open" || bad "missing dots-overview blocked"
 
+# an agent dispatched by Break down & start arrives with DOTS_TASK_DECLARE: declared at SessionStart
+S6=ffffffff-0000-4000-8000-000000000006
+u7=$(task rc.verbose=nothing ref:HD-7 export 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin)[0]["uuid"])')
+hk session "$(python3 -c "import json; print(json.dumps({'session_id':'$S6','cwd':'/x','hook_event_name':'SessionStart'}))")" DOTS_TASK_DECLARE="$u7" >/dev/null
+pre Edit $S6 "" | grep -q . && bad "dispatched agent still gated" || ok "a dispatched agent (DOTS_TASK_DECLARE) is declared at SessionStart"
+SESS=$S6 cli current 2>/dev/null | grep -q 'HD-7' && ok "...on the step it was sent for" || bad "dispatched agent declared on the wrong task"
+hk session "$(python3 -c "import json; print(json.dumps({'session_id':'eeeeeeee-0000-4000-8000-000000000007','cwd':'/x','hook_event_name':'SessionStart'}))")" 'DOTS_TASK_DECLARE=$(id)' >/dev/null
+pre Edit eeeeeeee-0000-4000-8000-000000000007 "" | denied && ok "a malformed DOTS_TASK_DECLARE declares nothing" || bad "malformed declare opened the gate"
+
 echo "4. Stop: steering check"
 stop_in() { python3 -c "import json,sys; print(json.dumps({'session_id':sys.argv[1],'cwd':sys.argv[2],'hook_event_name':'Stop','stop_hook_active':sys.argv[3]=='1'}))" "$@"; }
 S4=dddddddd-0000-4000-8000-000000000004

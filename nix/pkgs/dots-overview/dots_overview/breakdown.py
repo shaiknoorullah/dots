@@ -76,7 +76,7 @@ def existing(ref):
     return sorted(subs, key=lambda t: t.get("entry_ts") or 0)
 
 
-def run(ref, start=False, model=ask_model, opener=subprocess.Popen, say=notify):
+def run(ref, start=False, model=ask_model, opener=subprocess.Popen, say=notify, dispatch=None):
     """Create the subtasks, or reuse the ones a previous click made.
 
     Returns {'steps': [...], 'fallback': bool, 'started': uuid|None, 'reused': bool}.
@@ -85,10 +85,16 @@ def run(ref, start=False, model=ask_model, opener=subprocess.Popen, say=notify):
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     with open(lock_path, "w") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
-        return _run(ref, start, model, opener, say)
+        return _run(ref, start, model, opener, say, dispatch)
 
 
-def _run(ref, start, model, opener, say):
+def _dispatch(parent, steps, current, step_uuid):
+    from . import launch
+    t = next((x for x in tw.pending() if x["uuid"] == step_uuid), {"uuid": step_uuid})
+    return launch.launch(parent, steps, current, t)
+
+
+def _run(ref, start, model, opener, say, dispatch):
     parent = tw.by_ref(ref)
     if parent is None:
         say(f"Break down {ref}: not found", "No task carries that ref.")
@@ -117,7 +123,19 @@ def _run(ref, start, model, opener, say):
         if url and URL.match(url):
             opener(["xdg-open", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL,
                    start_new_session=True)
+    agent = None
+    if started:
+        try:
+            agent = (dispatch or _dispatch)(parent, steps, steps[0], started)
+        except Exception as e:          # the steps exist and are started; the agent is a bonus
+            agent = {"error": str(e)[:200]}
     head = f"{ref}: {len(steps)} step(s)" + (" (already broken down)" if reused else "") + \
         (" (model unavailable: one step)" if used_fallback else "")
-    say(head, "\n".join(f"{'▶' if i == 0 and started else '•'} {s}" for i, s in enumerate(steps)))
-    return {"steps": steps, "fallback": used_fallback, "started": started, "reused": reused}
+    lines = [f"{'▶' if i == 0 and started else '•'} {s}" for i, s in enumerate(steps)]
+    if agent and agent.get("error"):
+        lines.append(f"Agent not launched: {agent['error']}")
+    elif agent:
+        lines.append(("Agent already on it in " if agent.get("reused") else "Agent briefing you in the Hangar, ")
+                     + str(agent.get("pane")))
+    say(head, "\n".join(lines))
+    return {"steps": steps, "fallback": used_fallback, "started": started, "reused": reused, "agent": agent}
