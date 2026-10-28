@@ -1,0 +1,11 @@
+[Unit]
+Description=dots-mail: sync every folder and index (mbsync + notmuch)
+Requires=dots-mail-auth.service
+After=dots-mail-auth.service
+ConditionPathIsMountPoint=%h/Mail
+
+[Service]
+Type=oneshot
+Environment=PATH=%h/.nix-profile/bin:%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+Nice=10
+ExecStart=%h/.local/bin/dots-mail sync

@@ -1,0 +1,19 @@
+[Unit]
+Description=dots-mail: unlock the encrypted mail store at ~/Mail (key in the login keyring)
+# The keyring is unlocked by the login password, so this can only succeed in a session:
+# before login the store stays ciphertext and nothing below starts.
+ConditionPathExists=%h/.local/share/dots-mail/cipher/gocryptfs.conf
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+Environment=PATH=%h/.nix-profile/bin:%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=%h/.local/bin/dots-mail mount
+ExecStop=%h/.local/bin/dots-mail umount
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=graphical-session.target

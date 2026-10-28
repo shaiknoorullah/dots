@@ -1,0 +1,10 @@
+[Unit]
+Description=dots-mail: full sync every 10 minutes (INBOX is pushed sooner)
+
+[Timer]
+OnActiveSec=2min
+OnUnitActiveSec=10min
+RandomizedDelaySec=30
+
+[Install]
+WantedBy=timers.target
