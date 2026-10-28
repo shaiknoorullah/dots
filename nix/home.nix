@@ -70,6 +70,9 @@ in {
     # --- owner picks (addendum) ---
     # browsers / chat / mail
     zen aether compat (gl google-chrome) (gl brave) brotab slack teams-for-linux thunderbird
+    # work mail in the terminal (dots-mail): encrypted store, OAuth2, sync, push, index, client.
+    # isync needs the XOAUTH2 SASL plugin for Microsoft 365; it is off by default upstream.
+    (isync.override { withCyrusSaslXoauth2 = true; }) pizauth goimapnotify gocryptfs libsecret notmuch afew aerc
     # calendar / tasks / sync
     gcalcli gnome-calendar khal tasksh python3Packages.bugwarrior taskchampion-sync-server
     kdePackages.kdeconnect-kde hypr-kdeconnect-fix hyprcapture argonaut

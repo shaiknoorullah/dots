@@ -1,0 +1,14 @@
+[Unit]
+Description=dots-mail: IMAP IDLE on INBOX, so new mail syncs within seconds (goimapnotify)
+Requires=dots-mail-auth.service
+After=dots-mail-auth.service
+PartOf=graphical-session.target
+
+[Service]
+Environment=PATH=%h/.nix-profile/bin:%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=%h/.nix-profile/bin/goimapnotify
+Restart=always
+RestartSec=60
+
+[Install]
+WantedBy=graphical-session.target

@@ -1,0 +1,8 @@
+# Copy to ~/.config/dots-mail/account.conf (unmanaged: it names the account), then:
+#   dots-mail init && dots-mail render && systemctl --user start dots-mail-sync.timer
+MAIL_ADDRESS=you@example.com
+# a public OAuth client the tenant already allows for IMAP (e.g. the one your desktop mail
+# app signs in with); never a secret
+MAIL_CLIENT_ID=00000000-0000-0000-0000-000000000000
+MAIL_IMAP_HOST=outlook.office365.com
+MAIL_TENANT=common

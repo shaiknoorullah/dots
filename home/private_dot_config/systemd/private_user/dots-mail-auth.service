@@ -1,0 +1,17 @@
+[Unit]
+Description=dots-mail: OAuth2 token for work mail (pizauth; read and draft scopes only)
+Requires=dots-mail-mount.service
+After=dots-mail-mount.service
+PartOf=graphical-session.target
+
+[Service]
+Environment=PATH=%h/.nix-profile/bin:%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=%h/.nix-profile/bin/pizauth server -d
+# the token cache lives inside the encrypted store; restoring it means no sign-in after a reboot
+ExecStartPost=/bin/sh -c 'sleep 1; f=%h/Mail/.state/pizauth.dump; [ -s "$f" ] && %h/.nix-profile/bin/pizauth restore < "$f" || true'
+ExecStop=%h/.nix-profile/bin/pizauth shutdown
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=graphical-session.target
