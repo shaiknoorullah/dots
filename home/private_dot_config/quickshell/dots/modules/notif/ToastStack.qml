@@ -62,7 +62,7 @@ PanelWindow {
       onCountChanged: Qt.callLater(win.reflow)
 
       Toast {
-        dnd: win.notifs ? win.notifs.dnd : false
+        server: win.notifs
         onShownChanged: win.reflow()
         onHeightChanged: win.reflow()
         Component.onCompleted: win.reflow()

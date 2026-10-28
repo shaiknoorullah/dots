@@ -5,14 +5,15 @@ import "../../common"
 import "../../../services"
 
 // Notifications. Nothing held and nothing waiting -> zero width. Do-not-disturb is a
-// state I hold open, so it washes amber. If another daemon owns the notification bus
+// state I hold open, so it washes amber; so does a running focus block, which quiets toasts.
+// If another daemon owns the notification bus
 // the shell does not claim it and this shows a hollow "?" instead.
 // Twins: `qs ipc call dots.notif toggle` / `dnd`.
 Chip {
   id: chip
 
   property var notifs: null
-  readonly property bool dnd: notifs ? notifs.dnd : false
+  readonly property bool dnd: notifs ? notifs.quiet : false     // do-not-disturb, or a focus block
   readonly property int count: notifs ? notifs.count : 0
   readonly property bool held: notifs ? notifs.held : false
 

@@ -11,13 +11,13 @@ Item {
   id: toast
 
   required property var modelData      // Notification
-  property bool dnd: false
+  property var server: null           // NotifServer: decides what may pop up (dnd, focus)
   property bool alive: true
 
   readonly property bool critical: modelData.urgency === NotificationUrgency.Critical
   readonly property int lifetime: modelData.expireTimeout > 0 ? modelData.expireTimeout * 1000 : 6000
 
-  readonly property bool shown: alive && (!dnd || critical)
+  readonly property bool shown: alive && (server ? server.lets(modelData) : true)
 
   width: 380
   implicitHeight: shown ? box.height : 0
