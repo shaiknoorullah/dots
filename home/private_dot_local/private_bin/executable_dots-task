@@ -1,0 +1,13 @@
+#!/bin/sh
+# dots-task declare <ref|id|uuid>     bind THIS Claude session to an open task (starts its clock)
+# dots-task new "<title>" --project P [--parent REF]   create a local task and declare it
+# dots-task switch <ref>              move the session to another task (stops the old clock)
+# dots-task list [--grep W] [--project P]   open tasks to pick from
+# dots-task current                   what this session declared
+# dots-task none "<reason>"           trivial non-work: opens the task gate for this session, logged
+# dots-task promote <local-ref> <ref> give a local task a real ref once you filed the ticket
+#
+# A thin wrapper like dots-jump, so agents and humans share one resolver (dots-overview task).
+# The task gate (dots-task-hook) always lets this command through. Everything is local.
+command -v dots-overview >/dev/null 2>&1 || { echo "dots-task: dots-overview is not installed" >&2; exit 127; }
+exec dots-overview task "$@"

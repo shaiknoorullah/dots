@@ -131,6 +131,16 @@ sid=11111111-2222-3333-4444-555555555555
 ! grep -q 'sub-1\|ZZ-1' "$st/sessions.jsonl" && ok "subagents are skipped" || bad "subagent recorded"
 lines=$(wc -l < "$st/sessions.jsonl")
 [ "$lines" = 5 ] && ok "5 events recorded (session, 2 prompts, stop, end)" || bad "expected 5 lines, got $lines"
+# a `claude -p` run inherits the pane but is not its agent: nothing recorded
+st2="$tmp/state-sdk"
+run_hook prompt "$fix/hooks/prompt-ticket.json" DOTS_OVERVIEW_STATE_DIR="$st2" CLAUDE_CODE_ENTRYPOINT=sdk-cli
+[ ! -s "$st2/sessions.jsonl" ] && ok "claude -p (sdk entrypoint) is not recorded as the pane's agent" || bad "sdk run recorded"
+# an injected message (subagent report, notification) never names the ticket
+st3="$tmp/state-inj"
+python3 -c "import json; print(json.dumps({'session_id':'33333333-2222-3333-4444-555555555555','hook_event_name':'UserPromptSubmit','cwd':'/x','prompt':'<agent-message from=\"a1\">example TICKET-123 in a report</agent-message>'}))" > "$tmp/inj.json"
+run_hook prompt "$tmp/inj.json" DOTS_OVERVIEW_STATE_DIR="$st3"
+python3 -c "import json,sys; r=[json.loads(l) for l in open(sys.argv[1])]; assert r and r[-1]['ticket'] is None, r" "$st3/sessions.jsonl" \
+  && ok "an injected <tag> prompt does not set the ticket" || bad "injected prompt set a ticket"
 python3 - "$st" <<'EOF' && ok "ticket regex takes the 3-segment id, and the ticket is sticky" || bad "ticket handling"
 import json, sys
 rows = [json.loads(l) for l in open(sys.argv[1] + "/sessions.jsonl")]
@@ -185,6 +195,12 @@ st2="$tmp/state2"; export DOTS_OVERVIEW_STATE_DIR="$st2" DOTS_WORK_CONF="$tmp/no
 sed -e "s#^data.location=.*#data.location=$TASKDATA#" "$rc" > "$TASKRC"; mkdir -p "$TASKDATA"; rm -rf "$TASKDATA/hooks"
 run_hook session "$fix/hooks/session.json"; run_hook prompt "$fix/hooks/prompt.json"
 dots-overview ingest >/dev/null 2>&1 && ok "ingest runs" || bad "ingest failed"
+[ "$(task rc.json.array=on status:pending export 2>/dev/null | python3 -c 'import json,sys;print(len(json.load(sys.stdin)))')" = 0 ] \
+  && ok "a session alone invents no task" || bad "ingest created a placeholder task"
+# the agent declares its task (the gate's way out); ingest then keeps its coordinates
+env DOTS_SESSION_ID=11111111-2222-3333-4444-555555555555 HERDR_PANE_ID=w9:p1 \
+  dots-task new "please fix the intake form validation" --project work >/dev/null 2>&1 && ok "dots-task new declares" || bad "dots-task new failed"
+dots-overview ingest >/dev/null 2>&1
 python3 - <<'EOF' && ok "task carries agent, sess, pane, wspace (and src claude)" || bad "task attributes"
 import json, subprocess
 t = json.loads(subprocess.run(["task", "rc.json.array=on", "status:pending", "export"], capture_output=True, text=True).stdout)

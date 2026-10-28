@@ -71,6 +71,17 @@ class Contracts(helpers.Scratch):
         self.assertEqual(doc["sources"]["mail"]["state"], "unavailable")
         self.assertEqual(doc["sources"]["mail"]["detail"], "no local mail store")
 
+    def test_erp_waits_only_when_overdue_or_replied(self):
+        now = int(time.time())
+        mk = lambda ref, ss: {"uuid": ref.ljust(8, "0"), "ref": ref, "src": "erp", "srcstate": ss, "tags": ["attn"],
+                              "desc": ref, "entry_ts": now - 60}
+        tasks = [mk("T1", "task:open"), mk("T2", "task:overdue"), mk("H1", "hd:open"), mk("H2", "hd:replied"),
+                 mk("H3", "hd:waiting for more info")]
+        doc = attention.build(tasks, [], now)
+        self.check("attention", doc)
+        self.assertEqual(sorted(i["ref"] for i in doc["items"] if i["waiting"]), ["H2", "T2"])
+        self.assertEqual(doc["counts"]["waiting"], 2)
+
     def test_failed_ops_job_is_red_and_nobody_waits(self):
         config.OPS_STATE.mkdir(parents=True)
         (config.OPS_STATE / "disk-watch.json").write_text(json.dumps(

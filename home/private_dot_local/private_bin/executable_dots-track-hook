@@ -31,6 +31,8 @@ cat >"$inp" 2>/dev/null || true
 
 [ "${HERDR_ENV:-}" = "1" ] || exit 0
 [ -n "${HERDR_PANE_ID:-}" ] || exit 0
+# `claude -p` inherits the launching pane's HERDR_PANE_ID; it is not the pane's agent
+case "${CLAUDE_CODE_ENTRYPOINT:-}" in sdk*) exit 0 ;; esac
 command -v python3 >/dev/null 2>&1 || exit 0
 
 TT_ACTION="$action" TT_INPUT="$inp" python3 - >/dev/null 2>&1 <<'PY' || exit 0
@@ -123,8 +125,12 @@ if action == "prompt":
     if env:
         m = TICKET_RE.search(env)
         found = m.group(1) if m else None
-    if not found:
-        m = TICKET_RE.search(str(hook.get("prompt") or ""))
+    p = str(hook.get("prompt") or "")
+    # Only words I typed name a ticket. A prompt that opens with a tag is text the harness
+    # injected (a subagent's report, a task notification, a system reminder), and its
+    # examples ("TICKET-123") once became this session's ticket.
+    if not found and not p.lstrip().startswith("<"):
+        m = TICKET_RE.search(p)
         found = m.group(1) if m else None
     ticket = found or ticket
 

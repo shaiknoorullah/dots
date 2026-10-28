@@ -1,6 +1,7 @@
 {
  "buckets": {
   "month": {
+   "byAgent": [],
    "byApp": [],
    "byProject": [
     {
@@ -13,6 +14,7 @@
    "workedSec": 504000
   },
   "quarter": {
+   "byAgent": [],
    "byApp": [],
    "byProject": [
     {
@@ -25,6 +27,16 @@
    "workedSec": 1512000
   },
   "today": {
+   "byAgent": [
+    {
+     "agent": "Vega",
+     "sec": 3600
+    },
+    {
+     "agent": "Isis",
+     "sec": 1500
+    }
+   ],
    "byApp": [
     {
      "app": "editor",
@@ -32,6 +44,7 @@
     },
     {
      "app": "terminal",
+     "detail": "work 1h10m \u00b7 delegated 8m",
      "sec": 5000
     },
     {
@@ -74,6 +87,7 @@
    "workedSec": 15300
   },
   "week": {
+   "byAgent": [],
    "byApp": [
     {
      "app": "editor",

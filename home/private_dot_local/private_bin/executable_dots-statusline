@@ -1,0 +1,21 @@
+#!/bin/sh
+# Claude Code status line = your usual status line + the session's declared task.
+#
+#   settings.json:  "statusLine": {"type": "command", "command": "~/.local/bin/dots-statusline"}
+#
+# DOTS_STATUSLINE_BASE names the command that draws the usual line (default: claude-powerline,
+# found on PATH or in ~/.npm-global/bin). The status line JSON arrives on stdin and goes to both.
+# Never fails: with no base command and no task it prints nothing.
+in="$(cat)"
+base="${DOTS_STATUSLINE_BASE:-}"
+if [ -z "$base" ]; then
+  if command -v claude-powerline >/dev/null 2>&1; then base=claude-powerline
+  elif [ -x "$HOME/.npm-global/bin/claude-powerline" ]; then base="$HOME/.npm-global/bin/claude-powerline"
+  fi
+fi
+[ -n "$base" ] && printf '%s' "$in" | $base 2>/dev/null
+if command -v dots-overview >/dev/null 2>&1; then
+  seg="$(printf '%s' "$in" | timeout 1 dots-overview task statusline 2>/dev/null)"
+  [ -n "$seg" ] && printf '\ntask: %s\n' "$seg"
+fi
+exit 0

@@ -83,8 +83,66 @@ The installer script now finds each hook by its own marker, so two hooks share `
 |---|---|
 | `timetrack-ticket-hook` | `UserPromptSubmit`, `SessionStart` |
 | `dots-track-hook` | `UserPromptSubmit`, `SessionStart`, `Stop`, `SessionEnd` |
+| `dots-task-hook` | `SessionStart`, `UserPromptSubmit`, `PreToolUse` (matcher `Edit\|Write\|MultiEdit\|NotebookEdit\|Bash`), `Stop` |
 
 A session becomes a task on its **first prompt**, not at `SessionStart`. A session that never gets a prompt is not work yet.
+
+---
+
+## 5b. Task discipline for agents
+
+> No Claude agent edits files or runs commands until its session has declared a task.
+
+**The rule.** A session declares one task with `dots-task`. Everything is local; nothing leaves the machine.
+
+| command | does |
+|---|---|
+| `dots-task list [--grep W] [--project P]` | open tasks to pick from (ref, project, title) |
+| `dots-task declare <ref\|id\|uuid>` | bind this session to a task, start its clock, label the herdr pane |
+| `dots-task new "<title>" --project P [--parent REF]` | create a local task (`src=claude`, tag `claude`, ref `local:<6 hex>`) and declare it |
+| `dots-task switch <ref>` | move to another task; the old one stops |
+| `dots-task none "<reason>"` | trivial non-work: opens the gate, logged |
+| `dots-task current` | what this session declared |
+
+**Which session is "this" one**, first match wins:
+
+1. `CLAUDE_CODE_SESSION_ID` in the environment. Claude Code exports it to every Bash tool call. (`DOTS_SESSION_ID` and `CLAUDE_SESSION_ID` also work.)
+2. `HERDR_PANE_ID`, then the newest recorded session for that pane.
+3. The newest recorded session whose `cwd` is this directory or a parent.
+
+**The gate** (`dots-task-hook`, `PreToolUse`).
+
+1. No declaration and no exemption: `Edit`, `Write`, `MultiEdit`, `NotebookEdit` and `Bash` are denied, with the way out in the reason.
+2. Always allowed: `dots-task ...`, `task ... list|export|info`, `git status|log|diff`, `ls`, `cat`, `rg`, `grep`, `pwd`.
+   Only as a single plain command: any `;` `&` `|` `<` `>` `$` backtick, backslash, parenthesis or newline outside quotes is refused.
+3. Reading and searching tools are never gated.
+4. A subagent inherits its parent's declaration (same session id, else the same herdr pane or cwd).
+5. Headless runs are exempt: `claude -p` / SDK runs, whose hooks see `CLAUDE_CODE_ENTRYPOINT=sdk-cli` (interactive sessions see `cli`; verified 2026-10-28). They inherit the launching pane's `HERDR_PANE_ID`, so the pane proves nothing. The ERP mcp job also sets `DOTS_TASK_GATE=off`. Subagents' hooks carry the parent's `session_id` (verified), so the parent's declaration covers them.
+6. Fails open: a missing `dots-overview`, bad input, a crash or a timeout allows the call. The deny is the only hard edge.
+
+**Kill switch.** `DOTS_TASK_GATE=off` in the environment, or an empty file `~/.config/dots-work/task-gate-off`. Both silence the gate, the context and the Stop check.
+
+**Steering.** `SessionStart` and `UserPromptSubmit` tell the agent its task (or to declare one) and refresh the herdr `$ticket` token (4 h ttl).
+`Stop` asks the local model (Ollama on `127.0.0.1:11434` only, 3 s) whether the turn matches the task.
+Clearly different work blocks the stop **once** per prompt, telling the agent to switch, create a task or ask "log this as a ticket?".
+It never blocks when `stop_hook_active` is set, and it allows on any model failure.
+`DOTS_TASK_MODEL` and `DOTS_OLLAMA_URL` (loopback only) override the defaults.
+
+**Promote local tasks.** The daily brief lists open `local:` tasks under "Agent work logged as new local tasks" (company projects only) and counts exemptions.
+After you file the real ticket:
+
+```
+dots-task promote local:ab12cd HD-123
+```
+
+**Status line.** Set `statusLine.command` to `~/.local/bin/dots-statusline`.
+It runs `claude-powerline` (or `DOTS_STATUSLINE_BASE`) and adds a `task: <ref> <title>` line.
+`dots-overview task statusline` is the bare segment (status line JSON on stdin).
+
+**Agent instructions.** `~/.config/dots-work/task-discipline/SKILL.md` is shipped by chezmoi.
+To have Claude load it: `ln -s ~/.config/dots-work/task-discipline ~/.claude/skills/task-discipline`.
+The hook context already carries the rule; the skill is the longer form.
+Consider `Bash(dots-task:*)` in your permission allow-list.
 
 ---
 
@@ -101,6 +159,35 @@ A session becomes a task on its **first prompt**, not at `SessionStart`. A sessi
 5. `~/.config/dots-work/work.conf`: copy the example and fill it in by hand.
 6. ERP: choose `token` or `mcp` and set `ERP_MODE`. Until then it stays off.
 7. Check: `dots-overview fast && dots-overview doctor`.
+
+---
+
+## 6b. Terminal time (which task was the terminal on)
+
+About 90% of a day is one app, so "by app" says nothing. Terminal time is attributed per herdr pane.
+
+1. **Gate.** Terminal window focused and AW not-afk, the same gate browser time uses (`web.py`).
+2. **Focus log.** `clockd` subscribes to `pane.focused`, `tab.focused`, `workspace.focused` and writes `focus_span` rows (one per uninterrupted focus on one pane and context).
+   Spans close on the next focus, when you go idle, on a herdr disconnect (back-dated to the last moment the daemon was alive) and on suspend.
+3. **Join ladder** (`timetrack term`, strongest first, the rung is kept as `labelled_by`):
+   ```
+   session → the Claude session in the pane owns a Taskwarrior task (sess UDA) or a ticket in sessions.jsonl
+   token   → ticket token reported on the pane
+   branch  → ticket in the branch checked out in the pane's directory (HEAD at run time)
+   repo    → project the repo maps to (repos.json); a project, no ticket
+   llm     → local model, open tasks and known projects only
+   title   → before the focus log: workspace name from the window title
+   ```
+   Pane ids are recycled when herdr restarts, so joins also carry `terminal_id` and the session, and a session record is only matched inside a time window.
+4. **The model** (Ollama on loopback) sees a directory name, workspace/tab/pane labels, the session summary and recent prompt heads, with secrets redacted.
+   It may name only a task it was offered or a project already known; anything else is dropped.
+   Answers are cached per context in `term_label_cache`.
+5. **Where it lives.** `private.db` only: `focus_span`, `term_segment`, `term_day`, `term_label_cache` (schema v4). Pane titles, directories and prompts never reach `work.db`.
+   `dots-overview` reads only task, project and agent labels from it, to fill `byRef`, `byProject`, `byAgent` and the terminal line of `byApp`.
+6. **Honesty.** Time with no evidence behind it shows as `unattributed`, not as a verdict.
+   Clock run time and attention are merged per ref with `max`, never summed.
+7. **Run it.** `timetrack term [--day D] [--all] [--no-llm]`. `timetrack doctor` warns when herdr is up and you are present but no focus span is being written.
+   herdr's `window_title` is set to `{workspace} · {tab} · {pane}` so even unlogged history names the workspace.
 
 ---
 

@@ -1,0 +1,23 @@
+#!/bin/sh
+# Claude Code hook: "no agent works without a declared task". See docs/overview-tracking.md.
+#
+# Installed by .chezmoiscripts/run_onchange_after_30-claude-hooks on four events:
+#
+#   session  SessionStart      -- tell the agent which task it is on (or to declare one)
+#   prompt   UserPromptSubmit  -- same, and remember the prompt for the Stop check
+#   pretool  PreToolUse        -- DENY Edit/Write/MultiEdit/NotebookEdit/Bash until a task is declared
+#   stop     Stop              -- ask the local model whether the turn matches the task (blocks once)
+#
+# The one deliberate hard edge is the PreToolUse deny. Everything else fails OPEN: a missing
+# dots-overview, a crash or a timeout prints nothing and exits 0, which Claude Code reads as
+# "no opinion". Kill switch: DOTS_TASK_GATE=off, or the file ~/.config/dots-work/task-gate-off.
+# All the logic lives in dots_overview/gate.py; this script is only the strict-timeout shell.
+action="${1:-}"
+case "$action" in session|prompt|pretool|stop) ;; *) exit 0 ;; esac
+command -v dots-overview >/dev/null 2>&1 || exit 0
+if command -v timeout >/dev/null 2>&1; then
+  timeout -k 0.2 4.6 dots-overview task-hook "$action" 2>/dev/null
+else
+  dots-overview task-hook "$action" 2>/dev/null
+fi
+exit 0

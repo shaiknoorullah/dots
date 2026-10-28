@@ -7,6 +7,7 @@ loopback and bypasses any proxy, so a poisoned HTTP_PROXY cannot redirect it.
 import calendar
 import json
 import os
+import re
 import sqlite3
 import subprocess
 import time
@@ -158,7 +159,10 @@ def project_intervals(t0, now):
         except (KeyError, ValueError):
             continue
         tags = r.get("tags") or []
-        out.append((s, e, tags[0] if len(tags) >= 2 else "unassigned"))
+        # the hook tags [project, description], but timew stores tags sorted, so "first" is not
+        # the project: a project name has no spaces, a task description almost always does
+        words = [t for t in tags if t and not any(c.isspace() for c in t)]
+        out.append((s, e, words[0] if len(tags) >= 2 and len(words) == 1 else "unassigned"))
     return out
 
 
@@ -187,11 +191,15 @@ def _aw(path, timeout=4):
         return json.loads(fh.read())
 
 
+def _aw_ts(e):
+    return datetime.fromisoformat(str(e.get("timestamp")).replace("Z", "+00:00")).timestamp()
+
+
 def app_seconds(t0, t1, now=None, cached_only=False):
     """[(app, seconds)] from the window watcher, cached for 10 min so the 60 s cycle stays cheap."""
     now = int(now or time.time())
     cache_path = config.STATE_DIR / "app-cache.json"
-    key = f"{t0}:{t1 // 3600}"
+    key = f"v2:{t0}:{t1 // 3600}"
     cache = atomic.read_json(cache_path, {}) or {}
     hit = cache.get(key)
     if hit and (cached_only or now - hit["at"] < APP_CACHE_SEC):
@@ -199,22 +207,131 @@ def app_seconds(t0, t1, now=None, cached_only=False):
     if cached_only:
         return []
     try:
-        bucket = next(n for n, m in _aw("/buckets/").items() if m.get("type") == "currentwindow")
+        buckets = _aw("/buckets/")
+        win = next(n for n, m in buckets.items() if m.get("type") == "currentwindow")
+        afk = next((n for n, m in buckets.items() if m.get("type") == "afkstatus"), None)
         q = urllib.parse.urlencode({"start": datetime.fromtimestamp(t0).astimezone().isoformat(),
                                     "end": datetime.fromtimestamp(t1).astimezone().isoformat(), "limit": 100000})
-        events = _aw(f"/buckets/{urllib.parse.quote(bucket)}/events?{q}", timeout=8)
+        events = _aw(f"/buckets/{urllib.parse.quote(win)}/events?{q}", timeout=8)
+        present = _aw(f"/buckets/{urllib.parse.quote(afk)}/events?{q}", timeout=8) if afk else None
     except (OSError, ValueError, StopIteration):
         return [tuple(x) for x in hit["apps"]] if hit else []
+    # a window that stays focused while I am away (locked overnight) is not time spent in it:
+    # count only the part inside [t0, t1] that overlaps "not-afk"
+    here = sorted((_aw_ts(e), _aw_ts(e) + float(e.get("duration") or 0)) for e in (present or [])
+                  if (e.get("data") or {}).get("status") == "not-afk")
     acc = {}
     for e in events:
         app = (e.get("data") or {}).get("app")
-        if app:
-            acc[app] = acc.get(app, 0) + int(e.get("duration") or 0)
+        if not app:
+            continue
+        s0 = max(_aw_ts(e), t0)
+        s1 = min(_aw_ts(e) + float(e.get("duration") or 0), t1)
+        if s1 <= s0:
+            continue
+        sec = sum(max(0.0, min(s1, b) - max(s0, a)) for a, b in here) if present is not None else s1 - s0
+        if sec > 0:
+            acc[app] = acc.get(app, 0) + int(sec)
     apps = sorted(acc.items(), key=lambda kv: -kv[1])[:8]
     cache = {k: v for k, v in cache.items() if now - v.get("at", 0) < 86400}
     cache[key] = {"at": now, "apps": apps}
     atomic.write_json(cache_path, cache)
     return apps
+
+
+# -- terminal and browser attention, from timetrack's private.db -------------------------
+# term_segment (termclass) says which task / project / agent each terminal second was spent
+# on; web_visit (webclass) does the same for the browser. Read-only like everything here.
+# private.db holds pane titles and directories, so only the labels below are ever read out of
+# it -- never a title, a cwd or a prompt -- and the six JSON files stay free of them.
+
+TERMINAL_APP = re.compile(r"^(com\.mitchellh\.ghostty|ghostty|kitty|alacritty|foot|"
+                          r"org\.wezfurlong\.wezterm|wezterm)", re.IGNORECASE)
+
+
+def term_segments(t0, t1):
+    """[{sec, task_uuid, ref, project, agent, verdict}] clipped to [t0, t1)."""
+    conn = _ro(config.TT_DIR / "private.db")
+    if conn is None:
+        return []
+    try:
+        rows = conn.execute(
+            "SELECT start_unix, end_unix, task_uuid, ref, project, agent_name, verdict, labelled_by"
+            " FROM term_segment WHERE start_unix < ? AND end_unix > ?", (t1, t0)).fetchall()
+    except sqlite3.Error:
+        return []
+    finally:
+        conn.close()
+    return [{"sec": _clip(r["start_unix"], r["end_unix"], t0, t1), "task_uuid": r["task_uuid"],
+             "ref": r["ref"], "project": r["project"], "agent": r["agent_name"],
+             "verdict": r["verdict"], "by": r["labelled_by"]} for r in rows]
+
+
+def web_links(t0, t1):
+    """[(ticket, task_uuid, seconds)] for browser visits that were tied to something."""
+    conn = _ro(config.TT_DIR / "private.db")
+    if conn is None:
+        return []
+    try:
+        rows = conn.execute(
+            "SELECT start_unix, end_unix, ticket, task_uuid FROM web_visit WHERE start_unix < ?"
+            " AND end_unix > ? AND (ticket IS NOT NULL OR task_uuid IS NOT NULL)", (t1, t0)).fetchall()
+    except sqlite3.Error:
+        return []
+    finally:
+        conn.close()
+    return [(r["ticket"], r["task_uuid"], _clip(r["start_unix"], r["end_unix"], t0, t1)) for r in rows]
+
+
+def _add(acc, key, sec):
+    if key and sec > 0:
+        acc[key] = acc.get(key, 0) + sec
+
+
+def ranked(acc):
+    return sorted(((k, v) for k, v in acc.items() if v > 0), key=lambda kv: -kv[1])
+
+
+def attention(segs, links, uuid_ref, uuid_project):
+    """({ref: sec}, {project: sec}, {agent: sec}) of what the person's own attention went on.
+
+    Terminal and browser focus never overlap, so they add. A segment tied only to a task
+    still counts for that task's ref and project, via the Taskwarrior maps."""
+    refs, projects, agents = {}, {}, {}
+    for g in segs:
+        _add(refs, g["ref"] or uuid_ref.get(g["task_uuid"]), g["sec"])
+        _add(projects, g["project"] or uuid_project.get(g["task_uuid"]), g["sec"])
+        _add(agents, g["agent"], g["sec"])
+    for ticket, uuid, sec in links:
+        _add(refs, ticket or uuid_ref.get(uuid), sec)
+        _add(projects, uuid_project.get(uuid), sec)
+    return refs, projects, agents
+
+
+def merge_max(pairs, extra):
+    """[(key, sec)] and {key: sec} -> ranked [(key, sec)], the larger figure per key.
+
+    Max, not sum: the clock's run time and timewarrior's intervals measure the same hours
+    from another angle, so adding them to attention would count an hour twice."""
+    acc = dict(pairs)
+    for k, v in extra.items():
+        acc[k] = max(acc.get(k, 0), v)
+    return ranked(acc)
+
+
+def _hm(sec):
+    m = round(sec / 60)
+    return f"{m // 60}h{m % 60:02d}m" if m >= 60 else f"{m}m"
+
+
+def term_detail(segs):
+    """"work 3h12m / delegated 20m": the terminal app line read as what it was spent on."""
+    acc = {}
+    for g in segs:
+        # a verdict with no evidence behind it is a default, not a finding: say so
+        blind = g["by"] in ("none", "title") and not (g["ref"] or g["project"] or g["task_uuid"])
+        _add(acc, "unattributed" if blind else g["verdict"], g["sec"])
+    return " \u00b7 ".join(f"{k} {_hm(v)}" for k, v in ranked(acc)[:3])
 
 
 def clock_state(now=None):

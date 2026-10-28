@@ -28,6 +28,11 @@ CATEGORIES_TOML = CONF_DIR / "categories.toml"
 WEB_TOML = CONF_DIR / "web.toml"
 
 STATE_DIR = Path(os.environ.get("TIMETRACK_STATE_DIR") or XDG_DATA / "timetrack")
+# dots-overview's record of which Claude session ran where (written by dots-track-hook).
+# Read-only here: termclass joins it to pane time. Local file, never leaves the machine.
+SESSIONS_JSONL = (Path(os.environ.get("DOTS_OVERVIEW_STATE_DIR")
+                       or Path(os.environ.get("XDG_STATE_HOME") or HOME / ".local/state")
+                       / "dots-overview") / "sessions.jsonl")
 WORK_DB = STATE_DIR / "work.db"
 PRIVATE_DB = STATE_DIR / "private.db"
 LOGIND_JSONL = STATE_DIR / "events" / "logind.jsonl"

@@ -130,6 +130,22 @@ def start(uuid):
     run([uuid, "start"])
 
 
+def stop(uuid):
+    run([uuid, "stop"])
+
+
+def drop(uuid):
+    run([uuid, "delete"])
+
+
+def clear(uuid, *names):
+    """Unset UDAs (`modify` skips empty values, so clearing needs its own door)."""
+    for n in names:
+        if not re.fullmatch(r"[a-z]+", n):
+            raise TwError(f"bad attribute name {n!r}")
+    run([uuid, "modify"] + [f"{n}:" for n in names])
+
+
 def pending():
     return export("status:pending")
 

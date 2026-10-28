@@ -497,15 +497,18 @@ class Ingest(helpers.Scratch):
         rec.update(kw)
         atomic.write_json(config.STATE_DIR / "sessions" / f"{sess}.json", rec)
 
-    def test_new_session_becomes_one_task_with_agent_pane_and_is_idempotent(self):
+    def test_a_session_alone_never_invents_a_task(self):
+        # agents name their task with dots-task; a placeholder per session was noise
         self.session("sess-1")
-        r1 = ingest.run(live=[])
-        r2 = ingest.run(live=[])
-        self.assertEqual((r1["created"], r2["created"]), (1, 0))
-        t = self.tw.tasks[0]
-        self.assertEqual((t["src"], t["sess"], t["pane"], t["wspace"]), ("claude", "sess-1", "w1:p1", "w1"))
-        self.assertEqual(t["agent"], names.for_session("sess-1"))
-        self.assertEqual(t["tags"], ["mirror", "attn"])
+        self.assertEqual(ingest.run(live=[])["created"], 0)
+        self.assertEqual(self.tw.tasks, [])
+
+    def test_declared_task_gets_the_session_coordinates(self):
+        t = self.tw.seed(desc="Declared work", ref="local:abc123", src="claude", sess="sess-1", tags=["claude"])
+        self.session("sess-1")
+        r = ingest.run(live=[])
+        self.assertEqual((r["created"], r["updated"]), (0, 1))
+        self.assertEqual((t["pane"], t["wspace"], t["agent"]), ("w1:p1", "w1", names.for_session("sess-1")))
 
     def test_ticket_attaches_to_existing_ref_task_without_touching_its_title(self):
         orig = self.tw.seed(desc="Mirrored title", ref="TASK-2026-00561", src="erp", srcstate="task:open", tags=["mirror", "attn"])
@@ -524,18 +527,17 @@ class Ingest(helpers.Scratch):
         pending = [t for t in self.tw.tasks if t["status"] == "pending"]
         self.assertEqual([t["ref"] for t in pending], ["HD-50"])
 
-    def test_ticket_named_later_becomes_the_ref_when_nothing_mirrors_it(self):
-        self.session("sess-7")
-        ingest.run(live=[])
+    def test_ticket_named_with_nothing_mirroring_it_creates_nothing(self):
         self.session("sess-7", ticket="HD-51")
         ingest.run(live=[])
-        self.assertEqual([(t["ref"], t["src"]) for t in self.tw.tasks], [("HD-51", "claude")])
+        self.assertEqual(self.tw.tasks, [])
 
     def test_session_without_a_prompt_is_not_work_yet(self):
         self.session("sess-3", prompt_head="", action="session")
         self.assertEqual(ingest.run(live=[])["created"], 0)
 
     def test_live_herdr_pane_wins_over_the_recorded_one(self):
+        self.tw.seed(desc="Declared work", ref="local:abc124", src="claude", sess="sess-4", tags=["claude"])
         self.session("sess-4")
         ingest.run(live=[{"pane": "w7:p2", "workspace": "w7", "tab": "w7:t1", "sess": "sess-4", "status": "idle"}])
         self.assertEqual(self.tw.tasks[0]["pane"], "w7:p2")

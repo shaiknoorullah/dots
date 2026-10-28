@@ -13,6 +13,7 @@ Severity decides the exit code: any `fail` exits 1, warnings alone exit 0.
 import json
 import os
 import shutil
+import socket
 import sqlite3
 import subprocess
 import time
@@ -20,7 +21,7 @@ import urllib.error
 import urllib.request
 from datetime import date
 
-from . import attest, config, dbs, derive
+from . import attest, config, dbs, derive, herdr_proto, presence
 
 OK, WARN, FAIL = "ok", "warn", "fail"
 
@@ -30,7 +31,7 @@ def _r(name, status, detail, fix=""):
 
 
 def _schema(results):
-    for which, path, want in (("work", config.WORK_DB, 5), ("private", config.PRIVATE_DB, 3)):
+    for which, path, want in (("work", config.WORK_DB, 5), ("private", config.PRIVATE_DB, 4)):
         if not path.exists():
             results.append(_r(f"db:{which}", FAIL, "database file does not exist",
                               "timetrack migrate"))
@@ -354,6 +355,53 @@ def _web(results, types):
         results.append(_r("aw:web", OK, f"browser time ingested through {last}"))
 
 
+FOCUS_STALE_SECONDS = 3600
+
+
+def _herdr_up():
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    s.settimeout(1)
+    try:
+        s.connect(os.path.expanduser(herdr_proto.SOCKET))
+        return True
+    except OSError:
+        return False
+    finally:
+        s.close()
+
+
+def _focus(results):
+    """Is the focus log being written while herdr is up? Attribution only, so warn, never fail.
+
+    Silence here is the quiet failure: terminal time is ~90% of the day and without spans it
+    all falls back to workspace names. Judged only while herdr answers AND the human is
+    present, because a locked desk legitimately writes nothing."""
+    if not _herdr_up():
+        results.append(_r("focus:log", OK, "herdr is not running; nothing to log"))
+        return
+    try:
+        conn = sqlite3.connect(f"file:{config.PRIVATE_DB}?mode=ro", uri=True)
+        last, n = conn.execute(
+            "SELECT MAX(MAX(start_unix, COALESCE(end_unix, 0), COALESCE(seen_unix, 0))), COUNT(*)"
+            " FROM focus_span").fetchone()
+        conn.close()
+    except sqlite3.Error as e:
+        results.append(_r("focus:log", WARN, f"focus_span unreadable: {e}", "timetrack migrate"))
+        return
+    active, stale, _ = presence.aw_presence()
+    age = time.time() - last if last else None
+    if age is not None and age <= FOCUS_STALE_SECONDS:
+        results.append(_r("focus:log", OK, f"{n} span(s), newest activity {age / 60:.0f} min ago"))
+    elif active is False or stale:
+        results.append(_r("focus:log", OK, "no recent span, but nobody is at the desk to log"))
+    else:
+        results.append(_r("focus:log", WARN,
+                          f"herdr is up and you are present but the newest focus span is "
+                          f"{'absent' if age is None else f'{age / 3600:.1f}h old'}",
+                          "restart clockd (it holds the focus subscription); "
+                          "terminal time falls back to workspace names without it"))
+
+
 def _backup(results):
     latest = config.HOME / ".local/state/dots-ops/state/vault-backup.json"
     if not latest.exists():
@@ -385,6 +433,7 @@ def run(month=None):
         except sqlite3.Error as e:
             results.append(_r("queries", FAIL, f"{e}"))
     _activitywatch(results)
+    _focus(results)
     _enforcement(results)
     _backup(results)
     return results

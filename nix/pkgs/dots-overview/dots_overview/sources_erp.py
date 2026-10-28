@@ -119,7 +119,9 @@ def fetch_mcp(cfg, runner=subprocess.run):
             "--disallowedTools", ",".join(cfg.raw["ERP_MCP_DENY"].replace(",", " ").split()),
             "--permission-mode", "default", "--output-format", "text"]
     try:
-        p = runner(argv, capture_output=True, text=True, timeout=180, stdin=subprocess.DEVNULL)
+        # this headless run is not an agent session: the task gate (dots-task-hook) must stand down
+        p = runner(argv, capture_output=True, text=True, timeout=180, stdin=subprocess.DEVNULL,
+                   env={**os.environ, "DOTS_TASK_GATE": "off"})
         rows = json.loads(p.stdout[p.stdout.index("["):p.stdout.rindex("]") + 1])
     except (OSError, ValueError, subprocess.SubprocessError) as e:
         raise ErpError(f"mcp fetch failed: {type(e).__name__}") from e

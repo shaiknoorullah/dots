@@ -20,16 +20,18 @@ Race recoveries, each marked at its implementation:
   R7  herdr restarts under us                           -> reconnect with backoff
   R8  two daemons writing the same rows                 -> flock
   R9  closing a session while an agent still works      -> close predicate checks the machine
+  R10 focus logging must never take the clock down      -> wrapped, logged, rate-limited
 """
 import fcntl
 import json
 import signal
 import os
+import select
 import socket
 import time
 from datetime import date, datetime
 
-from . import attest, binding, clock_state, config, dbs, herdr_proto, presence
+from . import attest, binding, clock_state, config, dbs, focuslog, herdr_proto, presence
 
 SOCK = os.path.expanduser(herdr_proto.SOCKET)
 CACHE = config.STATE_DIR / "clock.json"
@@ -69,11 +71,12 @@ def sd_notify(state):
 
 
 class Clockd:
-    def __init__(self, conn, now=None):
+    def __init__(self, conn, now=None, private=None):
         self.conn = conn
         self.clock = clock_state.Clock()
         self.sock = None
         self.f = None
+        self.buf = b""                 # bytes read off the stream, not yet a whole frame
         self.subscribed = set()        # pane_ids with a live agent_status subscription
         self.session_id = None
         self.attendance_day = None
@@ -84,6 +87,10 @@ class Clockd:
         self.pending_grace = {}        # R3: pane_id -> act-after timestamp
         self.wall0 = now or time.time()
         self.mono0 = time.monotonic()
+        self.last_alive = self.wall0   # last instant the loop was known to be running
+        self.focus_errors = 0
+        # private.db: pane labels and cwds name the employer, so they never touch work.db
+        self.focus = focuslog.FocusLog(private, self._snapshot) if private is not None else None
 
     # -- socket ------------------------------------------------------------
     def _open(self):
@@ -105,12 +112,31 @@ class Clockd:
         finally:
             s.close()
 
+    def _snapshot(self):
+        return self._rpc(herdr_proto.M_SNAPSHOT).get("result")
+
+    def _focus(self, fn, *args):
+        """R10: the focus log is attribution, never the clock. Any failure here -- a missing
+        table, a locked database, a malformed snapshot -- is logged and swallowed, and the
+        first one is loud while the rest are sampled so a broken log cannot flood the journal."""
+        if self.focus is None:
+            return None
+        try:
+            return fn(*args)
+        except Exception as e:      # noqa: BLE001
+            self.focus_errors += 1
+            if self.focus_errors == 1 or self.focus_errors % 100 == 0:
+                focuslog.log(f"{getattr(fn, '__name__', 'op')} failed ({self.focus_errors}x): {e!r}")
+            return None
+
     def connect(self):
         self._rpc(herdr_proto.M_PING)          # R7: fail fast if herdr is not really there
         self.sock, self.f = self._open()
         self.sock.settimeout(1.0)
+        self.buf = b""
         self._subscribe(self._agent_panes())
         self.reconcile(time.time(), reason="connect")
+        self._focus(self.focus.connect if self.focus else None, time.time())
 
     def _agent_panes(self):
         r = self._rpc(herdr_proto.M_AGENT_LIST).get("result") or {}
@@ -118,15 +144,35 @@ class Clockd:
 
     def _subscribe(self, panes):
         subs = [{"type": t} for t in (
-            "pane.created", "pane.closed", "pane.exited", "pane.agent_detected")]
+            "pane.created", "pane.closed", "pane.exited", "pane.agent_detected",
+            # focus attribution (focuslog): none of these need a pane_id
+            "pane.focused", "tab.focused", "workspace.focused", "pane.updated")]
         # agent_status_changed cannot be watched globally -- it REQUIRES a pane_id, which
         # is the whole reason this daemon tracks pane lifecycle at all (herdr_proto)
         subs += [{"type": "pane.agent_status_changed", "pane_id": p} for p in panes]
-        self.f.write((json.dumps({"id": "s", "method": herdr_proto.M_SUBSCRIBE,
-                                  "params": {"subscriptions": subs}}) + "\n").encode())
-        self.f.flush()
-        self.f.readline()
+        self.sock.sendall((json.dumps({"id": "s", "method": herdr_proto.M_SUBSCRIBE,
+                                       "params": {"subscriptions": subs}}) + "\n").encode())
+        self._read_line(10.0)
         self.subscribed = set(panes)
+
+    def _read_line(self, timeout=1.0):
+        """One frame off the event stream; raises socket.timeout if none arrives in time.
+
+        Not `makefile().readline()`: once a read on a makefile object times out, EVERY later
+        read on it raises "cannot read from timed out object". The loop treated that as a
+        dropped connection, so an idle stream -- the normal state -- was torn down and
+        rebuilt every couple of seconds, and each rebuild is a gap in the focus log. A
+        timeout here is just "nothing yet", and the bytes already read stay in self.buf."""
+        while b"\n" not in self.buf:
+            ready, _, _ = select.select([self.sock], [], [], timeout)
+            if not ready:
+                raise socket.timeout("no frame")
+            chunk = self.sock.recv(65536)
+            if not chunk:
+                return b""
+            self.buf += chunk
+        line, _, self.buf = self.buf.partition(b"\n")
+        return line + b"\n"
 
     # -- reconciliation ----------------------------------------------------
     def close_dangling(self, now):
@@ -237,6 +283,8 @@ class Clockd:
         if self.run_open_at is not None:
             self._close_run(now, "shutdown")
             self._attest("clean_shutdown", now)
+        if self.focus is not None:
+            self._focus(self.focus.close, now, "shutdown")
         self._cache(now)
 
     def reconcile(self, now, reason="periodic"):
@@ -267,6 +315,8 @@ class Clockd:
         ev = frame.get("event")
         data = frame.get("data") or {}
         pid = data.get("pane_id")
+        if self.focus is not None:
+            self._focus(self.focus.on_event, ev, data, recv)
         if ev == "pane_agent_status_changed":
             status = data.get("agent_status") or data.get("status") or "unknown"
             if status == "blocked":
@@ -287,7 +337,10 @@ class Clockd:
         # last instant we were awake rather than crediting the sleep.
         drift = (now - self.wall0) - (time.monotonic() - self.mono0)
         if abs(drift) > SUSPEND_SKEW:
-            self._close_run(self.wall0 + (time.monotonic() - self.mono0), "suspend")
+            asleep_at = self.wall0 + (time.monotonic() - self.mono0)
+            self._close_run(asleep_at, "suspend")
+            if self.focus is not None:
+                self._focus(self.focus.suspend, asleep_at)
             self._attest("suspend_detected", now)
         self.wall0, self.mono0 = now, time.monotonic()
 
@@ -298,10 +351,14 @@ class Clockd:
         if now - self.last_presence >= PRESENCE_SECONDS:
             p = presence.human_active()
             self.clock.set_human(p.active, now)
+            if self.focus is not None:
+                self._focus(self.focus.set_present, p.active, now)
             self.presence_detail = p
             self.last_presence = now
         if now - self.last_reconcile >= RECONCILE_SECONDS:
             self.reconcile(now)
+        if self.focus is not None:
+            self._focus(self.focus.tick, now)
         self.clock.tick(now)
         self._settle(now)
         self.maybe_close_session(now)
@@ -314,7 +371,7 @@ class Clockd:
                 if self.sock is None:
                     self.connect()
                     attempt = 0
-                line = self.f.readline()
+                line = self._read_line()
                 recv = time.time()               # stamp on READ, before parsing
                 if not line:
                     raise ConnectionError("herdr closed the stream")
@@ -322,12 +379,15 @@ class Clockd:
             except socket.timeout:
                 pass
             except (OSError, ConnectionError, ValueError):
+                # the focus span ends where we were last known alive, never across the gap
+                self._focus(self.focus.gap if self.focus else None, self.last_alive)
                 self._drop()                     # R7
                 delay = BACKOFF[min(attempt, len(BACKOFF) - 1)]
                 attempt += 1
                 time.sleep(delay)
                 continue
             self.tick(time.time())
+            self.last_alive = time.time()
             sd_notify("WATCHDOG=1")
             if stop_after and time.time() - start >= stop_after:
                 return
@@ -440,8 +500,10 @@ def main(stop_after=None):
     fh = acquire_lock()
     if fh is None:
         raise SystemExit("timetrack: another clockd holds the lock")
-    with dbs.open_work() as conn:
-        d = Clockd(conn)
+    with dbs.open_work() as conn, dbs.open_private() as private:
+        d = Clockd(conn, private=private)
+        # a previous life's open spans end where it last looked (before connect opens new ones)
+        d._focus(d.focus.close_dangling)
         d.connect()
         n = d.close_dangling(time.time())      # R2: a previous life may have been killed
         if n:

@@ -51,11 +51,14 @@ def hook(event, args):
         bad.append(addr)
 sys.addaudithook(hook)
 
-from timetrack import doctor, presence
+from timetrack import doctor, focuslog, presence, termclass
 from timetrack.backfill import aw
 
 presence.aw_presence()
-for fn in (lambda: aw.bucket("afkstatus"), lambda: doctor._activitywatch([])):
+# terminal attribution: the model call must be loopback, herdr must be a unix socket
+for fn in (lambda: aw.bucket("afkstatus"), lambda: doctor._activitywatch([]),
+           lambda: termclass.llm_label([{"k": "a", "item": {}}], [], set(), "m"),
+           lambda: focuslog.snapshot(), lambda: doctor._focus([])):
     try: fn()
     except BaseException: pass   # no aw-server in CI: refused, but the connect was audited
 
