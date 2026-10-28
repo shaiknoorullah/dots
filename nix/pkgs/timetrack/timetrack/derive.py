@@ -21,6 +21,30 @@ def _rates(working_days):
     return daily, daily / config.hours_per_day()
 
 
+def basis(r, calib=None):
+    """The minutes one day contributes, and on what footing.
+
+    Net of breaks whenever breaks were recorded -- that is the employer's rule, and a
+    span is always the larger number. Only a day with no break recorded falls back to
+    its span, and only a GIT-DERIVED span is calibrated: the calibration factor exists
+    to correct commit-derived estimates against measured ones. Applying it to the
+    hand-kept sheet would inflate the user's own authoritative record by 18% and turn a
+    real shortfall into an apparent surplus -- which is exactly what it did.
+    """
+    calib = config.calibration() if calib is None else calib
+    if r["net_minutes"] is not None:
+        # An unconfirmed gap is a GUESS about what the absence was. Deducting it is the
+        # conservative choice -- an offline meeting is worked time, so the true figure
+        # can only be higher -- but the result must not be labelled a settled net
+        # figure. Calling both "net" is how an unclassified day would pass review.
+        return r["net_minutes"], ("net?" if (r["unconfirmed"] or 0) else "net")
+    span = r["span_minutes"] or 0
+    prov = r["provenance"] or ""
+    if "git" in prov:
+        return round(span * calib), "span:calibrated"
+    return span, "span"
+
+
 def month_summary(conn, month, today=None):
     """Everything needed for the summary page of a submission.
 
@@ -47,32 +71,10 @@ def month_summary(conn, month, today=None):
 
     calib = config.calibration()
 
-    def basis(r):
-        """The minutes one day contributes, and on what footing.
-
-        Net of breaks whenever breaks were recorded -- that is the employer's rule, and a
-        span is always the larger number. Only a day with no break recorded falls back to
-        its span, and only a GIT-DERIVED span is calibrated: the calibration factor exists
-        to correct commit-derived estimates against measured ones. Applying it to the
-        hand-kept sheet would inflate the user's own authoritative record by 18% and turn a
-        real shortfall into an apparent surplus -- which is exactly what it did.
-        """
-        if r["net_minutes"] is not None:
-            # An unconfirmed gap is a GUESS about what the absence was. Deducting it is the
-            # conservative choice -- an offline meeting is worked time, so the true figure
-            # can only be higher -- but the result must not be labelled a settled net
-            # figure. Calling both "net" is how an unclassified day would pass review.
-            return r["net_minutes"], ("net?" if (r["unconfirmed"] or 0) else "net")
-        span = r["span_minutes"] or 0
-        prov = r["provenance"] or ""
-        if "git" in prov:
-            return round(span * calib), "span:calibrated"
-        return span, "span"
-
     def total(rs):
-        return sum(basis(r)[0] for r in rs)
+        return sum(basis(r, calib)[0] for r in rs)
 
-    bases = sorted({basis(r)[1] for r in working if r["span_minutes"]})
+    bases = sorted({basis(r, calib)[1] for r in working if r["span_minutes"]})
     worked_to_date = total(elapsed)
     worked_all = total(working)
     daily_rate, hourly_rate = _rates(working_days)
