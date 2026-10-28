@@ -184,3 +184,32 @@ class Workday(helpers.Scratch):
 
     def test_a_week_that_starts_on_a_day_off_begins_at_the_next_login(self):
         self.assertEqual(local_tt.workday_start(datetime(2026, 10, 26).date()), self.at(27, 19, 27))
+
+
+class AgentOnlyIsNotWorked(helpers.Scratch):
+    """A session the live clock keeps open for an agent is not my time (plan D3)."""
+
+    def setUp(self):
+        super().setUp()
+        config.TT_DIR.mkdir(parents=True, exist_ok=True)
+        db = sqlite3.connect(config.TT_DIR / "work.db")
+        db.executescript("""CREATE TABLE work_session (id INTEGER PRIMARY KEY, opened_unix INTEGER, closed_unix INTEGER,
+                              attendance_day TEXT, open_trigger TEXT);
+                            CREATE TABLE deduction (start_unix INTEGER, end_unix INTEGER, session_id INTEGER);
+                            CREATE TABLE schema_meta (k TEXT PRIMARY KEY, v TEXT);
+                            INSERT INTO schema_meta VALUES ('live_counts', '0');""")
+        self.t = int(datetime(2026, 10, 28, 20, 0).timestamp())
+        # me 20:00-23:00 (aw); the live clock 20:00-03:00 because an agent kept working
+        db.executemany("INSERT INTO work_session (opened_unix, closed_unix, attendance_day, open_trigger) VALUES (?,?,?,?)",
+                       [(self.t, self.t + 3 * 3600, "2026-10-28", "aw"), (self.t, self.t + 7 * 3600, "2026-10-28", "clockd")])
+        db.commit()
+        self.db = db
+
+    def test_worked_counts_only_my_sessions(self):
+        self.assertEqual(local_tt.worked_sec(self.t, self.t + 8 * 3600, self.t + 8 * 3600), 3 * 3600)
+        self.assertEqual(local_tt.day_bounds(datetime(2026, 10, 28).date(), self.t + 8 * 3600), (self.t, self.t + 3 * 3600))
+
+    def test_promoted_live_clock_counts(self):
+        self.db.execute("UPDATE schema_meta SET v = '1' WHERE k = 'live_counts'")
+        self.db.commit()
+        self.assertEqual(local_tt.worked_sec(self.t, self.t + 8 * 3600, self.t + 8 * 3600), 7 * 3600)

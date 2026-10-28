@@ -37,6 +37,22 @@ def day_start(d):
 # session opened). A day's bounds are its sessions' first open and last close (now while
 # one is open). Dates with no session fall back to local midnight, which has nothing in it.
 
+def _human(conn):
+    """SQL filter for the sessions that are MY time, the same rule as timetrack's headline.
+
+    clockd keeps a session (and a run) open while an agent advances with me away; that time is
+    agent-only and never billable (plan D3). Until timetrack promotes the live clock
+    (schema_meta live_counts = '1', which it does only once agent-only time is split out), its
+    sessions are a shadow: Worked, the day's bounds and the brief count everything else."""
+    try:
+        if "open_trigger" not in {r[1] for r in conn.execute("PRAGMA table_info(work_session)")}:
+            return "1"                      # an older or hand-built table: every session is mine
+        row = conn.execute("SELECT v FROM schema_meta WHERE k = 'live_counts'").fetchone()
+    except sqlite3.Error:
+        row = None
+    return "1" if row and row[0] == "1" else "open_trigger IS NOT 'clockd'"
+
+
 def _sessions():
     """{attendance_day (date): [opened_unix, closed_unix or None]} merged per day."""
     conn = _ro(config.TT_DIR / "work.db")
@@ -44,7 +60,8 @@ def _sessions():
         return {}
     out = {}
     try:
-        for r in conn.execute("SELECT attendance_day, opened_unix, closed_unix FROM work_session"):
+        for r in conn.execute("SELECT attendance_day, opened_unix, closed_unix FROM work_session"
+                              f" WHERE {_human(conn)}"):
             try:
                 d = datetime.strptime(r["attendance_day"], "%Y-%m-%d").date()
             except (TypeError, ValueError):
@@ -125,7 +142,7 @@ def worked_by_day(first, last, now=None):
     try:
         sess = [(r["opened_unix"], _end(r, now), r["id"]) for r in conn.execute(
             "SELECT id, opened_unix, closed_unix FROM work_session"
-            " WHERE opened_unix < ? AND COALESCE(closed_unix, ?) > ?", (t1, now, t0))]
+            f" WHERE {_human(conn)} AND opened_unix < ? AND COALESCE(closed_unix, ?) > ?", (t1, now, t0))]
         ded = [(r["start_unix"], r["end_unix"], r["session_id"]) for r in conn.execute(
             "SELECT start_unix, end_unix, session_id FROM deduction"
             " WHERE end_unix IS NOT NULL AND start_unix < ? AND end_unix > ?", (t1, t0))]
@@ -154,7 +171,7 @@ def worked_sec(t0, t1, now=None):
     try:
         sess = [(r["opened_unix"], _end(r, now)) for r in conn.execute(
             "SELECT opened_unix, closed_unix FROM work_session"
-            " WHERE opened_unix < ? AND COALESCE(closed_unix, ?) > ?", (t1, now, t0))]
+            f" WHERE {_human(conn)} AND opened_unix < ? AND COALESCE(closed_unix, ?) > ?", (t1, now, t0))]
         ded = [(r["start_unix"], r["end_unix"]) for r in conn.execute(
             "SELECT start_unix, end_unix FROM deduction"
             " WHERE end_unix IS NOT NULL AND start_unix < ? AND end_unix > ?", (t1, t0))]
