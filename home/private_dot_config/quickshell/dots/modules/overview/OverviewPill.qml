@@ -46,6 +46,10 @@ Item {
         Feed.anchorBottom = Look.barHeight
     }
     onXChanged: publishAnchor()
+    Connections {
+        target: Feed
+        function onAnchorWanted() { pill.publishAnchor() }
+    }
     onWidthChanged: publishAnchor()
     Component.onCompleted: { publishAnchor(); Qt.callLater(function () { pill.ready = true }) }
 

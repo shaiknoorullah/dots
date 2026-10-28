@@ -71,6 +71,9 @@ Singleton {
     property string anchorScreen: ""
     property real anchorX: 0
     property real anchorBottom: 30
+    // asked by the host before it opens anything: the pill re-measures where it is, since
+    // its x inside its row does not change when the rest of the bar shifts around it
+    signal anchorWanted()
 
     // The item the Item page shows. openItem() also tells a visible panel to switch to it.
     property string selectedId: ""
