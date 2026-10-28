@@ -24,6 +24,7 @@ away.STATE = tmp / "state" / "away-state.json"
 away.INTENT = tmp / "state" / "away-intent.json"
 config.PANIC = tmp / "config" / "timetrack" / "PANIC"
 away._toast = lambda body: None
+away._brief = away._wrap = lambda *a: None
 aw.write = lambda conn, **kw: None      # the refresh is tests/refresh.sh's subject
 
 T = int(datetime(2026, 10, 27, 17, 0).timestamp())

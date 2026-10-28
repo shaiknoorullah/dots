@@ -89,6 +89,7 @@ printf '#!/bin/sh\necho "$*" > "%s/spawned"\n' "$tmp" > "$tmp/logbin/dots-overvi
   PATH="$tmp/logbin:/usr/bin:/bin" TIMETRACK_STATE_DIR="$tmp/tt2" python3 -c '
 from timetrack import away, migrate
 migrate.migrate()
+away._wrap = lambda now: None   # the D18 wrap prompt is tests/health.sh'"'"'s
 away.declare("logout")
 away.declare("walk")
 ' 2>&1
@@ -99,10 +100,12 @@ rm -f "$tmp/spawned"
 (cd "$root/nix/pkgs/timetrack" && PATH="/usr/bin:/bin" TIMETRACK_STATE_DIR="$tmp/tt3" python3 -c '
 from timetrack import away, migrate
 migrate.migrate()
+away._wrap = lambda now: None   # the D18 wrap prompt is tests/health.sh'"'"'s
 away.declare("logout")') && ok "without dots-overview installed the declaration still works" || bad "declare broke without dots-overview"
 (cd "$root/nix/pkgs/timetrack" && PATH="$tmp/logbin:/usr/bin:/bin" TIMETRACK_STATE_DIR="$tmp/tt4" python3 -c '
 from timetrack import away, migrate
 migrate.migrate()
+away._wrap = lambda now: None   # the D18 wrap prompt is tests/health.sh'"'"'s
 away.declare("meal")'); sleep 0.5
 [ ! -f "$tmp/spawned" ] && ok "only logout spawns the brief" || bad "another reason spawned it"
 

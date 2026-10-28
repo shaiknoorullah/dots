@@ -40,6 +40,7 @@ STATE = config.STATE_DIR / "away-state.json"
 INTENT = config.STATE_DIR / "away-intent.json"
 PRAYER_TIMES = config.HOME / ".config/adhd/prayer-times.conf"
 POLL = 15
+QUIET_LOGIN = 150 * 60     # clockd's QUIET_CLOSE: this long without presence ends a session
 DINNER_FROM = 17           # a long break from 17:00 on is dinner, not lunch (WORK_V2)
 
 # picker key -> (lock-screen label, deduction category; None = meeting = worked time)
@@ -137,6 +138,7 @@ def declare(key, now=None):
                          (now, DECLARED))
             conn.commit()
         _brief()
+        _wrap(now)
     return label
 
 
@@ -148,6 +150,16 @@ def _brief():
                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
         except OSError:
             pass
+
+
+def _wrap(now):
+    """D18: the wrap checkpoint, asked on the way out. Detached: never holds up the lock."""
+    try:
+        subprocess.Popen([sys.executable, "-m", "timetrack", "health", "ask", "wrap"],
+                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL, start_new_session=True)
+    except OSError:
+        pass
 
 
 def take_intent(g0, g1):
@@ -245,8 +257,51 @@ def prayer_now(now=None):
     return salah_hint(now, now) or ""
 
 
+def present(events, now):
+    """True while the newest afk event is not-afk and still being extended."""
+    if not events:
+        return False
+    cur = events[0]
+    if (cur.get("data") or {}).get("status") != "not-afk":
+        return False
+    return _ts(cur["timestamp"]) + float(cur.get("duration") or 0) >= now - 120
+
+
+def _logged_out_since(t):
+    try:
+        with dbs.open_work(readonly=True) as conn:
+            return conn.execute("SELECT 1 FROM logout WHERE ts_unix > ?", (t,)).fetchone() is not None
+    except Exception:
+        return False
+
+
+def login_due(st, events, now):
+    """Is this the first presence of a new session (after a logout, or QUIET_LOGIN quiet)?
+
+    Updates st["last_active"]. The very first look only records presence: deploying the
+    watcher mid-session must not look like a login.
+    """
+    if not present(events, now):
+        return False
+    last = st.get("last_active")
+    st["last_active"] = int(now)
+    if last is None:
+        return False
+    return now - last >= QUIET_LOGIN or _logged_out_since(last)
+
+
+def on_login(now):
+    """D10, D15, D18 at the start of a session. One failure must not stop the others."""
+    from . import health, login
+    for hook in (login.on_login, health.on_login):
+        try:
+            hook(int(now))
+        except (Exception, SystemExit) as e:
+            print(f"away: login hook {hook.__module__}: {e}", file=sys.stderr, flush=True)
+
+
 def watch():
-    """Poll the afk bucket; handle each return once."""
+    """Poll the afk bucket; handle each return once, and each login once."""
     if shutil.which("notify-send") is None:
         print("away: notify-send missing; toasts will be silent", file=sys.stderr)
     while True:
@@ -256,7 +311,7 @@ def watch():
             ret = last_return(events, now)
         except SystemExit as e:      # aw-server down: nothing to detect, keep watching
             print(f"away: {e}", file=sys.stderr)
-            ret = None
+            events, ret = [], None
         st = _state()
         if ret and ret[1] > st.get("handled", 0):
             st["handled"] = ret[1]
@@ -266,4 +321,12 @@ def watch():
             except (Exception, SystemExit) as e:   # one bad return must not kill the watcher
                 out = f"error: {e}"
             print(f"away {_clock(ret[0])}-{_clock(ret[1])}: {out}", file=sys.stderr, flush=True)
+        st = _state()
+        before = st.get("last_active")
+        if login_due(st, events, now):
+            _write(STATE, st)
+            print(f"away: login at {_clock(now)}", file=sys.stderr, flush=True)
+            on_login(now)
+        elif before is None or now - before >= 60:
+            _write(STATE, st)      # a heartbeat a minute is plenty against 150 min
         time.sleep(POLL)
