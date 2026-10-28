@@ -36,7 +36,7 @@ class Launch(unittest.TestCase):
 
     def test_first_dispatch_creates_the_hangar_and_names_the_tab(self):
         h = FakeHerdr([{"workspace_id": "w1", "label": "Elsewhere"}])
-        r = launch.launch(PARENT, ["Read it", "Fix it"], "Read it", STEP, cfg=self.cfg, run=h)
+        r = launch.launch(PARENT, ["Read it", "Fix it"], "Read it", STEP, cfg=self.cfg, run=h, sleep=lambda s: None)
         self.assertEqual(r, {"pane": "w5:p1", "tab": "w5:t1", "reused": False})
         create = next(c for c in h.calls if c[:2] == ["workspace", "create"])
         self.assertIn("Hangar", create)
@@ -48,7 +48,7 @@ class Launch(unittest.TestCase):
 
     def test_later_dispatches_add_a_tab_to_the_existing_hangar(self):
         h = FakeHerdr([{"workspace_id": "w5", "label": "Hangar"}])
-        r = launch.launch(PARENT, ["Read it"], "Read it", STEP, cfg=self.cfg, run=h)
+        r = launch.launch(PARENT, ["Read it"], "Read it", STEP, cfg=self.cfg, run=h, sleep=lambda s: None)
         self.assertEqual(r["pane"], "w5:p2")
         create = next(c for c in h.calls if c[:2] == ["tab", "create"])
         self.assertEqual(create[2:4], ["--workspace", "w5"])
@@ -57,16 +57,24 @@ class Launch(unittest.TestCase):
     def test_a_live_agent_on_the_step_is_focused_not_duplicated(self):
         h = FakeHerdr([{"workspace_id": "w5", "label": "Hangar"}],
                       [{"pane_id": "w5:p2", "tab_id": "w5:t2", "workspace_id": "w5", "agent": "claude"}])
-        r = launch.launch(PARENT, ["Read it"], "Read it", dict(STEP, pane="w5:p2"), cfg=self.cfg, run=h)
+        r = launch.launch(PARENT, ["Read it"], "Read it", dict(STEP, pane="w5:p2"), cfg=self.cfg, run=h, sleep=lambda s: None)
         self.assertTrue(r["reused"])
         self.assertFalse(any(c[:2] in (["tab", "create"], ["agent", "start"]) for c in h.calls))
 
     def test_the_brief_prompt_is_read_only(self):
         h = FakeHerdr([{"workspace_id": "w5", "label": "Hangar"}])
-        launch.launch(dict(PARENT, src="erp", ref="TASK-2026-00001"), ["Read it"], "Read it", STEP, cfg=self.cfg, run=h)
+        launch.launch(dict(PARENT, src="erp", ref="TASK-2026-00001"), ["Read it"], "Read it", STEP, cfg=self.cfg, run=h, sleep=lambda s: None)
         text = next(c for c in h.calls if c[:2] == ["agent", "prompt"])[3]
         for must in ("READ ONLY", "Never create, update, comment on", "never answer anyone on my behalf", "stop and wait"):
             self.assertIn(must, text)
+
+    def test_agent_start_is_retried_until_the_shell_is_ready(self):
+        h = FakeHerdr([{"workspace_id": "w5", "label": "Hangar"}])
+        fails = [None, None]
+        inner = h.__call__
+        h_run = lambda args, timeout=5: (fails.pop() if args[:2] == ["agent", "start"] and fails else inner(args, timeout))  # noqa: E731
+        r = launch.launch(PARENT, ["Read it"], "Read it", STEP, cfg=self.cfg, run=h_run, sleep=lambda s: None)
+        self.assertEqual(r["pane"], "w5:p2")
 
     def test_no_repo_checkout_uses_agent_cwd(self):
         self.assertEqual(launch.cwd_for("TASK-2026-00001", self.cfg), str(self.home))

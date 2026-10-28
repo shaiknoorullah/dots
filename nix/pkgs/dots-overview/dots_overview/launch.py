@@ -16,6 +16,7 @@ starting another.
 import json
 import os
 import re
+import time
 from pathlib import Path
 
 from . import config, herdr, names
@@ -80,7 +81,7 @@ def live_agent_for(step_uuid, snap, task):
     return None
 
 
-def launch(parent, steps, current, step_task, cfg=None, run=None):
+def launch(parent, steps, current, step_task, cfg=None, run=None, sleep=time.sleep):
     """Open the tab, start Claude, send the brief prompt. Returns {'pane', 'tab', 'reused'} or
     {'error': ...}. `run` is the herdr seam tests replace."""
     cfg = cfg or config.Work()
@@ -106,7 +107,13 @@ def launch(parent, steps, current, step_task, cfg=None, run=None):
     if not ws and tab:
         run(["tab", "rename", tab, label])
     name = names.for_session(step_task["uuid"])
-    if run(["agent", "start", name, "--kind", "claude", "--pane", pane, "--timeout", "60000"], timeout=70) is None:
+    # a fresh tab's shell takes a moment to reach its prompt, and herdr refuses to start an
+    # agent before that: retry for up to ~15 s
+    for attempt in range(8):
+        if run(["agent", "start", name, "--kind", "claude", "--pane", pane, "--timeout", "60000"], timeout=70) is not None:
+            break
+        sleep(2)
+    else:
         return {"error": f"claude did not start in {pane}", "pane": pane}
     if run(["agent", "prompt", pane, prompt_for(parent, steps, current)], timeout=15) is None:
         return {"error": f"the brief prompt was not delivered to {pane}", "pane": pane}
