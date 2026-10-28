@@ -48,6 +48,10 @@ job_main() {
   { "$tt" web --day "$(date -d yesterday +%F)" && "$tt" web; } >/dev/null 2>&1 || \
     ops_state timetrack-capture warn "web ingest failed; is the ActivityWatch browser extension installed?"
 
+  # Terminal time per pane -> session -> task -> project (private.db), local model for leftovers.
+  { "$tt" term --day "$(date -d yesterday +%F)" && "$tt" term; } >/dev/null 2>&1 || \
+    ops_state timetrack-capture warn "term attribution failed; see: timetrack term"
+
   out=$("$tt" doctor 2>&1); rc=$?
   summary=$(printf '%s' "$out" | tail -1)
   if [ "$rc" -ne 0 ]; then
