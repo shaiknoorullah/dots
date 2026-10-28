@@ -1,8 +1,10 @@
 import QtQuick
 import "../theme"
 import "../common"
+import "../../services"
 
-// Notification history and the do-not-disturb switch, as a popout under the bell.
+// Notification history (newest first, scrolls past 520 px) and the do-not-disturb switch,
+// as a popout under the bell. Each row is a NotifCard: click opens the source, × dismisses.
 Popout {
   id: win
 
@@ -67,39 +69,45 @@ Popout {
       dim: true
     }
 
-    Repeater {
-      model: win.notifs ? win.notifs.model : null
+    Flickable {
+      id: list
+      width: parent.width
+      height: Math.min(contentHeight, 520)
+      contentHeight: rows.implicitHeight
+      clip: true
+      boundsBehavior: Flickable.StopAtBounds
+      visible: win.notifs !== null && win.notifs.count > 0
 
-      Item {
-        id: row
-        required property var modelData
-        width: parent.width
-        height: item.implicitHeight + Theme.space.l
+      Column {
+        id: rows
+        width: list.width
+        spacing: Theme.space.l
 
-        Column {
-          id: item
-          width: parent.width
-          spacing: Theme.space.xs
-          DText {
-            width: parent.width
-            text: row.modelData.summary
-            elide: Text.ElideRight
-            font.weight: Font.DemiBold
+        Repeater {
+          // newest first
+          model: win.notifs && win.notifs.model ? win.notifs.model.values.slice().reverse() : []
+
+          Rectangle {
+            id: row
+            required property var modelData
+            width: rows.width
+            height: card.implicitHeight + 2 * Theme.space.l
+            radius: Theme.radius.chip
+            color: hov.hovered ? Qt.alpha(Theme.color.fg, Theme.alpha.hover) : "transparent"
+
+            HoverHandler { id: hov }
+
+            NotifCard {
+              id: card
+              x: Theme.space.l
+              y: Theme.space.l
+              width: parent.width - 2 * Theme.space.l
+              notification: row.modelData
+              summaryLines: 2
+              bodyLines: 3
+              onOpened: Ui.close()
+            }
           }
-          DText {
-            width: parent.width
-            text: row.modelData.body
-            dim: true
-            role: "bodyS"
-            wrapMode: Text.WordWrap
-            maximumLineCount: 3
-            elide: Text.ElideRight
-            visible: text !== ""
-          }
-        }
-        MouseArea {
-          anchors.fill: parent
-          onClicked: row.modelData.dismiss()
         }
       }
     }

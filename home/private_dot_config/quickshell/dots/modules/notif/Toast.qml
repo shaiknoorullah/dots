@@ -3,7 +3,8 @@ import QtQuick
 import "../theme"
 import "../common"
 
-// One toast: 380 wide, padding 14, radius 16. It hides itself when its time is up (the
+// One toast: 380 wide, padding 14, radius 16. Click opens the source, × dismisses, action
+// buttons run the app's actions (NotifCard). It hides itself when its time is up (the
 // notification stays in the centre) and re-appears when the app REPLACES it in place:
 // the server updates the same Notification object, so summary/body changing is the cue.
 Item {
@@ -37,7 +38,7 @@ Item {
   Timer {
     id: life
     interval: toast.lifetime
-    running: toast.alive && !toast.critical && !hover.containsMouse
+    running: toast.alive && !toast.critical && !hover.hovered
     onTriggered: toast.alive = false
   }
 
@@ -48,50 +49,17 @@ Item {
     width: parent.width
     height: col.implicitHeight + 2 * 14
 
-    Column {
+    NotifCard {
       id: col
       x: 14
       y: 14
       width: parent.width - 28
-      spacing: Theme.space.s
-
-      DText {
-        width: parent.width
-        text: toast.modelData.appName
-        dim: true
-        role: "caption"
-        elide: Text.ElideRight
-        visible: text !== ""
-      }
-      DText {
-        width: parent.width
-        text: toast.modelData.summary
-        role: "title"
-        wrapMode: Text.WordWrap
-        maximumLineCount: 2
-        elide: Text.ElideRight
-      }
-      DText {
-        width: parent.width
-        text: toast.modelData.body
-        dim: true
-        role: "bodyS"
-        wrapMode: Text.WordWrap
-        maximumLineCount: 4
-        elide: Text.ElideRight
-        visible: text !== ""
-      }
+      notification: toast.modelData
+      summaryLines: 2
+      bodyLines: 4
+      onOpened: toast.alive = false
     }
 
-    MouseArea {
-      id: hover
-      anchors.fill: parent
-      hoverEnabled: true
-      acceptedButtons: Qt.LeftButton | Qt.RightButton
-      onClicked: mouse => {
-        if (mouse.button === Qt.RightButton) toast.modelData.dismiss();
-        else toast.alive = false;
-      }
-    }
+    HoverHandler { id: hover }
   }
 }

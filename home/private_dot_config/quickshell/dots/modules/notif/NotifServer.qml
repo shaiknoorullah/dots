@@ -52,7 +52,7 @@ Scope {
     active: root.checked && !root.held
 
     NotificationServer {
-      keepOnReload: false
+      keepOnReload: true
       actionsSupported: true
       bodySupported: true
       imageSupported: true

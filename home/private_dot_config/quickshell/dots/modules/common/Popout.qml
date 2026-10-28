@@ -1,5 +1,6 @@
 import Quickshell
 import Quickshell.Wayland
+import Quickshell.Io
 import QtQuick
 import "../theme"
 import "../../services"
@@ -43,10 +44,38 @@ PanelWindow {
       marginLeft = Math.max(Theme.space.l, Math.min(screen.width - panelWidth - Theme.space.l, Ui.anchorX - panelWidth / 2));
   }
 
+  // A screenshot (slurp/grim, Print) takes the keyboard and clears the grab. That is not
+  // "clicked away": stay open until the capture is done, then re-arm the grab.
+  property bool capturing: false
+
   FocusGrab {
     windows: [win]
-    active: win.wanted
-    onCleared: Ui.close()
+    active: win.wanted && !win.capturing
+    onCleared: if (win.wanted) capture.running = true
+  }
+
+  Process {
+    id: capture
+    command: ["sh", "-c", "sleep 0.2; pgrep -x slurp >/dev/null || pgrep -x grim >/dev/null"]
+    onExited: code => {
+      if (code === 0) { win.capturing = true; poll.start(); }
+      else Ui.close();
+    }
+  }
+
+  Timer {
+    id: poll
+    interval: 300
+    repeat: true
+    onTriggered: if (!still.running) still.running = true
+  }
+
+  Process {
+    id: still
+    command: ["sh", "-c", "pgrep -x slurp >/dev/null || pgrep -x grim >/dev/null"]
+    onExited: code => {
+      if (code !== 0) { poll.stop(); win.capturing = false; }
+    }
   }
 
   Canvas {
