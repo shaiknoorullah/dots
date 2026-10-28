@@ -353,8 +353,58 @@ CREATE TABLE web_ticket_day (
 COMMIT;
 """
 
-MIGRATIONS = {"work": [(1, WORK_V1), (2, WORK_V2), (3, WORK_V3), (4, WORK_V4)],
-              "private": [(1, PRIVATE_V1), (2, PRIVATE_V2)]}
+# --- work v5 ---------------------------------------------------------------
+# An explicit logout (Super+Esc -> "log out for today"). It ENDS the day: presence after
+# it never extends that day's session. Coming back afterwards is a new login, clustered
+# afresh. A table, not a clock_event kind, because it must exist before any session does
+# -- the AW ingest reads it to decide where sessions end.
+WORK_V5 = """
+BEGIN;
+CREATE TABLE logout (
+  ts_unix    INTEGER PRIMARY KEY,
+  provenance TEXT    NOT NULL
+);
+COMMIT;
+"""
+
+# --- private v3 -------------------------------------------------------------
+# Browser VISITS with what they were (webclass.py). Unlike v2's domain totals this keeps the
+# page -- URL without query or fragment, and a redacted title -- because "40m github.com"
+# says nothing, and the user asked to see what each visit actually was. private.db only.
+PRIVATE_V3 = """
+BEGIN;
+CREATE TABLE web_visit (
+  id          INTEGER PRIMARY KEY,
+  day         TEXT    NOT NULL,
+  start_unix  INTEGER NOT NULL,
+  end_unix    INTEGER NOT NULL,
+  seconds     INTEGER NOT NULL,
+  domain      TEXT    NOT NULL,
+  url         TEXT    NOT NULL,
+  title       TEXT,
+  ticket      TEXT,
+  link        TEXT,
+  task_uuid   TEXT,
+  activity    TEXT    NOT NULL,
+  category    TEXT    NOT NULL,
+  work        INTEGER NOT NULL,
+  verdict     TEXT    NOT NULL CHECK (verdict IN ('work','delegated','unproductive')),
+  agent_share REAL    NOT NULL,
+  labelled_by TEXT    NOT NULL,
+  model       TEXT
+);
+CREATE INDEX ix_wv_day ON web_visit(day, start_unix);
+-- one label per page, so the model is asked about a page once
+CREATE TABLE web_label_cache (
+  key          TEXT PRIMARY KEY,
+  label        TEXT    NOT NULL,
+  created_unix INTEGER NOT NULL
+);
+COMMIT;
+"""
+
+MIGRATIONS = {"work": [(1, WORK_V1), (2, WORK_V2), (3, WORK_V3), (4, WORK_V4), (5, WORK_V5)],
+              "private": [(1, PRIVATE_V1), (2, PRIVATE_V2), (3, PRIVATE_V3)]}
 
 
 def live_counts(conn):

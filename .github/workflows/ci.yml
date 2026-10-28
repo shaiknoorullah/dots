@@ -44,6 +44,7 @@ jobs:
       - run: bash tests/refresh.sh
       - run: bash tests/shadow.sh
       - run: bash tests/web.sh
+      - run: bash tests/webclass.sh
       - run: bash tests/away.sh
       - run: bash tests/locality.sh
       - name: in-home.sh (sentinel mode)

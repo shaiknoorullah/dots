@@ -25,6 +25,7 @@ PANIC = CONF_DIR / "PANIC"
 PAYROLL_TOML = CONF_DIR / "payroll.toml"
 HOLIDAYS_TOML = CONF_DIR / "holidays.toml"
 CATEGORIES_TOML = CONF_DIR / "categories.toml"
+WEB_TOML = CONF_DIR / "web.toml"
 
 STATE_DIR = Path(os.environ.get("TIMETRACK_STATE_DIR") or XDG_DATA / "timetrack")
 WORK_DB = STATE_DIR / "work.db"
@@ -109,6 +110,18 @@ def web_ticket_prefixes():
     counted as one."""
     raw = payroll().get("web", {}).get("ticket_prefixes", ["TASK", "PROJ", "ISS"])
     return tuple(str(p).strip().upper() + "-" for p in raw if str(p).strip())
+
+
+def web():
+    """Browser classification settings (webclass.py). Unmanaged and hand-written: the work
+    domains and GitHub orgs name the employer, so they never go in the public repo.
+
+        model = "qwen3-coder:30b"
+        work_domains = ["erp.example.com", "portal.azure.com"]
+        work_github_orgs = ["example-org"]
+        nonwork_domains = ["outlook.cloud.microsoft"]   # e.g. mail: not task work by itself
+    """
+    return _load(WEB_TOML)
 
 
 def gap_bridge_seconds():
