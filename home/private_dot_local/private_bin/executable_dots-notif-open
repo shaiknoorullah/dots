@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# dots-notif-open <app-name> [desktop-entry]   bring a notification's source to the front
+#
+# Run by the Quickshell notification card on click, after the app's own "default" action
+# (if any) has been invoked. Claude Code notifications jump to their herdr pane through
+# claude-focus.sh; anything else focuses the newest window whose class matches the
+# desktop entry or the app name. Local only: hyprctl and herdr, nothing else.
+set -uo pipefail
+app=${1:-}
+entry=${2:-}
+
+if [[ $app == "Claude Code" ]]; then
+  f="$HOME/.config/dots-mux/claude-focus.sh"
+  [[ -x $f ]] && exec "$f"
+  exit 0
+fi
+
+command -v hyprctl >/dev/null 2>&1 && command -v jq >/dev/null 2>&1 || exit 0
+if [[ -z ${HYPRLAND_INSTANCE_SIGNATURE:-} ]]; then
+  for d in "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"/hypr/*/; do
+    [[ -S "$d.socket.sock" ]] && export HYPRLAND_INSTANCE_SIGNATURE=$(basename "$d")
+  done
+fi
+
+# candidates, most specific first: desktop entry, app name, app name without spaces
+addr=$(hyprctl clients -j 2>/dev/null | jq -r --arg e "${entry,,}" --arg a "${app,,}" '
+  def k: ascii_downcase;
+  ($a | gsub(" "; "")) as $s
+  | [ .[] | select(
+        (($e != "") and ((.class | k) == $e or (.class | k | endswith("." + $e))))
+        or (($a != "") and ((.class | k) == $a or (.class | k) == $s or (.initialClass | k) == $a))
+      ) ]
+  | sort_by(.focusHistoryID) | .[0].address // empty')
+[[ -n $addr ]] || exit 0
+[[ "$(hyprctl dispatch "hl.dsp.focus({ window = \"address:$addr\" })" 2>/dev/null)" == ok ]] ||
+  hyprctl dispatch focuswindow "address:$addr" >/dev/null 2>&1
+exit 0
