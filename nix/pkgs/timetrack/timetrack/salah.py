@@ -6,22 +6,33 @@ This module decides whether to bother the user at all, and if so walks a fixed l
     ask (4 min, snooze once) -> armed warning (60 s) -> lock -> wait for unlock
 
 Checks run in a fixed order and each leaves its verdict in salah_log.enforcement:
-panic, already answered, away, spaced, paused, then enforce. Only the last locks.
+panic, already answered, not at desk, spaced, paused, then enforce. Only the last locks.
 
-Strikes. A strike is an ESCAPED lock: the user unlocked within two minutes of it. Nothing
-else counts. In particular an absent user is never locked (the presence check precedes the
-lock), so a nudge missed inside an away gap that is later classified as a meeting can never
-become a strike. Three strikes in seven days pause locking for a week; nudges continue.
+Only prayers inside the user's own time are enforced (the user's call, 2026-10-29). A
+prayer whose iqamah falls outside a session (logged out, or 150 min without presence)
+is marked `away` -- "not at desk" -- silently, and is never auto-marked qaza: what
+happens away from the desk is not this machine's business. Inside a session, a prayer
+still unmarked when its time ends (prayer-times.conf `ends HH:MM`) becomes qaza on its
+own (`status_by = 'auto'`); `sweep` does that, hourly and before every enforcement.
+
+A prayer's `day` is the calendar date of its iqamah, not the session's attendance day:
+each prayer happens once per date, and keying by session would let a night session that
+spans two Fajrs write both to one row.
+
+Strikes. A strike is an ESCAPED lock: the user, present when it locked, unlocked within two
+minutes of it. Nothing else counts. A user away from the desk when the lock lands cannot
+escape it, so a nudge missed inside an away gap that is later classified as a meeting can
+never become a strike. Three strikes in seven days pause locking for a week; nudges continue.
 
 Nothing is answered for the user: a timeout is recorded as what it is (an armed warning, a
 lock), never as a pick. Every clock, subprocess and presence read goes through a module
-level seam (`_now`, `_sleep`, `_lock`, `_locked`, `_foreground`, `_presence`, `_day`) so
+level seam (`_now`, `_sleep`, `_lock`, `_locked`, `_foreground`, `_presence`, `_session`) so
 tests never touch the desktop. Everything here is local; salah_log lives in private.db.
 """
 import os
-import sqlite3
+import re
 import time
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from . import away, config, dbs, notify
 from .backfill import aw
@@ -31,7 +42,7 @@ ASK_S = 240                 # first question, and the one after a snooze
 ARMED_S = 60                # "Locking in 60 s"
 LOCK_BEFORE = 15 * 60       # a salah declaration this recent already answers the nudge
 SPACING = 40 * 60           # no second lock within this of the last (Asr / Maghrib)
-LAST_CAP = 90 * 60          # veto cap after the last prayer of the day
+LAST_CAP = 90 * 60          # veto cap, and a prayer's end, when the conf does not say
 VETO_POLL = 15
 UNLOCK_POLL = 5
 UNLOCK_MAX = 90 * 60
@@ -105,12 +116,19 @@ def _presence(now):
     return away.present(events, now)
 
 
-def _day(now):
-    try:
-        with dbs.open_work(readonly=True) as conn:
-            return aw.current_day(conn, now)
-    except sqlite3.Error:                  # no work.db yet: the calendar day is all we have
-        return date.fromtimestamp(now).isoformat()
+def _session(now):
+    """True inside a session, False outside, None when the away watcher has not looked yet.
+
+    The watcher stamps `last_active` every minute the user is present. A session is over
+    after QUIET_LOGIN without presence, or at a logout (Super+Esc, "Log out for today").
+    """
+    st = away._read(away.STATE, None)
+    if not isinstance(st, dict) or st.get("last_active") is None:
+        return None
+    last = int(st["last_active"])
+    if now - last >= away.QUIET_LOGIN:
+        return False
+    return not away._logged_out_since(last - 120)
 
 
 # --- data -------------------------------------------------------------------
@@ -119,24 +137,47 @@ def _clock(t):
     return datetime.fromtimestamp(t).strftime("%H:%M")
 
 
-def _times(now):
-    """[(prayer, iqamah_unix)] for today from prayer-times.conf, in file order."""
+ENDS = re.compile(r"\bends (\d{1,2}):(\d{2})")
+
+
+def _schedule(day):
+    """[(prayer, iqamah_unix, ends_unix)] on a date, from prayer-times.conf, in file order.
+
+    The conf is regenerated daily; a neighbouring date reuses its clock times, which move
+    by a minute or two at most. An end earlier than the iqamah is the next morning (Isha).
+    """
     try:
         lines = away.PRAYER_TIMES.read_text().splitlines()
     except OSError:
         return []
-    base = datetime.fromtimestamp(now).replace(hour=0, minute=0, second=0, microsecond=0)
+    base = datetime.combine(day, datetime.min.time())
     out = []
     for line in lines:
-        parts = line.split("#", 1)[0].split()
+        body, _, comment = line.partition("#")
+        parts = body.split()
         if len(parts) < 2 or ":" not in parts[1]:
             continue
         try:
             hh, mm = (int(x) for x in parts[1].split(":"))
         except ValueError:
             continue
-        out.append((parts[0].capitalize(), int(base.replace(hour=hh, minute=mm).timestamp())))
-    return out
+        iq = int(base.replace(hour=hh, minute=mm).timestamp())
+        m = ENDS.search(comment)
+        if m:
+            end = int(base.replace(hour=int(m[1]), minute=int(m[2])).timestamp())
+            if end <= iq:
+                end += 86400
+        else:
+            end = None
+        out.append((parts[0].capitalize(), iq, end))
+    # no `ends` in the conf: a prayer lasts until the next iqamah, the last one LAST_CAP
+    return [(n, iq, end or (out[i + 1][1] if i + 1 < len(out) else iq + LAST_CAP))
+            for i, (n, iq, end) in enumerate(out)]
+
+
+def _times(now):
+    """[(prayer, iqamah_unix)] for the date of `now`."""
+    return [(n, iq) for n, iq, _ in _schedule(date.fromtimestamp(now))]
 
 
 def _iqamah(prayer, now):
@@ -144,6 +185,16 @@ def _iqamah(prayer, now):
         if name == prayer:
             return t
     return None
+
+
+def _day(now, prayer=None):
+    """The date a prayer belongs to. Logged after midnight, Isha is yesterday's."""
+    today = date.fromtimestamp(now)
+    if prayer:
+        iq = _iqamah(prayer, now)
+        if iq is not None and iq > now + 30 * 60:
+            return (today - timedelta(days=1)).isoformat()
+    return today.isoformat()
 
 
 def _cap(prayer, iqamah, now):
@@ -225,9 +276,10 @@ def enforce(prayer, now=None):
     """Run the ladder for one prayer. Returns the final enforcement code."""
     prayer = prayer.capitalize()
     now = int(now or _now())
-    day = _day(now)
     iq = _iqamah(prayer, now)
     shown = iq or now
+    day = date.fromtimestamp(shown).isoformat()
+    sweep(now)
     with dbs.open_private() as conn:
         _upsert(conn, day, prayer, iq, now)
 
@@ -244,14 +296,13 @@ def enforce(prayer, now=None):
             return done("logged")
         if _declared(now):
             return done("declared")
-        here = _presence(now)
-        if here is None:
-            _nudge(prayer, shown, "Could not check presence. Log it with Super+Shift+;")
-            return done("vetoed", veto_reason="presence_unknown")
-        if not here:
-            notify.toast("Salah", f"{prayer} iqamah passed while you were away"
-                         " — log it with Super+Shift+;")
-            return done("away")
+        inside = _session(now)
+        if inside is False:
+            return done("away")    # not at desk: no nudge, no lock, never auto-qaza
+        if inside is None:
+            _nudge(prayer, shown, "Could not tell whether you are at the desk. "
+                   "Log it with Super+Shift+;")
+            return done("vetoed", veto_reason="session_unknown")
         if conn.execute("SELECT 1 FROM salah_log WHERE locked_unix >= ? AND prayer != ?",
                         (now - SPACING, prayer)).fetchone():
             _nudge(prayer, shown, "Another prayer was just locked. Log it with Super+Shift+;")
@@ -299,6 +350,7 @@ def _enforce(conn, day, prayer, iq, cap, done):
 
 def _lock_and_wait(conn, day, prayer):
     t0 = _now()
+    here = _presence(t0)           # away from the desk, the lock cannot be escaped
     away.declare("salah", t0)
     _lock()
     _set(conn, day, prayer, enforcement="locked", locked_unix=t0)
@@ -316,7 +368,7 @@ def _lock_and_wait(conn, day, prayer):
         _sleep(UNLOCK_POLL)
     now = _now()
     cols = {"unlocked_unix": now}
-    if now - t0 < ESCAPE_S:
+    if now - t0 < ESCAPE_S and here:
         cols["strike"] = 1
     _set(conn, day, prayer, **cols)
     if cols.get("strike"):
@@ -331,6 +383,36 @@ def _lock_and_wait(conn, day, prayer):
     return "locked"
 
 
+# --- sweep ------------------------------------------------------------------
+
+def sweep(now=None):
+    """Settle every prayer whose time is over, yesterday's and today's.
+
+    No row at all: enforcement never ran (machine off or asleep), so not at desk. A row
+    from inside a session with no status: qaza, marked automatically. Returns the count of
+    rows written, for the log.
+    """
+    now = int(now or _now())
+    today = date.fromtimestamp(now)
+    n = 0
+    with dbs.open_private() as conn:
+        for d in (today - timedelta(days=1), today):
+            day = d.isoformat()
+            for prayer, iq, end in _schedule(d):
+                if end > now:
+                    continue
+                r = _row(conn, day, prayer)
+                if r is None:
+                    conn.execute("INSERT INTO salah_log(day, prayer, iqamah_unix, enforcement)"
+                                 " VALUES(?,?,?, 'away')", (day, prayer, iq))
+                    n += 1
+                elif r["status"] is None and r["enforcement"] != "away":
+                    _set(conn, day, prayer, status="qaza", status_by="auto", logged_unix=now)
+                    n += 1
+        conn.commit()
+    return n
+
+
 # --- log / status -----------------------------------------------------------
 
 def log(prayer, status, now=None):
@@ -339,19 +421,21 @@ def log(prayer, status, now=None):
         raise SystemExit(f"timetrack: salah status must be one of {', '.join(STATUSES)}")
     prayer = prayer.capitalize()
     now = int(now or _now())
-    day = _day(now)
+    day = _day(now, prayer)
+    iq = _iqamah(prayer, int(datetime.fromisoformat(day).timestamp()) + 43200)
     with dbs.open_private() as conn:
         conn.execute("INSERT INTO salah_log(day, prayer, iqamah_unix, enforcement, status,"
-                     " logged_unix) VALUES(?,?,?, 'logged', ?, ?)"
+                     " status_by, logged_unix) VALUES(?,?,?, 'logged', ?, 'user', ?)"
                      " ON CONFLICT(day, prayer) DO UPDATE SET status = excluded.status,"
-                     " logged_unix = excluded.logged_unix",
-                     (day, prayer, _iqamah(prayer, now), status, now))
+                     " status_by = 'user', logged_unix = excluded.logged_unix",
+                     (day, prayer, iq, status, now))
         conn.commit()
 
 
 def status(now=None):
     now = int(now or _now())
     day = _day(now)
+    sweep(now)
     with dbs.open_private(readonly=True) as conn:
         rows = conn.execute("SELECT * FROM salah_log WHERE day = ? ORDER BY iqamah_unix, id",
                             (day,)).fetchall()
@@ -360,7 +444,9 @@ def status(now=None):
     print(day)
     for r in rows:
         iq = _clock(r["iqamah_unix"]) if r["iqamah_unix"] else "--:--"
-        print(f"  {r['prayer']:<8} {iq}  {r['status'] or '-':<7} {r['enforcement']}"
+        st = (r["status"] or "-") + (" (auto)" if r["status_by"] == "auto" else "")
+        enf = "not at desk" if r["enforcement"] == "away" else r["enforcement"]
+        print(f"  {r['prayer']:<8} {iq}  {st:<12} {enf}"
               + (f" ({r['qaza_reason'] or r['veto_reason']})"
                  if r["qaza_reason"] or r["veto_reason"] else ""))
     if not rows:
@@ -382,3 +468,5 @@ def add_parser(sub):
     lg.set_defaults(fn=lambda a: (log(a.prayer, a.status), 0)[1])
     ss.add_parser("status", help="today's prayers, recent strikes, any pause"
                   ).set_defaults(fn=lambda a: (status(), 0)[1])
+    ss.add_parser("sweep", help="settle prayers whose time is over (run hourly)"
+                  ).set_defaults(fn=lambda a: (print(f"{sweep()} prayer(s) settled"), 0)[1])

@@ -539,9 +539,18 @@ CREATE TABLE prompt_log (
 COMMIT;
 """
 
+# --- private v6 -------------------------------------------------------------
+# Who set a prayer's status: the user (the picker), or the hourly sweep that marks a prayer
+# from inside a session qaza once its time is over.
+PRIVATE_V6 = """
+BEGIN;
+ALTER TABLE salah_log ADD COLUMN status_by TEXT CHECK (status_by IN ('user','auto'));
+COMMIT;
+"""
+
 MIGRATIONS = {"work": [(1, WORK_V1), (2, WORK_V2), (3, WORK_V3), (4, WORK_V4), (5, WORK_V5)],
               "private": [(1, PRIVATE_V1), (2, PRIVATE_V2), (3, PRIVATE_V3), (4, PRIVATE_V4),
-                          (5, PRIVATE_V5)]}
+                          (5, PRIVATE_V5), (6, PRIVATE_V6)]}
 
 
 def live_counts(conn):

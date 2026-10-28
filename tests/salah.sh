@@ -47,14 +47,14 @@ def sleep(s): clock[0] += s
 salah._now = lambda: clock[0]
 salah._sleep = sleep
 salah._lock = lambda: calls.append(("lock", clock[0]))
-salah._day = lambda now: "2026-10-27"
+salah._day = lambda now, prayer=None: "2026-10-27"
 
 state = {}
 def world(**kw):
     """Reset the fakes. unlock_after: seconds the lock screen stays up."""
     global n_scen
     n_scen += 1
-    state.update(present=True, fg=[], unlock_after=3600, **kw)
+    state.update(present=True, session=True, fg=[], unlock_after=3600, **kw)
     toasts.clear(); asks.clear(); calls.clear(); script.clear()
     for p in (away.INTENT, config.PANIC): p.unlink(missing_ok=True)
     config.HABITS_TOML.unlink(missing_ok=True)
@@ -66,6 +66,7 @@ def locked():
     t0 = calls[0][1] if calls else None
     return t0 is not None and clock[0] - t0 < state["unlock_after"]
 salah._presence = lambda now: state["present"]
+salah._session = lambda now: state["session"]
 salah._foreground = fg
 salah._locked = locked
 
@@ -74,7 +75,7 @@ def run(prayer, h, m):
     return salah.enforce(prayer, clock[0])
 def row(prayer):
     with dbs.open_private() as c:
-        r = c.execute("SELECT * FROM salah_log WHERE prayer=?", (prayer,)).fetchone()
+        r = c.execute("SELECT * FROM salah_log WHERE prayer=? AND day='2026-10-27'", (prayer,)).fetchone()
     return dict(r) if r else None
 def seed(prayer, **cols):
     enf = cols.pop("enforcement", "locked")
@@ -101,14 +102,16 @@ check("declared silent", (asks, toasts, calls), ([], [], []))
 world(); away.declare("salah", at(16, 0))
 check("stale declaration does not count", run("Asr", 17, 15), "locked")
 
-# 3. away; AW down
+# 3. outside the session: not at desk, silently; session unknown: nudge only
+world(); state["session"] = False
+check("not at desk", run("Asr", 17, 15), "away")
+check("not at desk is silent", (asks, calls, toasts), ([], [], []))
+world(); state["session"] = None
+check("session unknown", run("Asr", 17, 15), "vetoed")
+check("session unknown reason", (row("Asr")["veto_reason"], asks, calls), ("session_unknown", [], []))
+check("session unknown nudges", len(toasts), 1)
 world(); state["present"] = False
-check("away", run("Asr", 17, 15), "away")
-check("away toast", "Super+Shift+;" in toasts[0][0] and "away" in toasts[0][0], True)
-check("away no lock", (asks, calls), ([], []))
-world(); state["present"] = None
-check("aw down", run("Asr", 17, 15), "vetoed")
-check("aw down reason", (row("Asr")["veto_reason"], asks, calls), ("presence_unknown", [], []))
+check("in session but stepped away: still locked", run("Asr", 17, 15), "locked")
 
 # 4. spaced
 world(); seed("Asr", locked_unix=at(17, 15) + 60, unlocked_unix=at(17, 25))
@@ -205,6 +208,9 @@ check("old strike ignored", dbs.open_private().execute("SELECT COUNT(*) FROM sal
 world(); script[:] = ["go"]; state["unlock_after"] = 200
 run("Asr", 17, 15)
 check("slow unlock no strike", row("Asr")["strike"], 0)
+world(); script[:] = ["go"]; state["unlock_after"] = 30; state["present"] = False
+run("Asr", 17, 15)
+check("away when it locked: quick unlock is no strike", row("Asr")["strike"], 0)
 
 # 13. log upsert
 world(); clock[0] = at(17, 40)
@@ -213,7 +219,7 @@ r = row("Asr")
 check("log new", (r["status"], r["enforcement"], r["logged_unix"], r["iqamah_unix"]), ("jamaah", "logged", at(17, 40), at(17, 15)))
 salah.log("Asr", "qaza", clock[0] + 5)
 with dbs.open_private() as c:
-    rows = c.execute("SELECT status, logged_unix FROM salah_log WHERE prayer='Asr'").fetchall()
+    rows = c.execute("SELECT status, logged_unix FROM salah_log WHERE prayer='Asr' AND day='2026-10-27'").fetchall()
 check("log upsert one row", [tuple(x) for x in rows], [("qaza", at(17, 40) + 5)])
 world(); seed("Asr", enforcement="away")
 salah.log("Asr", "alone", at(18, 0))
@@ -221,6 +227,30 @@ check("log keeps enforcement", (row("Asr")["enforcement"], row("Asr")["status"])
 world(); script[:] = ["go"]
 salah.log("Asr", "jamaah", at(17, 14))
 check("logged before iqamah", run("Asr", 17, 15), "logged")
+
+# 14. sweep: in-session and unmarked at its end -> qaza (auto); outside -> not at desk
+away.PRAYER_TIMES.write_text("Fajr 05:30 # adhan 05:00 · ends 06:13\nDhuhr 13:30 # ends 16:09\n"
+                             "Asr 17:15 # ends 17:46\nMaghrib 17:51 # ends 18:59\nIsha 19:14 # ends 05:00\n")
+world()
+seed("Dhuhr", locked_unix=at(13, 31), unlocked_unix=at(13, 45))      # enforced, never marked
+seed("Asr", enforcement="away")                                     # outside the session
+seed("Fajr", enforcement="locked", status="jamaah", status_by="user")
+salah.sweep(at(17, 50))
+check("unmarked after its end: qaza", (row("Dhuhr")["status"], row("Dhuhr")["status_by"]), ("qaza", "auto"))
+check("not at desk stays unmarked", row("Asr")["status"], None)
+check("marked is left alone", (row("Fajr")["status"], row("Fajr")["status_by"]), ("jamaah", "user"))
+check("still in its time: untouched", row("Maghrib"), None)
+salah.sweep(at(19, 30))
+check("no row by its end: not at desk", (row("Maghrib")["enforcement"], row("Maghrib")["status"]), ("away", None))
+seed("Isha", enforcement="locked", locked_unix=at(19, 15))
+salah.sweep(at(23, 0))
+check("Isha runs until the next Fajr", row("Isha")["status"], None)
+salah.sweep(at(5, 1) + 86400)
+check("Isha qaza after Fajr adhan", (row("Isha")["status"], row("Isha")["status_by"]), ("qaza", "auto"))
+salah.log("Dhuhr", "alone", at(18, 0))
+check("the user overrides auto", (row("Dhuhr")["status"], row("Dhuhr")["status_by"]), ("alone", "user"))
+n = salah.sweep(at(5, 2) + 86400)
+check("sweep is idempotent", n, 0)
 
 if fails:
     print("\n".join(fails)); sys.exit(1)
