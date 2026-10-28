@@ -199,7 +199,7 @@ def _answer(g0, g1, key, provenance=interactive.PROVENANCE):
 def handle(g0, g1, now, launch=None):
     """Classify or ask about one return. Returns what happened, for the log and tests."""
     with dbs.open_work() as conn:
-        aw.write(conn, refresh_day=date.today().isoformat())
+        aw.write(conn, refresh_day=aw.current_day(conn))
     mins = round((g1 - g0) / 60)
 
     if key := take_intent(g0, g1):

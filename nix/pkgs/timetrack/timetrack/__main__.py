@@ -60,8 +60,8 @@ def cmd_backfill_git(a):
 
 def cmd_ingest_aw(a):
     from .backfill import aw
-    day = None if a.no_refresh else date.today().isoformat()
     with dbs.open_work() as conn:
+        day = None if a.no_refresh else aw.current_day(conn)
         rep = aw.write(conn, since=None, until=None, refresh_day=day)
     for w in rep["written"]:
         print(f"wrote {w['day']}: {w['gaps']} unconfirmed gap(s) recorded as breaks")

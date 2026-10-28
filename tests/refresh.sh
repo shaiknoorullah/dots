@@ -120,9 +120,19 @@ aw.workdays = lambda _ev, _lo=(): presence(21, 0)
 aw.write(conn, refresh_day=day)
 check("sheet day untouched", net(), 450 + 30)
 
+# past midnight the refresh follows the SESSION's day, not the date (a day is login -> logout)
+o = int(datetime(2030, 1, 10, 20, 24).timestamp()); c = int(datetime(2030, 1, 10, 23, 0).timestamp())
+conn.execute("INSERT INTO work_session(opened_ts,opened_unix,closed_ts,closed_unix,attendance_day,open_trigger,"
+             "close_trigger,provenance) VALUES('x',?,'y',?,'2030-01-10','aw','aw',?)", (o, c, aw.PROVENANCE))
+conn.commit()
+check("00:40 refreshes the evening's day", aw.current_day(conn, now=int(datetime(2030, 1, 11, 0, 40).timestamp())), "2030-01-10")
+check("after the workday gap it is a new day", aw.current_day(conn, now=int(datetime(2030, 1, 11, 9, 0).timestamp())), "2030-01-11")
+conn.execute("UPDATE work_session SET close_trigger='logout' WHERE attendance_day='2030-01-10'"); conn.commit()
+check("a logout ends the day at once", aw.current_day(conn, now=int(datetime(2030, 1, 11, 0, 40).timestamp())), "2030-01-11")
+
 if fails:
     print("refresh FAILED:")
     for f in fails: print("  " + f)
     raise SystemExit(1)
-print("refresh ok (6 scenarios, 17 assertions)")
+print("refresh ok (7 scenarios, 20 assertions)")
 PY

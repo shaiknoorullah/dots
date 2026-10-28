@@ -14,9 +14,10 @@ without touching it -- that comparison is the evidence for whether AW can be tru
 all, and it must not be contaminated by AW's own writes.
 """
 import json
+import time
 import urllib.error
 import urllib.request
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 from .. import config, migrate, intervals
 
@@ -161,6 +162,21 @@ def _answers(conn, day):
         # hotkey:overlap is arithmetic, re-derived on every write; carrying it would add it twice
         " AND d.provenance NOT IN ('hotkey:overlap', 'hotkey:covered')",
         (day, PROVENANCE, PROVENANCE))]
+
+
+def current_day(conn, now=None):
+    """The attendance_day new presence belongs to: the last AW session's day while it is
+    still within the workday gap (the same session, past midnight or not), else today.
+
+    Refreshing date.today() instead froze an evening at whatever the last pre-midnight run
+    saw: after 00:00 "today" is a new date, and the session still open is yesterday's."""
+    now = int(now or time.time())
+    row = conn.execute("SELECT attendance_day, closed_unix, close_trigger FROM work_session"
+                       " WHERE provenance = ? ORDER BY opened_unix DESC LIMIT 1", (PROVENANCE,)).fetchone()
+    # a logout ended that day: whatever comes next is a new one
+    if row and row[1] and row[2] != "logout" and now - row[1] < config.workday_gap_seconds():
+        return row[0]
+    return date.fromtimestamp(now).isoformat()
 
 
 def write(conn, since=None, until=None, refresh_day=None):
